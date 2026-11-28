@@ -64,6 +64,15 @@ foreach(script IN ITEMS "ZSHENV=zshenv.zsh" "ZSH=telar.zsh" "BASH=telar.bash" "F
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/terminal/shell_integration/${script_file}")
 endforeach()
 configure_file(terminal/shell_integration/scripts.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/shell_scripts.inc" @ONLY)
+# So are the scripts that complete a line as the pane's shell would.
+foreach(script IN ITEMS zsh bash fish)
+  string(TOUPPER "${script}" script_name)
+  file(READ "${CMAKE_CURRENT_SOURCE_DIR}/terminal/shell_completion/complete.${script}" TELAR_COMPLETION_${script_name})
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/terminal/shell_completion/complete.${script}")
+endforeach()
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/terminal/shell_completion/remote/remote.sh" TELAR_COMPLETION_REMOTE)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/terminal/shell_completion/remote/remote.sh")
+configure_file(terminal/shell_completion/scripts.inc.in "${CMAKE_CURRENT_BINARY_DIR}/generated/shell_completion_scripts.inc" @ONLY)
 # What an embedded Neovim is taught is compiled in too: telar's side of the conversation, and
 # the modules of integrations/nvim it loads without anything installed on the host.
 file(REAL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../integrations/nvim/lua/telar" telar_nvim_modules)
@@ -130,7 +139,7 @@ endif()
 
 # The domains of docs/build/modules.json (process_layers), lowest first.
 foreach(domain IN ITEMS diagnostics transport server/config suggestions host workers
-    terminal/shell_integration workspaces workspaces/worktrees paths files nvim metrics terminal history
+    terminal/shell_integration terminal/shell_completion workspaces workspaces/worktrees paths files nvim metrics terminal history
     terminal/command_capture terminal/graphics agents traffic/tap agents/observation core/model
     traffic/http1 traffic/http traffic/exchange_capture traffic/http2 traffic/tls traffic/redirect
     traffic traffic/proxy plugins workspaces/editors core/persistence core server)

@@ -1,4 +1,4 @@
-telar history: Search, show, import, prune and summarize the command history the runtime records
+telar history: Search, show, import, export, prune and summarize the command history the runtime records
 
 Usage: telar history COMMAND [ARG] [filters] [--socket PATH]
 
@@ -6,7 +6,8 @@ Commands:
   list            Show recent commands
   search          Search commands by text
   show            Print the output captured for one entry
-  import          Import an existing shell histfile once; running it again adds only new lines
+  import          Import a shell's histfile or another tool's history; running it again adds only new runs
+  export          Print the history oldest first, as JSON lines or a zsh, bash or fish histfile
   delete          Remove one entry, without asking
   prune           Remove every entry matching the filters, after a preview and a confirmation
   stats           Count commands and show the most frequent ones over a period
@@ -19,10 +20,24 @@ Text output only. One scope filter at a time.
 
 Filters:
   --cwd            Only the current directory.
-  --workspace PATH Only that workspace directory.
+  --workspace PATH Only that workspace directory, relative to where it runs.
   --pane ID        Only that pane.
-  --failed         Only commands that exited nonzero.
+  --failed         Only commands that exited nonzero and were not interrupted.
   --author all|human|agent  Who typed it (default all).
+  --since TIME, --until TIME  Only commands started from TIME, or before it: today,
+                   yesterday, an age as -1d, 2h, 30m or 1w, YYYY-MM-DD, or epoch seconds.
+  --exit CODE|failed  Only commands that exited with CODE, or that failed.
+  --min-duration D Only commands that ran at least D: 500ms, 2s, 5m, 1h.
+  --host NAME      Only commands run on that machine.
+  --branch NAME    Only commands run on that git branch.
+  --shell NAME     Only commands run in that shell: zsh, bash, fish, or the path
+                   it was started from.
+  --mode fuzzy|substring|prefix|regex  How the query matches (default substring).
+  --sort rank|time By how well and how often they match, or newest first.
   --limit N        At most N entries (default 20, up to 1000).
+
+`list` and `search` also take --after ID or --offset N, --fuzzy, --distinct, and
+--json or --format TEMPLATE for what each line prints. `prune` also takes
+--keep N.
 
 `telar history COMMAND --help` explains a command's arguments, effects and results.

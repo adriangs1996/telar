@@ -711,26 +711,44 @@ prints.
 
 ### `runtime.history.secrets_filter`
 
-Boolean. Skip commands that look like they contain a secret, such as tokens
-starting with `ghp_`, `github_pat_`, `sk_live_`, `xoxb-` or `AKIA`,
-private keys, Slack webhook URLs, or assignments like `password=` and
-`token=`. Default `true`.
+Boolean. Keep secrets out of the history. A command or an output that holds a
+structural secret keeps everything but it: the value of an assignment to a
+name like `*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `api_key` or `AZURE_*_KEY`,
+a URL's password, a private key's body or a Slack webhook's path becomes
+`[redacted]`. A provider's key (AWS, Google, GitHub, GitLab, Slack, Stripe,
+npm, Netlify, Pulumi, Anthropic, OpenAI, OpenRouter, Groq, xAI, Hugging Face)
+is redacted too, and a command that is mostly a key is not recorded at all.
+Default `true`.
 
 ### `runtime.history.command_filters`
 
-List of strings. Commands containing any of these substrings are not
-recorded. At most 64 patterns of up to 256 bytes each.
+List. Commands that contain one of its strings, or match one of its
+`{ regex = "..." }` expressions, are not recorded. An expression is found
+anywhere in the command unless `^` or `$` anchor it; it takes literals, `.`,
+classes, `\d \w \s`, groups, `|`, `* + ?` and `{m,n}`. At most 64 patterns of
+up to 256 bytes each, of which at most 16 expressions; one that does not
+compile refuses the configuration.
 
 ```lua
 runtime = {
-  history = { command_filters = { "vault login" }, cwd_filters = { "/secrets/" } },
+  history = {
+    command_filters = { "vault login", { regex = "^ssh .*prod" } },
+    cwd_filters = { "/secrets/" },
+  },
 }
 ```
 
 ### `runtime.history.cwd_filters`
 
-List of strings. Commands run in a directory whose path contains any of these
-substrings are not recorded. Same limits as `command_filters`.
+List. Commands run in a directory whose path contains one of its strings, or
+matches one of its expressions, are not recorded. Same forms and limits as
+`command_filters`.
+
+### `runtime.history.trivial_commands`
+
+List of strings. Commands not recorded when they are the whole command line,
+such as `{ "ls", "cd", "clear", "pwd" }`; with arguments they are. At most 64.
+Default none.
 
 ## Command editor
 
@@ -1141,6 +1159,47 @@ one-time nonce; the remote shell answers with it and a token of its own, which
 signs its marks until the local shell prompts again. The nonce is on ssh's
 command line, where other users of either host can read it, and is spent by
 the first answer.
+
+So that Tab completes the remote host's files and its shell's words, the session
+shares its connection: unless your `ssh_config` or arguments name a
+`ControlPath` of their own, `ssh` gets `-o ControlMaster=auto -o
+ControlPath=<dir>/%C -o ControlPersist=no`, where `<dir>` is a directory only
+you may enter beside the runtime's socket, and the master ends with the session.
+With a `ControlPath` of your own, telar uses its socket when it is one, and no
+socket otherwise. The signed nonce names the socket; telar takes only a socket
+of yours, in that directory or in a directory nobody else may write. For each
+Tab it runs `ssh -S <socket> -o ControlMaster=no -o BatchMode=yes` with no
+configuration of yours and no connection of its own, and a fixed remote command
+that reads the directory and the line from its standard input: they are never
+part of a command line, never code the host runs and never keys typed into the
+pane. It answers what `runtime.shell_completion` does, with the same bounds; a
+session that shares no connection, or one whose connection closed, completes
+nothing from its host.
+
+### `runtime.shell_completion`
+
+Boolean. For a command no completion spec describes, let Tab in the
+[command editor](#command-editor) ask the pane's own shell, zsh, bash or fish,
+what it completes at the end of the line. Default `true`.
+
+The shell runs in a process of its own, never in the pane: in the pane's
+directory, with the pane's `PATH`, `HOME`, `TERM=dumb` and the runtime's locale
+and nothing else, for at most a second and a half, and the next Tab in the
+same pane ends it. zsh loads `compinit` (its dump is kept beneath telar's data
+directory), bash loads bash-completion, fish its own completions. The line is
+an argument, never code the shell runs, and a line with `(`, `)` or a backquote
+is not given to it at all, because zsh's and bash-completion's own completion
+evaluate them. Answers are kept for five seconds per shell, line and
+directory. A shell on another host that `ssh` reached is asked there, through
+the connection its session shares (see
+[`runtime.ssh_integration`](#runtimessh_integration)), and its shell runs as
+here: apart from your configuration unless this option says otherwise.
+
+### `runtime.shell_completion_rc`
+
+Boolean. Let that shell read your `.zshrc`, `.bashrc` or `config.fish` first,
+so it knows the completions they set up. Default `false`: your configuration
+runs whatever it runs, on every Tab that asks.
 
 ### `runtime.graphics.pane_mib`
 

@@ -38,8 +38,19 @@ namespace telar::gui::features::prompt {
       entries_.clear();
     }
 
-    static_cast<void>(entries_.assign(ds::String<Memory>{memory_, command}, Entry{.digest = digest, .spec = std::move(spec.getMut())}));
+    static_cast<void>(entries_.assign(ds::String<Memory>{memory_, command}, Entry{.digest = digest, .spec = std::move(spec.getMut()), .complete = source.contains(complete_marker)}));
+    ++revision_;
     return true;
+  }
+
+  bool Specs::complete(std::string_view command) const {
+    const auto* found = entries_.find(command);
+
+    return found != nullptr && found->complete;
+  }
+
+  std::uint64_t Specs::revision() const noexcept {
+    return revision_;
   }
 
   MatchScratch::MatchScratch(Memory& memory)

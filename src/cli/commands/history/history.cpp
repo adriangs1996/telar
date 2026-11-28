@@ -9,7 +9,10 @@ import telar.platform.fs;
 import telar.platform.paths;
 import telar.platform.error;
 import telar.wire.runtime;
+import telar.wire.history;
 import telar.base.ds;
+import telar.cli.commands.history.sources;
+import telar.cli.commands.history.output;
 
 namespace telar::runtime::cli::file_transfer {
 
@@ -553,61 +556,341 @@ namespace telar::runtime::cli {
 
 namespace telar::runtime::cli::history {
 
-  constexpr std::size_t max_histfile_bytes = std::size_t{32} * 1024 * 1024;
-  constexpr std::size_t max_command_bytes = 65535;
-  constexpr std::size_t max_batch_payload = 4 * max_command_bytes;
-  constexpr std::size_t max_import_entries = 64;
-
   namespace {
 
+    constexpr std::size_t max_batch_payload = 4 * max_command_bytes;
+    constexpr std::size_t max_import_entries = ImportHistory::maximum_entries;
+    constexpr unsigned timeout_seconds = 30;
     constexpr std::int64_t milliseconds_per_second = 1000;
+    // A request carries a batch of imported commands with its source and other fields, which this leaves room for.
+    constexpr std::size_t request_overhead_bytes = 4096;
 
-    struct ImportedLine {
-      std::int64_t started_at_ms;
-      Text command;
+    using Kind = HistoryOptions::ImportKind;
+
+    // The shell or tool a file named on the command line comes from, as its name and its first
+    // bytes suggest.
+    Kind fileKind(std::string_view file, const char* path) noexcept {
+      auto name = file;
+
+      name.remove_prefix(file.rfind('/') + 1);
+
+      if (name.ends_with("fish_history")) {
+        return Kind::fish;
+      }
+
+      if (name == "ConsoleHost_history.txt") {
+        return Kind::powershell;
+      }
+
+      if (name.ends_with(".json") || name == "history_json") {
+        return Kind::xonsh;
+      }
+
+      if (sqliteFile(path)) {
+        if (file.contains("atuin")) {
+          return Kind::atuin;
+        }
+
+        if (file.contains("mcfly") || file.contains("McFly")) {
+          return Kind::mcfly;
+        }
+
+        return name.ends_with(".sqlite3") ? Kind::nushell : Kind::histdb;
+      }
+
+      if (file.contains("nushell")) {
+        return Kind::nushell;
+      }
+
+      return file.contains("bash") ? Kind::bash : Kind::zsh;
+    }
+
+    // Where each shell and tool keeps its history when nothing moved it, in the order tried: below
+    // the directory an environment variable names, or below the home without one.
+    struct Candidate {
+      Kind kind;
+      const char* variable;
+      const char* suffix;
     };
 
-    class ImportParser {
+    constexpr ds::Array candidates{
+        Candidate{.kind = Kind::zsh, .variable = nullptr, .suffix = "/.zsh_history"},
+        Candidate{.kind = Kind::bash, .variable = nullptr, .suffix = "/.bash_history"},
+        Candidate{.kind = Kind::fish, .variable = "XDG_DATA_HOME", .suffix = "/fish/fish_history"},
+        Candidate{.kind = Kind::fish, .variable = nullptr, .suffix = "/.local/share/fish/fish_history"},
+        Candidate{.kind = Kind::nushell, .variable = "XDG_CONFIG_HOME", .suffix = "/nushell/history.sqlite3"},
+        Candidate{.kind = Kind::nushell, .variable = "XDG_CONFIG_HOME", .suffix = "/nushell/history.txt"},
+        Candidate{.kind = Kind::nushell, .variable = nullptr, .suffix = "/.config/nushell/history.sqlite3"},
+        Candidate{.kind = Kind::nushell, .variable = nullptr, .suffix = "/.config/nushell/history.txt"},
+        Candidate{.kind = Kind::nushell, .variable = nullptr, .suffix = "/Library/Application Support/nushell/history.sqlite3"},
+        Candidate{.kind = Kind::nushell, .variable = nullptr, .suffix = "/Library/Application Support/nushell/history.txt"},
+        Candidate{.kind = Kind::xonsh, .variable = "XONSH_DATA_DIR", .suffix = "/history_json"},
+        Candidate{.kind = Kind::xonsh, .variable = "XDG_DATA_HOME", .suffix = "/xonsh/history_json"},
+        Candidate{.kind = Kind::xonsh, .variable = nullptr, .suffix = "/.local/share/xonsh/history_json"},
+        Candidate{.kind = Kind::powershell, .variable = nullptr, .suffix = "/.local/share/powershell/PSReadLine/ConsoleHost_history.txt"},
+        Candidate{.kind = Kind::atuin, .variable = "XDG_DATA_HOME", .suffix = "/atuin/history.db"},
+        Candidate{.kind = Kind::atuin, .variable = nullptr, .suffix = "/.local/share/atuin/history.db"},
+        Candidate{.kind = Kind::mcfly, .variable = "XDG_DATA_HOME", .suffix = "/mcfly/history.db"},
+        Candidate{.kind = Kind::mcfly, .variable = nullptr, .suffix = "/.local/share/mcfly/history.db"},
+        Candidate{.kind = Kind::mcfly, .variable = nullptr, .suffix = "/.mcfly/history.db"},
+        Candidate{.kind = Kind::mcfly, .variable = nullptr, .suffix = "/Library/Application Support/McFly/history.db"},
+        Candidate{.kind = Kind::histdb, .variable = "HISTDB_FILE", .suffix = ""},
+        Candidate{.kind = Kind::histdb, .variable = nullptr, .suffix = "/.histdb/zsh-history.db"},
+    };
+
+    // The import's source, by its real path: `./h`, `/home/me/h` and a link to it are one file,
+    // and one source, so importing it again by another name adds only what it did not have.
+    struct ImportPlan {
+      Kind kind;
+      Text path;
+    };
+
+    tbc::val_a<ds::Option<Text>> realPath(tbc::mut_a<Memory> memory, const char* path) {
+      ds::Array<char, PATH_MAX> resolved{};
+      if (::realpath(path, resolved.dataMut()) == nullptr) {
+        return ds::none;
+      }
+
+      return Text{memory, std::string_view{resolved.data()}};
+    }
+
+    tbc::val_a<ImportPlan> planImport(tbc::mut_a<Memory> memory, const HistoryOptions& options) {
+      if (options.import_file) {
+        const auto file = *options.import_file;
+        auto path = realPath(memory, file.data());
+        if (!path) {
+          throw std::runtime_error{sys::errorName(sys::lastError())};
+        }
+
+        const auto kind = options.import_kind != Kind::automatic ? options.import_kind : fileKind(path->view(), path->data());
+
+        return {.kind = kind, .path = std::move(path.getMut())};
+      }
+
+      const auto home = processHome();
+
+      for (const auto& candidate : candidates) {
+        // Without a kind, only the shells' own histfiles are looked for, as before any tool's.
+        const bool shell = candidate.kind == Kind::zsh || candidate.kind == Kind::bash || candidate.kind == Kind::fish;
+        if (options.import_kind == Kind::automatic ? !shell : options.import_kind != candidate.kind) {
+          continue;
+        }
+
+        const std::string_view base = candidate.variable == nullptr ? home : process_environment.lookup(candidate.variable);
+        if (base.empty()) {
+          continue;
+        }
+
+        const auto named = ds::format(memory, "{}{}", base, candidate.suffix);
+        if (::access(named.data(), F_OK) != 0) {
+          continue;
+        }
+
+        if (auto path = realPath(memory, named.data())) {
+          return {.kind = candidate.kind, .path = std::move(path.getMut())};
+        }
+      }
+
+      throw std::runtime_error{"HistfileNotFound"};
+    }
+
+    ImportFormat importFormat(Kind kind, const Text& path) {
+      switch (kind) {
+      case Kind::zsh:
+        return ImportFormat::zsh;
+      case Kind::bash:
+        return ImportFormat::bash;
+      case Kind::fish:
+        return ImportFormat::fish;
+      case Kind::nushell:
+        return sqliteFile(path.data()) ? ImportFormat::nushell_sqlite : ImportFormat::nushell;
+      case Kind::xonsh:
+        return ImportFormat::xonsh;
+      case Kind::powershell:
+        return ImportFormat::powershell;
+      case Kind::atuin:
+        return ImportFormat::atuin;
+      case Kind::mcfly:
+        return ImportFormat::mcfly;
+      case Kind::histdb:
+        return ImportFormat::histdb;
+      case Kind::automatic:
+        break;
+      }
+
+      throw std::runtime_error{"UnknownHistoryImportKind"};
+    }
+
+    // The length of the valid UTF-8 character at `index`, or 0 for a byte that starts none: the
+    // range a lead byte allows its first continuation rules out overlong forms, surrogates and
+    // code points past U+10FFFF.
+    std::size_t characterLength(std::string_view text, std::size_t index) noexcept {
+      constexpr unsigned char continuation_low = 0x80;
+      constexpr unsigned char continuation_high = 0xbf;
+
+      struct Lead {
+        unsigned char first;
+        unsigned char last;
+        std::size_t length;
+        unsigned char low;
+        unsigned char high;
+      };
+
+      constexpr ds::Array leads{
+          Lead{.first = 0x01, .last = 0x7f, .length = 1, .low = 0, .high = 0},
+          Lead{.first = 0xc2, .last = 0xdf, .length = 2, .low = continuation_low, .high = continuation_high},
+          Lead{.first = 0xe0, .last = 0xe0, .length = 3, .low = 0xa0, .high = continuation_high},
+          Lead{.first = 0xe1, .last = 0xec, .length = 3, .low = continuation_low, .high = continuation_high},
+          Lead{.first = 0xed, .last = 0xed, .length = 3, .low = continuation_low, .high = 0x9f},
+          Lead{.first = 0xee, .last = 0xef, .length = 3, .low = continuation_low, .high = continuation_high},
+          Lead{.first = 0xf0, .last = 0xf0, .length = 4, .low = 0x90, .high = continuation_high},
+          Lead{.first = 0xf1, .last = 0xf3, .length = 4, .low = continuation_low, .high = continuation_high},
+          Lead{.first = 0xf4, .last = 0xf4, .length = 4, .low = continuation_low, .high = 0x8f},
+      };
+
+      const auto byte = static_cast<unsigned char>(text[index]);
+      const auto* const lead = std::ranges::find_if(leads, [byte](const Lead& candidate) {
+        return byte >= candidate.first && byte <= candidate.last;
+      });
+      if (lead == leads.end() || index + lead->length > text.size()) {
+        return 0;
+      }
+
+      for (std::size_t offset = 1; offset < lead->length; ++offset) {
+        const auto next = static_cast<unsigned char>(text[index + offset]);
+        const auto low = offset == 1 ? lead->low : continuation_low;
+        const auto high = offset == 1 ? lead->high : continuation_high;
+
+        if (next < low || next > high) {
+          return 0;
+        }
+      }
+
+      return lead->length;
+    }
+
+    // The text with every byte that starts no valid UTF-8 character, and NUL, as U+FFFD: what a
+    // histfile holds is whatever its shell wrote, the history keeps text.
+    void appendRepaired(Text& output, std::string_view text) {
+      constexpr std::string_view replacement = "\xef\xbf\xbd";
+      std::size_t index = 0;
+      std::size_t valid = 0;
+
+      while (index < text.size()) {
+        const auto length = characterLength(text, index);
+        if (length != 0) {
+          index += length;
+          continue;
+        }
+
+        output.append(text.substr(valid, index - valid));
+        output.append(replacement);
+        ++index;
+        valid = index;
+      }
+
+      output.append(text.substr(valid));
+    }
+
+    // FNV-1a over the bytes, seeded with the time: what tells the runs of one command apart.
+    std::uint64_t runKey(std::int64_t time, std::string_view command) noexcept {
+      constexpr std::uint64_t prime = 0x100000001b3;
+      constexpr std::uint64_t offset_basis = 0xcbf29ce484222325;
+      auto hash = offset_basis ^ static_cast<std::uint64_t>(time);
+
+      for (const auto byte : command) {
+        hash = (hash ^ static_cast<unsigned char>(byte)) * prime;
+      }
+
+      return hash;
+    }
+
+    // Sends a source's commands to the runtime in batches, each once the runtime has written the
+    // last: an import that fails stops there and says so, and one large file never fills the
+    // runtime's queue. Each entry is known by what it ran and when; the later runs of one command
+    // at one time, as a histfile without times holds, take a millisecond more each, so the same
+    // file imported again lands on the entries it already made.
+    class Importer final : public ImportSink {
     public:
-      ImportParser(Memory& memory, HistoryOptions::ImportKind kind)
-          : kind_(kind),
-            command_(memory) {}
-
-      ds::Option<ImportedLine> feed(std::string_view line) {
-        while (line.ends_with('\r')) {
-          line.remove_suffix(1);
-        }
-
-        switch (kind_) {
-        case HistoryOptions::ImportKind::zsh:
-          return zsh(line);
-        case HistoryOptions::ImportKind::bash:
-          return bash(line);
-        case HistoryOptions::ImportKind::fish:
-          return fish(line);
-        case HistoryOptions::ImportKind::automatic:
-          break;
-        }
-
-        throw std::runtime_error{"UnknownHistoryImportKind"};
+      Importer(Memory& memory, ControlSession& session, std::string_view source)
+          : session_(session),
+            source_(source),
+            commands_(memory),
+            repaired_(memory),
+            runs_(memory) {
+        commands_.reserve(max_batch_payload);
       }
 
-      ds::Option<ImportedLine> flush() {
-        if (!active_ || bytes_ == 0) {
-          return ds::none;
+      void command(std::int64_t started_at_ms, std::string_view command, const ImportedRun& known) override {
+        repaired_.clear();
+        appendRepaired(repaired_, command);
+        if (repaired_.size() > max_command_bytes) {
+          skipped(repaired_.size());
+          return;
         }
 
-        active_ = false;
-        if (bytes_ > command_.size()) {
-          ++skipped_;
-          largest_skipped_ = std::max(largest_skipped_, bytes_);
-          return ds::none;
+        // A directory past what the wire carries is left out rather than cut into another one.
+        const auto command_bytes = repaired_.size();
+
+        appendRepaired(repaired_, known.cwd);
+        const auto cwd_bytes = repaired_.size() - command_bytes <= ImportHistoryEntry::maximum_cwd_bytes ? repaired_.size() - command_bytes : 0;
+
+        repaired_.truncate(command_bytes + cwd_bytes);
+
+        const auto key = runKey(started_at_ms, repaired_.view().substr(0, command_bytes));
+        auto* runs = runs_.findMut(key);
+        std::int64_t run = 0;
+
+        if (runs == nullptr) {
+          runs_.insert(key, 1);
+        } else {
+          run = (*runs)++;
         }
 
-        return ImportedLine{.started_at_ms = time_, .command = command_.clone()};
+        if (count_ == max_import_entries || commands_.size() + repaired_.size() > max_batch_payload) {
+          flush();
+        }
+
+        offsets_.atMut(count_) = {.started_at_ms = started_at_ms + run, .offset = commands_.size(), .size = command_bytes, .cwd_size = cwd_bytes, .exit_code = known.exit_code, .duration_ns = std::max<std::int64_t>(0, known.duration_ns)};
+        commands_.append(repaired_.view());
+        ++count_;
       }
 
-      [[nodiscard]] std::size_t skipped() const noexcept {
+      void skipped(std::size_t bytes) override {
+        ++skipped_;
+        largest_skipped_ = std::max(largest_skipped_, bytes);
+      }
+
+      void flush() {
+        if (count_ == 0) {
+          return;
+        }
+
+        ds::Array<ImportHistoryEntry, max_import_entries> entries;
+
+        for (std::size_t index = 0; index < count_; ++index) {
+          const auto& entry = offsets_[index];
+
+          entries.atMut(index) = {
+              .started_at_ms = entry.started_at_ms,
+              .command = commands_.view().substr(entry.offset, entry.size),
+              .cwd = commands_.view().substr(entry.offset + entry.size, entry.cwd_size),
+              .exit_code = entry.exit_code,
+              .duration_ns = entry.duration_ns,
+          };
+        }
+
+        session_.template exchange<RequestCompleted>(ImportHistory{.source = source_, .base_sequence = imported_, .entries = std::span{entries}.first(count_)});
+        imported_ += count_;
+        count_ = 0;
+        commands_.clear();
+      }
+
+      [[nodiscard]] std::uint64_t imported() const noexcept {
+        return imported_;
+      }
+
+      [[nodiscard]] std::size_t skippedCount() const noexcept {
         return skipped_;
       }
 
@@ -616,309 +899,71 @@ namespace telar::runtime::cli::history {
       }
 
     private:
-      // A command and when it started, as a history line gives them.
-      struct TimedCommand {
-        std::int64_t time;
-        std::string_view command;
+      // An entry of the batch: its command and then its directory in commands_.
+      struct Pending {
+        std::int64_t started_at_ms;
+        std::size_t offset;
+        std::size_t size;
+        std::size_t cwd_size;
+        ds::Option<std::int32_t> exit_code;
+        std::int64_t duration_ns;
       };
 
-      static std::int64_t timestamp(std::string_view text) {
-        try {
-          constexpr auto max_seconds = std::numeric_limits<std::int64_t>::max() / milliseconds_per_second;
-          constexpr auto min_seconds = std::numeric_limits<std::int64_t>::min() / milliseconds_per_second;
-          const auto seconds = parseInt<std::int64_t>(text);
-
-          return seconds > max_seconds || seconds < min_seconds ? 0 : seconds * milliseconds_per_second;
-        } catch (const std::invalid_argument&) {
-          return 0;
-        }
-      }
-
-      static bool integer(std::string_view text) {
-        try {
-          static_cast<void>(parseInt<std::int64_t>(text));
-          return true;
-        } catch (const std::invalid_argument&) {
-          return false;
-        }
-      }
-
-      // The command a zsh line holds, extended (`: start:elapsed;command`) or plain; none for an
-      // empty or malformed line.
-      static tbc::val_a<ds::Option<TimedCommand>> zshCommand(tbc::val_a<std::string_view> line) {
-        if (!line.starts_with(": ")) {
-          return line.empty() ? ds::none : ds::Option{TimedCommand{.time = 0, .command = line}};
-        }
-
-        const auto semicolon = line.find(';');
-        const auto colon = line.find(':', 2);
-        if (semicolon == std::string_view::npos || colon == std::string_view::npos || colon >= semicolon) {
-          return ds::none;
-        }
-
-        return TimedCommand{.time = timestamp(line.substr(2, colon - 2)), .command = line.substr(semicolon + 1)};
-      }
-
-      void append(std::string_view bytes) {
-        if (bytes.empty()) {
-          return;
-        }
-
-        bytes_ += bytes.size();
-        last_ = bytes.back();
-        if (bytes_ <= max_command_bytes) {
-          command_.append(bytes);
-        }
-      }
-
-      void begin(std::int64_t time, std::string_view command) {
-        time_ = time;
-        bytes_ = 0;
-        last_ = 0;
-        active_ = true;
-        command_.clear();
-        append(command);
-      }
-
-      // Ends the pending command, which it returns, and begins this one.
-      ds::Option<ImportedLine> restart(std::int64_t time, std::string_view command) {
-        auto finished = flush();
-
-        begin(time, command);
-        return finished;
-      }
-
-      ds::Option<ImportedLine> zsh(std::string_view line) {
-        if (active_ && bytes_ != 0 && last_ == '\\') {
-          --bytes_;
-          if (bytes_ < command_.size()) {
-            command_.truncate(bytes_);
-          }
-
-          last_ = 0;
-          append("\n");
-          append(line);
-          return line.ends_with('\\') ? ds::none : flush();
-        }
-
-        const auto command = zshCommand(line);
-        if (!command) {
-          return flush();
-        }
-
-        if (auto finished = restart(command->time, command->command); finished || last_ == '\\') {
-          return finished;
-        }
-
-        return flush();
-      }
-
-      ds::Option<ImportedLine> plain(std::string_view line) {
-        if (line.empty()) {
-          return ds::none;
-        }
-
-        if (auto finished = restart(time_, line)) {
-          return finished;
-        }
-
-        return flush();
-      }
-
-      ds::Option<ImportedLine> bash(std::string_view line) {
-        if (line.size() > 1 && line.front() == '#' && integer(line.substr(1))) {
-          auto finished = flush();
-
-          time_ = timestamp(line.substr(1));
-          return finished;
-        }
-
-        return plain(line);
-      }
-
-      ds::Option<ImportedLine> fish(std::string_view line) {
-        constexpr std::string_view command_prefix = "- cmd: ";
-        constexpr std::string_view time_prefix = "  when: ";
-
-        if (line.starts_with(command_prefix)) {
-          return restart(0, line.substr(command_prefix.size()));
-        }
-
-        if (line.starts_with(time_prefix)) {
-          time_ = timestamp(line.substr(time_prefix.size()));
-          return flush();
-        }
-
-        return ds::none;
-      }
-
-      HistoryOptions::ImportKind kind_;
-      std::int64_t time_ = 0;
-      Text command_;
-      std::size_t bytes_ = 0;
-      char last_ = 0;
-      bool active_ = false;
+      ControlSession& session_;
+      std::string_view source_;
+      Text commands_;
+      Text repaired_;
+      ds::Map<std::uint64_t, std::int64_t, Memory> runs_;
+      ds::Array<Pending, max_import_entries> offsets_{};
+      std::size_t count_ = 0;
+      std::uint64_t imported_ = 0;
       std::size_t skipped_ = 0;
       std::size_t largest_skipped_ = 0;
     };
 
-    // The shell a history file named on the command line comes from, as its name suggests.
-    HistoryOptions::ImportKind fileKind(std::string_view file) noexcept {
-      if (file.ends_with("fish_history")) {
-        return HistoryOptions::ImportKind::fish;
+    int importHistory(Memory& memory, const char* socket, const ImportPlan& plan) {
+      const auto format = importFormat(plan.kind, plan.path);
+      const auto source = ds::format(memory, "{}:{}", formatName(format), plan.path);
+      if (source.size() > ImportHistory::maximum_source_bytes) {
+        throw std::runtime_error{"HistfilePathTooLong"};
       }
 
-      return file.contains("bash") ? HistoryOptions::ImportKind::bash : HistoryOptions::ImportKind::zsh;
-    }
+      ControlSession session{memory, socket, max_payload_size, max_batch_payload + request_overhead_bytes};
 
-    tbc::val_a<std::pair<HistoryOptions::ImportKind, Text>> resolveImport(tbc::mut_a<Memory> memory, const HistoryOptions& options) {
-      using Kind = HistoryOptions::ImportKind;
+      session.receiveTimeout(timeout_seconds);
+      Importer importer{memory, session, source.view()};
+      bool truncated = false;
 
-      if (options.import_file) {
-        const auto file = *options.import_file;
-        const auto kind = options.import_kind != Kind::automatic ? options.import_kind : fileKind(file);
+      switch (format) {
+      case ImportFormat::xonsh:
+        readXonsh(memory, plan.path.data(), importer);
+        break;
+      case ImportFormat::atuin:
+      case ImportFormat::mcfly:
+      case ImportFormat::histdb:
+      case ImportFormat::nushell_sqlite:
+        readDatabase(format, plan.path.data(), importer);
+        break;
+      case ImportFormat::zsh:
+      case ImportFormat::bash:
+      case ImportFormat::fish:
+      case ImportFormat::nushell:
+      case ImportFormat::powershell: {
+        const auto file = readHistfile(memory, plan.path.data());
 
-        return {kind, Text{memory, file}};
+        truncated = file.truncated;
+        parseHistfile(memory, format, file.text.view(), file.truncated, importer);
+        break;
+      }
       }
 
-      const auto home = processHome();
-      if (home.empty()) {
-        throw std::runtime_error{"HistfileNotFound"};
-      }
+      importer.flush();
+      const auto skipped = importer.skippedCount();
+      const auto largest = importer.largestSkipped();
 
-      constexpr ds::Array candidates{
-          std::pair{Kind::zsh, "/.zsh_history"},
-          std::pair{Kind::bash, "/.bash_history"},
-          std::pair{Kind::fish, "/.local/share/fish/fish_history"},
-      };
-
-      for (const auto& [kind, suffix] : candidates) {
-        if (options.import_kind != Kind::automatic && options.import_kind != kind) {
-          continue;
-        }
-
-        auto path = ds::format(memory, "{}{}", home, suffix);
-        if (::access(path.data(), F_OK) == 0) {
-          return {kind, std::move(path)};
-        }
-      }
-
-      throw std::runtime_error{"HistfileNotFound"};
-    }
-
-    tbc::val_a<std::pair<Text, bool>> newestLines(tbc::mut_a<Memory> memory, const Text& path) {
-      const FileDescriptor file{::open(path.data(), combineFlags(O_RDONLY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
-      struct stat inode{};
-      if (!file || ::fstat(file.get(), &inode) != 0) {
-        throw std::runtime_error{sys::errorName(sys::lastError())};
-      }
-
-      const auto size = static_cast<std::uint64_t>(inode.st_size);
-      const auto offset = size > max_histfile_bytes ? size - max_histfile_bytes : 0;
-      Text text{memory};
-      std::size_t used = 0;
-
-      text.resizeForOverwrite(size - offset);
-      while (used < text.size()) {
-        const auto rest = text.viewMut().subspan(used);
-        const auto count = ::pread(file.get(), rest.data(), rest.size(), static_cast<off_t>(offset + used));
-        if (count < 0 && sys::lastError() == EINTR) {
-          continue;
-        }
-
-        if (count < 0) {
-          throw std::runtime_error{sys::errorName(sys::lastError())};
-        }
-
-        if (count == 0) {
-          break;
-        }
-
-        used += static_cast<std::size_t>(count);
-      }
-
-      text.truncate(used);
-      if (offset != 0) {
-        reportCommandLimit({.name = "history.max_histfile_bytes", .noun = "bytes", .value = max_histfile_bytes, .requested = size});
-        const auto newline = text.view().find('\n');
-
-        text.remove(0, newline == std::string_view::npos ? text.size() : newline + 1);
-      }
-
-      return {std::move(text), offset != 0};
-    }
-
-    struct ImportSource {
-      HistoryOptions::ImportKind kind;
-      Text path;
-      Text text;
-      bool truncated;
-    };
-
-    tbc::val_a<ImportSource> loadImport(tbc::mut_a<Memory> memory, const HistoryOptions& options) {
-      auto [kind, path] = resolveImport(memory, options);
-      auto [text, truncated] = newestLines(memory, path);
-
-      return {.kind = kind, .path = std::move(path), .text = std::move(text), .truncated = truncated};
-    }
-
-    int importHistory(Memory& memory, ControlSession& session, const ImportSource& input) {
-      constexpr ds::Array kind_names{"auto", "zsh", "bash", "fish"};
-      const auto source = ds::format(memory, "{}:{}", kind_names.at(static_cast<std::size_t>(input.kind)), input.path);
-      ImportParser parser{memory, input.kind};
-      ds::Vec<ImportedLine, Memory> batch{memory};
-
-      batch.reserve(max_import_entries);
-      std::size_t used = 0;
-      std::uint64_t total = 0;
-      auto flush = [&] {
-        if (batch.empty()) {
-          return;
-        }
-
-        ds::Array<ImportHistoryEntry, max_import_entries> entries;
-
-        for (std::size_t index = 0; index < batch.size(); ++index) {
-          entries.atMut(index) = {.started_at_ms = batch[index].started_at_ms, .command = batch[index].command.view()};
-        }
-
-        session.template exchange<RequestCompleted>(ImportHistory{.source = source.view(), .base_sequence = total, .entries = std::span{entries}.first(batch.size())});
-        total += batch.size();
-        batch.clear();
-        used = 0;
-      };
-
-      const auto push = [&](ds::Option<ImportedLine> entry) {
-        if (!entry || entry->command.empty()) {
-          return;
-        }
-
-        if (batch.size() == max_import_entries || used + entry->command.size() > max_batch_payload) {
-          flush();
-        }
-
-        used += entry->command.size();
-        batch.push(std::move(entry.getMut()));
-      };
-
-      std::string_view remaining = input.text;
-
-      for (;;) {
-        const auto newline = remaining.find('\n');
-
-        push(parser.feed(remaining.substr(0, newline)));
-        if (newline == std::string_view::npos) {
-          break;
-        }
-
-        remaining.remove_prefix(newline + 1);
-      }
-
-      push(parser.flush());
-      flush();
-      writeText(ds::format(memory, "imported {} commands from {}\n", total, input.path));
-      if (parser.skipped() != 0) {
-        const LimitReach reach{.name = "history.import_command_bytes", .noun = "bytes", .value = max_command_bytes, .requested = parser.largestSkipped()};
+      writeText(ds::format(memory, "imported {} commands from {}\n", importer.imported(), plan.path));
+      if (skipped != 0) {
+        const LimitReach reach{.name = "history.import_command_bytes", .noun = "bytes", .value = max_command_bytes, .requested = largest};
 
         reportCommandLimit(reach);
         try {
@@ -927,82 +972,204 @@ namespace telar::runtime::cli::history {
         }
       }
 
-      return input.truncated || parser.skipped() != 0 ? 1 : 0;
+      return truncated || skipped != 0 ? 1 : 0;
     }
 
-    // An entry's state: running, interrupted, its exit code written into `code`, or unknown.
-    tbc::val_a<std::string_view> statusText(const HistoryEntry& entry, tbc::val_a<std::span<char>> code) {
-      if (entry.status == HistoryStatus::running) {
-        return "RUN";
-      }
-
-      if (entry.status == HistoryStatus::interrupted) {
-        return "INT";
-      }
-
-      if (!entry.exit_code) {
-        return "?";
-      }
-
-      const auto written = std::format_to_n(code.data(), static_cast<std::ptrdiff_t>(code.size()), "{}", *entry.exit_code);
-
-      return {code.data(), std::min(static_cast<std::size_t>(written.size), code.size())};
+    // The query a list, a search, a preview or an export pages through, from the options.
+    tbc::val_a<QueryHistory> historyQuery(tbc::ref_a<HistoryOptions> options, tbc::ref_a<HistoryScopeValue> scope) {
+      return QueryHistory{
+          .query = options.query,
+          .scope = options.scope,
+          .scope_value = scope,
+          .failed_only = options.failed_only,
+          .author = options.author,
+          .match = options.match,
+          .distinct = options.distinct,
+          .limit = options.limit,
+          .offset = options.offset,
+          .sort = options.sort,
+          .since_ms = options.since_ms,
+          .until_ms = options.until_ms,
+          .exit_code = options.exit_code,
+          .min_duration_ms = options.min_duration_ms,
+          .host = options.host,
+          .branch = options.branch,
+          .shell = options.shell,
+      };
     }
 
-    void print(Memory& memory, const HistoryResults& results) {
-      constexpr std::size_t exit_code_bytes = 16;
-      constexpr int tm_year_base = 1900;
-      constexpr std::int64_t nanoseconds_per_millisecond = 1000000;
-      Text output{memory};
+    // One page of a query, on a connection of its own: the runtime ends a control connection
+    // once it answers a history query. `consume` reads the results while they are valid.
+    template <typename Consume>
+    void page(Memory& memory, const char* socket, const QueryHistory& request, Consume consume) {
+      ControlSession session{memory, socket};
 
-      for (const auto& entry : results.entries) {
-        const auto seconds = static_cast<std::time_t>(std::max<std::int64_t>(0, entry.started_at_ms / milliseconds_per_second));
-        std::tm utc{};
+      session.receiveTimeout(timeout_seconds);
+      consume(session.template exchange<HistoryResults>(request));
+    }
 
-        ::gmtime_r(&seconds, &utc);
-        ds::Array<char, exit_code_bytes> code{};
-        const auto status = statusText(entry, code.viewMut());
+    // Where a run stands in a listing by time, newest first: the place a page continues past.
+    struct RunMark {
+      std::int64_t started_at_ms = 0;
+      std::uint64_t id = 0;
 
-        ds::formatTo(output, "#{}  {:04}-{:02}-{:02} {:02}:{:02}:{:02}Z  {}  {}ms  {}  ", entry.id, utc.tm_year + tm_year_base, utc.tm_mon + 1, utc.tm_mday, utc.tm_hour, utc.tm_min, utc.tm_sec, status, std::max<std::int64_t>(0, entry.duration_ns / nanoseconds_per_millisecond), EscapedField{entry.cwd});
-        if (entry.author == HistoryAuthor::agent && !entry.provider.empty()) {
-          ds::formatTo(output, "\x1b[2m[{}]\x1b[22m ", EscapedField{entry.provider});
+      static RunMark of(const HistoryEntry& entry) noexcept {
+        return {.started_at_ms = entry.started_at_ms, .id = entry.id};
+      }
+
+      // Whether `entry` lists after this run, as an older one.
+      [[nodiscard]] bool before(const HistoryEntry& entry) const noexcept {
+        return entry.started_at_ms < started_at_ms || (entry.started_at_ms == started_at_ms && entry.id < id);
+      }
+    };
+
+    // Asks for the runs past `mark`, or from the newest when it names none.
+    void continuePast(QueryHistory& request, RunMark mark) noexcept {
+      request.after_started_ms = mark.started_at_ms;
+      request.after_id = mark.id;
+    }
+
+    // Every page the query matches, newest first, over one snapshot, each continuing past the
+    // last run the one before it held: what the runtime records meanwhile neither shifts nor
+    // joins the pages, and what it deletes skips nothing. `visit` reads a page that holds an
+    // entry and returns whether to read on; the request keeps the snapshot.
+    template <typename Visit>
+    void eachPage(Memory& memory, const char* socket, QueryHistory& request, Visit visit) {
+      request.limit = HistoryOptions::max_results;
+      request.offset = 0;
+      request.sort = HistorySort::time;
+      continuePast(request, {});
+      for (;;) {
+        bool more = false;
+
+        page(memory, socket, request, [&](const HistoryResults& results) {
+          request.snapshot_id = results.snapshot_id;
+          if (results.entries.empty()) {
+            return;
+          }
+
+          more = visit(results) && results.has_more;
+          continuePast(request, RunMark::of(results.entries.back()));
+        });
+
+        if (!more) {
+          return;
         }
-
-        ds::formatTo(output, "{}\n", EscapedField{entry.command});
       }
-
-      writeText(output);
     }
 
-    tbc::val_a<HistoryScopeValue> scopeValue(tbc::ref_a<HistoryOptions> options, tbc::val_a<std::string_view> cwd) {
-      switch (options.scope) {
-      case HistoryScope::cwd:
-        return cwd;
-      case HistoryScope::workspace:
-        return options.scope_value;
-      case HistoryScope::pane:
-        return options.pane_id;
-      case HistoryScope::global:
-        return std::monostate{};
-      }
-
-      throw std::runtime_error{"InvalidHistoryScope"};
+    // Every entry the query matches, newest first, as eachPage reads them. `visit` returns
+    // whether to read on.
+    template <typename Visit>
+    void eachEntry(Memory& memory, const char* socket, QueryHistory request, Visit visit) {
+      eachPage(memory, socket, request, [&](const HistoryResults& results) {
+        return std::ranges::all_of(results.entries, std::ref(visit));
+      });
     }
 
-  }
+    EntryStyle entryStyle(HistoryOptions::Output output) noexcept {
+      switch (output) {
+      case HistoryOptions::Output::text:
+        return EntryStyle::text;
+      case HistoryOptions::Output::json:
+        return EntryStyle::json;
+      case HistoryOptions::Output::format:
+        return EntryStyle::format;
+      case HistoryOptions::Output::zsh:
+        return EntryStyle::zsh;
+      case HistoryOptions::Output::bash:
+        return EntryStyle::bash;
+      case HistoryOptions::Output::fish:
+        return EntryStyle::fish;
+      }
 
-  tbc::val_b<HistoryResults> query(tbc::mut_b<ControlSession> session, const HistoryOptions& options, const HistoryScopeValue& scope) {
-    return session.template exchange<HistoryResults>(QueryHistory{
-        .query = options.query,
-        .scope = options.scope,
-        .scope_value = scope,
-        .failed_only = options.failed_only,
-        .author = options.author,
-        .limit = options.limit,
-    });
-  }
+      return EntryStyle::text;
+    }
 
-  namespace {
+    // The entry `--after` names, as a mark to continue past.
+    RunMark entryMark(Memory& memory, const char* socket, std::uint64_t id) {
+      ds::Option<RunMark> mark;
+
+      page(memory, socket, QueryHistory{.limit = 1, .entry_id = id}, [&](const HistoryResults& results) {
+        if (!results.entries.empty()) {
+          mark = RunMark::of(results.entries.front());
+        }
+      });
+
+      if (!mark) {
+        throw std::runtime_error{"HistoryEntryNotFound"};
+      }
+
+      return *mark;
+    }
+
+    void list(Memory& memory, const char* socket, const HistoryOptions& options, const HistoryScopeValue& scope) {
+      DescriptorWriter output{STDOUT_FILENO};
+      auto request = historyQuery(options, scope);
+
+      if (options.after_id != 0) {
+        request.sort = HistorySort::time;
+        continuePast(request, entryMark(memory, socket, options.after_id));
+      }
+
+      page(memory, socket, request, [&](const HistoryResults& results) {
+        for (const auto& entry : results.entries) {
+          printEntry(output, entry, entryStyle(options.output), options.format);
+        }
+      });
+
+      output.flush();
+    }
+
+    // Prints every entry the filters match, oldest first, as a shell reads its histfile, holding
+    // one page at a time. A first walk, newest first, marks where each page of one snapshot
+    // ends; the pages are then read again from the oldest, each down to its mark and printed
+    // reversed. Every page continues past a run rather than skipping a count of them, so what is
+    // deleted meanwhile neither skips nor repeats an entry, and the snapshot keeps out what is
+    // recorded.
+    void exportHistory(Memory& memory, const char* socket, const HistoryOptions& options, const HistoryScopeValue& scope) {
+      auto request = historyQuery(options, scope);
+      ds::Vec<RunMark, Memory> marks{memory};
+      DescriptorWriter output{STDOUT_FILENO};
+
+      marks.push({});
+      eachPage(memory, socket, request, [&](const HistoryResults& results) {
+        marks.push(RunMark::of(results.entries.back()));
+        return true;
+      });
+
+      // The page past the second-to-last mark, down to the last. One a deletion shrank ends at
+      // an older entry or at the end of the listing; one the reply's size cut short (the runs
+      // it holds grew since) is split at the run it reached, and its older part printed first.
+      while (marks.size() > 1) {
+        const auto until = marks.back();
+
+        continuePast(request, marks[marks.size() - 2]);
+        page(memory, socket, request, [&](const HistoryResults& results) {
+          const auto entries = results.entries;
+          std::size_t count = 0;
+
+          while (count < entries.size() && !until.before(entries[count])) {
+            ++count;
+          }
+
+          const bool reached = count < entries.size() || !results.has_more || count == 0 || entries[count - 1].id == until.id;
+
+          marks.truncate(marks.size() - 1);
+          if (!reached) {
+            marks.push(RunMark::of(entries[count - 1]));
+            marks.push(until);
+            return;
+          }
+
+          for (const auto& entry : std::views::reverse(entries.first(count))) {
+            printEntry(output, entry, entryStyle(options.output), options.format);
+          }
+        });
+      }
+
+      output.flush();
+    }
 
     bool confirmPrune() {
       constexpr std::size_t confirmation_bytes = 16;
@@ -1029,58 +1196,98 @@ namespace telar::runtime::cli::history {
       return false;
     }
 
-  }
-
-  void prune(Memory& memory, const char* socket, ControlSession& session, const HistoryOptions& options, const HistoryScopeValue& scope) {
-    if (options.action == HistoryOptions::Action::remove) {
-      const auto result = session.template exchange<HistoryPruned>(DeleteHistory{.id = options.id});
-
-      writeText(ds::format(memory, "removed {} entries\n", result.removed));
-      return;
-    }
-
-    if (options.dry_run || !options.assume_yes) {
-      auto preview = options;
-
-      preview.author = HistoryAuthorFilter::all;
-      preview.limit = HistoryOptions::max_results;
-      const auto results = query(session, preview, scope);
-
-      if (options.before_ms != 0) {
-        writeText(ds::format(memory, "{} newest entries match the text/scope filters; --before applies on top and is not previewable\n", results.entries.size()));
-      } else {
-        writeText(ds::format(memory, "would remove {} entries (counting at most the newest {})\n", results.entries.size(), HistoryOptions::max_results));
+    // Shows how many entries a prune removes, asks, and tells whether to go on.
+    bool previewPrune(Memory& memory, const HistoryOptions& options, std::uint64_t count) {
+      writeText(ds::format(memory, "would remove {} entries\n", count));
+      if (options.dry_run) {
+        return false;
       }
 
-      if (options.dry_run) {
-        return;
+      if (options.assume_yes) {
+        return true;
       }
 
       writeText("prune permanently? type yes to continue: ");
       if (!confirmPrune()) {
         writeText("aborted\n");
-        return;
+        return false;
       }
+
+      return true;
     }
 
-    constexpr unsigned timeout_seconds = 30;
-    ControlSession removal{memory, socket};
+    void prune(Memory& memory, const char* socket, const HistoryOptions& options, const HistoryScopeValue& scope) {
+      PruneHistory request{
+          .scope = options.scope,
+          .scope_value = scope,
+          .before_ms = options.before_ms,
+          .failed_only = options.failed_only,
+          .match = options.query,
+          .keep_runs = options.keep_runs,
+          .dry_run = true,
+      };
 
-    removal.receiveTimeout(timeout_seconds);
-    const auto result = removal.template exchange<HistoryPruned>(PruneHistory{
-        .scope = options.scope,
-        .scope_value = scope,
-        .before_ms = options.before_ms,
-        .failed_only = options.failed_only,
-        .match = options.query,
-    });
+      const auto send = [&] {
+        ControlSession session{memory, socket};
 
-    writeText(ds::format(memory, "removed {} entries\n", result.removed));
-  }
+        session.receiveTimeout(timeout_seconds);
+        return session.template exchange<HistoryPruned>(request).removed;
+      };
 
-  namespace {
+      // The preview is the prune's own selection, counted by the runtime, so it is exactly what goes.
+      if ((options.dry_run || !options.assume_yes) && !previewPrune(memory, options, send())) {
+        return;
+      }
 
-    void show(Memory& memory, ControlSession& session, const HistoryOptions& options) {
+      request.dry_run = false;
+      writeText(ds::format(memory, "removed {} entries\n", send()));
+    }
+
+    // Passes the entries the prune's filters match through the history's filters as the runtime
+    // has them today: what they would refuse is removed and what they would keep redacted is
+    // redacted, what a filter added later still kept from before it.
+    void pruneFiltered(Memory& memory, const char* socket, const HistoryOptions& options, const HistoryScopeValue& scope) {
+      RewriteHistory request{
+          .scope = options.scope,
+          .scope_value = scope,
+          .before_ms = options.before_ms,
+          .failed_only = options.failed_only,
+          .match = options.query,
+          .dry_run = true,
+      };
+
+      const auto rewrite = [&] {
+        ControlSession session{memory, socket};
+
+        session.receiveTimeout(timeout_seconds);
+        return session.template exchange<HistoryRewritten>(request);
+      };
+
+      if (options.dry_run || !options.assume_yes) {
+        const auto preview = rewrite();
+
+        writeText(ds::format(memory, "would remove {} entries and redact {}\n", preview.removed, preview.redacted));
+        if (options.dry_run) {
+          return;
+        }
+
+        writeText("prune permanently? type yes to continue: ");
+        if (!confirmPrune()) {
+          writeText("aborted\n");
+          return;
+        }
+      }
+
+      request.dry_run = false;
+      const auto result = rewrite();
+
+      writeText(ds::format(memory, "removed {} entries and redacted {}\n", result.removed, result.redacted));
+    }
+
+    void show(Memory& memory, const char* socket, const HistoryOptions& options) {
+      ControlSession session{memory, socket};
+
+      session.receiveTimeout(timeout_seconds);
       const auto output = session.template exchange<HistoryOutput>(ReadHistoryOutput{.id = options.id});
       if (output.observed_bytes == 0) {
         writeText(ds::format(memory, "telar history: no output captured for entry {} (runtime.history.output = \"bounded\" enables capture)\n", output.id), STDERR_FILENO);
@@ -1093,13 +1300,129 @@ namespace telar::runtime::cli::history {
       }
     }
 
-    void stats(Memory& memory, ControlSession& session, const HistoryOptions& options, const HistoryScopeValue& scope) {
+    // When the period starts: local midnight for today, else that many days back from now.
+    std::int64_t periodStart(const HistoryOptions& options) {
       constexpr std::int64_t milliseconds_per_day = 86400000;
       const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+      if (options.period_today) {
+        const auto seconds = static_cast<std::time_t>(now / milliseconds_per_second);
+        std::tm local{};
+
+        ::localtime_r(&seconds, &local);
+        local.tm_hour = 0;
+        local.tm_min = 0;
+        local.tm_sec = 0;
+        local.tm_isdst = -1;
+        return static_cast<std::int64_t>(std::mktime(&local)) * milliseconds_per_second;
+      }
+
+      return options.period_days == 0 ? 0 : now - (static_cast<std::int64_t>(options.period_days) * milliseconds_per_day);
+    }
+
+    // Counts the runs of `size` commands one after another, as `git add` then `git commit`: the
+    // period's entries arrive newest first, and the newest `size` of them, oldest first, make each
+    // sequence. The most distinct sequences kept is bounded; past it the new ones are not counted.
+    void ngramStats(Memory& memory, const char* socket, const HistoryOptions& options, const HistoryScopeValue& scope, std::int64_t since) {
+      constexpr std::size_t maximum_sequences = 100000;
+      constexpr std::size_t shown = 10;
+      constexpr std::string_view separator = " ; ";
+
+      struct Sequence { // NOLINT(bugprone-exception-escape): its implicit move assignment, which sorting uses, moves a Text between two of the one memory, which allocates nothing
+        std::uint64_t count;
+        Text text;
+      };
+
+      ds::Map<std::uint64_t, std::size_t, Memory> indexes{memory};
+      ds::Vec<Sequence, Memory> sequences{memory};
+      ds::Vec<Text, Memory> window{memory};
+      Text joined{memory};
+      std::size_t seen = 0;
+      std::uint64_t total = 0;
+      bool limited = false;
+      auto request = historyQuery(options, scope);
+
+      request.query = {};
+      request.failed_only = false;
+      request.author = HistoryAuthorFilter::all;
+      request.match = HistoryMatch::substring;
+      request.distinct = false;
+      eachEntry(memory, socket, request, [&](const HistoryEntry& entry) {
+        if (since != 0 && entry.started_at_ms < since) {
+          return false;
+        }
+
+        // The last `size` commands read, in a ring: the one just read is the oldest of them, and
+        // the ones before it in the ring follow it in time.
+        const auto slot = seen % options.ngram_size;
+
+        if (window.size() < options.ngram_size) {
+          window.push(Text{memory, entry.command});
+        } else {
+          window.atMut(slot).assign(entry.command);
+        }
+
+        ++seen;
+        if (seen < options.ngram_size) {
+          return true;
+        }
+
+        joined.clear();
+        for (std::size_t step = 0; step < options.ngram_size; ++step) {
+          if (step != 0) {
+            joined.append(separator);
+          }
+
+          joined.append(window[(slot + options.ngram_size - step) % options.ngram_size].view());
+        }
+
+        ++total;
+        const auto key = runKey(0, joined.view());
+        if (const auto* index = indexes.find(key)) {
+          ++sequences.atMut(*index).count;
+        } else if (sequences.size() < maximum_sequences) {
+          indexes.insert(key, sequences.size());
+          sequences.push({.count = 1, .text = joined.clone()});
+        } else {
+          limited = true;
+        }
+
+        return true;
+      });
+
+      if (limited) {
+        reportCommandLimit({.name = "history.stats_sequences", .noun = "sequences", .value = maximum_sequences});
+      }
+
+      std::ranges::stable_sort(sequences.viewMut(), std::greater{}, &Sequence::count);
+      auto output = ds::format(memory, "commands: {}\nunique:   {}\n", total, sequences.size());
+
+      if (!sequences.empty()) {
+        output.append("top:\n");
+      }
+
+      for (const auto& sequence : std::span{sequences}.first(std::min(shown, sequences.size()))) {
+        ds::formatTo(output, "  {:>7}  {}\n", sequence.count, EscapedField{sequence.text});
+      }
+
+      writeText(output);
+    }
+
+    void stats(Memory& memory, const char* socket, const HistoryOptions& options, const HistoryScopeValue& scope) {
+      const auto since = periodStart(options);
+
+      if (options.ngram_size > 1) {
+        ngramStats(memory, socket, options, scope, since);
+        return;
+      }
+
+      ControlSession session{memory, socket};
+
+      session.receiveTimeout(timeout_seconds);
       const auto result = session.template exchange<HistoryStatsResult>(HistoryStatsQuery{
           .scope = options.scope,
           .scope_value = scope,
-          .since_ms = options.period_days == 0 ? 0 : now - (static_cast<std::int64_t>(options.period_days) * milliseconds_per_day),
+          .since_ms = since,
       });
 
       auto output = ds::format(memory, "commands: {}\nunique:   {}\n", result.total, result.unique);
@@ -1127,57 +1450,112 @@ namespace telar::runtime::cli::history {
       case HistoryOptions::Action::stats:
       case HistoryOptions::Action::list:
       case HistoryOptions::Action::search:
+      case HistoryOptions::Action::export_history:
         return "error: HistoryQueryFailed\n";
       }
 
       std::unreachable();
     }
 
+    // A workspace named relative to where the command runs, as the store keys directories: its
+    // real path when it exists, else the path joined to the working directory.
+    tbc::val_a<std::string_view> workspacePath(tbc::val_a<std::string_view> path, std::string_view working, tbc::mut_a<ds::Array<char, PATH_MAX>> buffer) {
+      if (path.starts_with('/')) {
+        return path;
+      }
+
+      if (::realpath(path.data(), buffer.dataMut()) != nullptr) {
+        return std::string_view{buffer.data()};
+      }
+
+      while (path.starts_with("./")) {
+        path.remove_prefix(2);
+      }
+
+      const auto written = std::format_to_n(buffer.dataMut(), buffer.size() - 1, "{}/{}", working, path);
+      if (static_cast<std::size_t>(written.size) >= buffer.size()) {
+        throw std::invalid_argument{"InvalidWorkspacePath"};
+      }
+
+      const auto size = static_cast<std::size_t>(written.size);
+
+      buffer.atMut(size) = '\0';
+      return std::string_view{buffer.data(), size};
+    }
+
   }
 
   int run(Memory& memory, const HistoryOptions& options) {
     try {
-      ds::Option<ImportSource> input;
+      ds::Option<ImportPlan> plan;
 
       if (options.action == HistoryOptions::Action::import) {
-        input.emplace(loadImport(memory, options));
+        plan.emplace(planImport(memory, options));
       }
 
-      // A request carries a batch of imported commands with its source and other fields, which this leaves room for.
-      constexpr std::size_t request_overhead_bytes = 2048;
-      constexpr unsigned timeout_seconds = 30;
       ServerOptions server_options{};
 
       server_options.socket = options.socket.valueOr("");
       const RuntimePaths<Memory> paths{memory, server_options, process_environment};
 
       ensureRuntime(memory, paths);
-      ControlSession session{memory, paths.socket.data(), max_payload_size, max_batch_payload + request_overhead_bytes};
-
-      session.receiveTimeout(timeout_seconds);
       ds::Array<char, PATH_MAX> directory{};
-      if (options.scope == HistoryScope::cwd && ::realpath(".", directory.dataMut()) == nullptr) {
+      ds::Array<char, PATH_MAX> workspace{};
+
+      if ((options.scope == HistoryScope::cwd || options.scope == HistoryScope::workspace) && ::realpath(".", directory.dataMut()) == nullptr) {
         throw SystemError{"Resolve the working directory"};
       }
 
-      const auto scope = scopeValue(options, std::string_view{directory.data()});
+      HistoryScopeValue scope = std::monostate{};
+
+      switch (options.scope) {
+      case HistoryScope::cwd:
+        scope = std::string_view{directory.data()};
+        break;
+      case HistoryScope::workspace:
+        scope = workspacePath(options.scope_value, std::string_view{directory.data()}, workspace);
+        break;
+      case HistoryScope::pane:
+        scope = options.pane_id;
+        break;
+      case HistoryScope::global:
+        break;
+      }
+
+      const auto* const socket = paths.socket.data();
 
       switch (options.action) {
       case HistoryOptions::Action::import:
-        return importHistory(memory, session, *input);
-      case HistoryOptions::Action::remove:
+        return importHistory(memory, socket, *plan);
+      case HistoryOptions::Action::remove: {
+        ControlSession session{memory, socket};
+
+        session.receiveTimeout(timeout_seconds);
+        const auto result = session.template exchange<HistoryPruned>(DeleteHistory{.id = options.id});
+
+        writeText(ds::format(memory, "removed {} entries\n", result.removed));
+        break;
+      }
       case HistoryOptions::Action::prune:
-        prune(memory, paths.socket.data(), session, options, scope);
+        if (options.prune_filters) {
+          pruneFiltered(memory, socket, options, scope);
+        } else {
+          prune(memory, socket, options, scope);
+        }
+
         break;
       case HistoryOptions::Action::show:
-        show(memory, session, options);
+        show(memory, socket, options);
         break;
       case HistoryOptions::Action::stats:
-        stats(memory, session, options, scope);
+        stats(memory, socket, options, scope);
         break;
       case HistoryOptions::Action::list:
       case HistoryOptions::Action::search:
-        print(memory, query(session, options, scope));
+        list(memory, socket, options, scope);
+        break;
+      case HistoryOptions::Action::export_history:
+        exportHistory(memory, socket, options, scope);
         break;
       }
 
@@ -1195,14 +1573,6 @@ namespace telar::runtime::cli::history {
       return 1;
     }
   }
-
-}
-
-namespace telar::runtime::cli::diagnostics {
-
-}
-
-namespace telar::runtime::cli::history {
 
 }
 
@@ -1292,23 +1662,114 @@ namespace telar::runtime::cli {
   }
 
   auto HistoryOptions::importKind(std::string_view value) -> ImportKind {
-    if (value == "auto") {
-      return ImportKind::automatic;
-    }
+    using Named = std::pair<std::string_view, ImportKind>;
+    constexpr ds::Array kinds{
+        Named{"auto", ImportKind::automatic},
+        Named{"zsh", ImportKind::zsh},
+        Named{"bash", ImportKind::bash},
+        Named{"fish", ImportKind::fish},
+        Named{"nushell", ImportKind::nushell},
+        Named{"xonsh", ImportKind::xonsh},
+        Named{"powershell", ImportKind::powershell},
+        Named{"atuin", ImportKind::atuin},
+        Named{"mcfly", ImportKind::mcfly},
+        Named{"histdb", ImportKind::histdb},
+    };
 
-    if (value == "zsh") {
-      return ImportKind::zsh;
-    }
-
-    if (value == "bash") {
-      return ImportKind::bash;
-    }
-
-    if (value == "fish") {
-      return ImportKind::fish;
+    for (const auto& [name, kind] : kinds) {
+      if (name == value) {
+        return kind;
+      }
     }
 
     throw std::invalid_argument{"UnknownHistoryImportKind"};
+  }
+
+  std::int64_t HistoryOptions::parseTime(std::string_view text, std::int64_t now_ms) {
+    constexpr std::int64_t second_ms = 1000;
+    constexpr std::int64_t minute_ms = 60 * second_ms;
+    constexpr std::int64_t hour_ms = 60 * minute_ms;
+    constexpr std::int64_t day_ms = 24 * hour_ms;
+    constexpr std::int64_t week_ms = 7 * day_ms;
+
+    if (text == "today" || text == "yesterday") {
+      // Midnight where the user is, as `today` means to them.
+      const auto seconds = static_cast<std::time_t>(now_ms / second_ms);
+      std::tm local{};
+
+      ::localtime_r(&seconds, &local);
+      local.tm_hour = 0;
+      local.tm_min = 0;
+      local.tm_sec = 0;
+      local.tm_isdst = -1;
+      if (text == "yesterday") {
+        --local.tm_mday;
+      }
+
+      return static_cast<std::int64_t>(std::mktime(&local)) * second_ms;
+    }
+
+    struct Unit {
+      std::string_view suffix;
+      std::int64_t milliseconds;
+    };
+
+    constexpr ds::Array<Unit, 5> units{
+        {
+            {.suffix = "w", .milliseconds = week_ms},
+            {.suffix = "d", .milliseconds = day_ms},
+            {.suffix = "h", .milliseconds = hour_ms},
+            {.suffix = "m", .milliseconds = minute_ms},
+            {.suffix = "s", .milliseconds = second_ms},
+        },
+    };
+
+    auto age = text;
+
+    age.remove_prefix(age.starts_with('-') ? 1 : 0);
+    for (const auto& unit : units) {
+      if (!age.ends_with(unit.suffix) || age.size() == unit.suffix.size()) {
+        continue;
+      }
+
+      const auto count = parseInt<std::int64_t>(age.substr(0, age.size() - unit.suffix.size()));
+      if (count < 0 || count > now_ms / unit.milliseconds) {
+        throw std::invalid_argument{"InvalidHistoryTime"};
+      }
+
+      return now_ms - (count * unit.milliseconds);
+    }
+
+    return parseBefore(text);
+  }
+
+  std::uint64_t HistoryOptions::parseDuration(std::string_view text) {
+    struct Unit {
+      std::string_view suffix;
+      std::uint64_t milliseconds;
+    };
+
+    constexpr ds::Array<Unit, 4> units{
+        {
+            {.suffix = "ms", .milliseconds = 1},
+            {.suffix = "s", .milliseconds = 1'000},
+            {.suffix = "m", .milliseconds = 60'000},
+            {.suffix = "h", .milliseconds = 3'600'000},
+        },
+    };
+
+    for (const auto& unit : units) {
+      if (text.ends_with(unit.suffix) && text.size() > unit.suffix.size() && (unit.suffix != "s" || !text.ends_with("ms"))) {
+        const auto count = parseInt<std::uint64_t>(text.substr(0, text.size() - unit.suffix.size()));
+        if (count > std::numeric_limits<std::uint64_t>::max() / unit.milliseconds) {
+          throw std::invalid_argument{"InvalidHistoryDuration"};
+        }
+
+        return count * unit.milliseconds;
+      }
+    }
+
+    return parseInt<std::uint64_t>(text);
   }
 
   std::int64_t HistoryOptions::parseBefore(std::string_view text) {
@@ -1341,8 +1802,15 @@ namespace telar::runtime::cli {
     constexpr std::int64_t epoch_year = 1970;
     constexpr std::int64_t max_date_year = 292000000;
     constexpr std::int64_t months_per_year = 12;
-    constexpr std::int64_t max_month_day = 31;
-    if (year < epoch_year || year > max_date_year || month < 1 || month > months_per_year || day < 1 || day > max_month_day) {
+    if (year < epoch_year || year > max_date_year || month < 1 || month > months_per_year) {
+      throw std::invalid_argument{"InvalidHistoryBefore"};
+    }
+
+    // A day the month does not have, as 2024-02-31, names no date rather than one in the next month.
+    constexpr ds::Array<std::int64_t, 12> month_days{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    const bool leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    const auto last_day = month_days[static_cast<std::size_t>(month - 1)] + (month == 2 && leap ? 1 : 0);
+    if (day < 1 || day > last_day) {
       throw std::invalid_argument{"InvalidHistoryBefore"};
     }
 
@@ -1387,6 +1855,9 @@ namespace telar::runtime::cli {
         if (words.size() > 1 && !std::string_view{words[1]}.starts_with('-')) {
           self.import_kind = HistoryOptions::importKind(*cursor.next());
         }
+      } else if (action == "export") {
+        self.action = Action::export_history;
+        self.output = HistoryOptions::Output::json;
       } else {
         throw std::invalid_argument{"UnknownHistoryAction"};
       }
@@ -1398,7 +1869,7 @@ namespace telar::runtime::cli {
       constexpr std::uint16_t days_per_year = 365;
 
       if (value == "today") {
-        return 1;
+        return 0;
       }
 
       if (value == "week") {
@@ -1470,6 +1941,13 @@ namespace telar::runtime::cli {
         self.assume_yes = true;
       } else if (arg == "--match") {
         self.query = cursor.take("MissingHistoryQuery");
+      } else if (arg == "--filters") {
+        self.prune_filters = true;
+      } else if (arg == "--keep") {
+        self.keep_runs = number<std::uint32_t>(cursor.take("MissingHistoryKeep"), "InvalidHistoryKeep");
+        if (self.keep_runs == 0) {
+          throw std::invalid_argument{"InvalidHistoryKeep"};
+        }
       } else {
         return false;
       }
@@ -1477,17 +1955,142 @@ namespace telar::runtime::cli {
       return true;
     }
 
+    // Reads an option only list and search take; whether `arg` names one.
+    bool listOption(tbc::mut_a<HistoryOptions> self, std::string_view arg, Cursor& cursor) {
+      using Output = HistoryOptions::Output;
+
+      if (arg == "--offset") {
+        self.offset = number<std::uint32_t>(cursor.take("MissingHistoryOffset"), "InvalidHistoryOffset");
+      } else if (arg == "--after") {
+        self.after_id = number<std::uint64_t>(cursor.take("MissingHistoryAfter"), "InvalidHistoryAfter");
+        if (self.after_id == 0) {
+          throw std::invalid_argument{"InvalidHistoryAfter"};
+        }
+      } else if (arg == "--fuzzy") {
+        self.match = HistoryMatch::fuzzy;
+      } else if (arg == "--distinct") {
+        self.distinct = true;
+      } else if (arg == "--json" && self.output == Output::text) {
+        self.output = Output::json;
+      } else if (arg == "--format" && self.output == Output::text) {
+        self.format = cursor.take("MissingHistoryFormat");
+        history::checkTemplate(self.format);
+        self.output = Output::format;
+      } else {
+        return false;
+      }
+
+      return true;
+    }
+
+    // Reads an option that filters or orders what a listing or a search shows; whether `arg`
+    // names one.
+    bool filterOption(tbc::mut_a<HistoryOptions> self, std::string_view arg, Cursor& cursor) {
+      const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+      if (arg == "--since") {
+        self.since_ms = HistoryOptions::parseTime(cursor.take("MissingHistorySince"), now);
+      } else if (arg == "--until") {
+        self.until_ms = HistoryOptions::parseTime(cursor.take("MissingHistoryUntil"), now);
+      } else if (arg == "--exit") {
+        const auto value = cursor.take("MissingHistoryExit");
+
+        if (value == "failed") {
+          self.failed_only = true;
+        } else {
+          self.exit_code = parseInt<std::int32_t>(value);
+        }
+      } else if (arg == "--min-duration") {
+        self.min_duration_ms = HistoryOptions::parseDuration(cursor.take("MissingHistoryDuration"));
+      } else if (arg == "--host") {
+        self.host = cursor.take("MissingHistoryHost");
+      } else if (arg == "--branch") {
+        self.branch = cursor.take("MissingHistoryBranch");
+      } else if (arg == "--shell") {
+        self.shell = cursor.take("MissingHistoryShell");
+        if (self.shell.empty() || self.shell.size() > max_history_shell_bytes) {
+          throw std::invalid_argument{"InvalidHistoryShell"};
+        }
+      } else if (arg == "--sort") {
+        const auto value = cursor.take("MissingHistorySort");
+        if (value != "rank" && value != "time") {
+          throw std::invalid_argument{"InvalidHistorySort"};
+        }
+
+        self.sort = value == "rank" ? HistorySort::rank : HistorySort::time;
+      } else if (arg == "--mode") {
+        constexpr ds::Array<std::pair<std::string_view, HistoryMatch>, 4> modes{{{"fuzzy", HistoryMatch::fuzzy}, {"substring", HistoryMatch::substring}, {"prefix", HistoryMatch::prefix}, {"regex", HistoryMatch::regex}}};
+        const auto value = cursor.take("MissingHistoryMode");
+        const auto* const found = std::ranges::find(modes, value, &std::pair<std::string_view, HistoryMatch>::first);
+        if (found == modes.end()) {
+          throw std::invalid_argument{"InvalidHistoryMode"};
+        }
+
+        self.match = found->second;
+      } else {
+        return false;
+      }
+
+      if (self.since_ms != 0 && self.until_ms != 0 && self.until_ms <= self.since_ms) {
+        throw std::invalid_argument{"InvalidHistoryRange"};
+      }
+
+      return true;
+    }
+
+    // A cursor continues a listing by time, each command once or every run: a ranked one pages by
+    // --offset alone.
+    void checkPaging(const HistoryOptions& self) {
+      const bool ranked = self.sort == HistorySort::rank || (self.sort == HistorySort::automatic && self.match == HistoryMatch::fuzzy && !self.query.empty());
+
+      if (self.after_id != 0 && (self.offset != 0 || ranked)) {
+        throw std::invalid_argument{"HistoryCursorNeedsTimeOrder"};
+      }
+    }
+
+    HistoryOptions::Output exportFormat(std::string_view value) {
+      using Output = HistoryOptions::Output;
+      using Named = std::pair<std::string_view, Output>;
+      constexpr ds::Array formats{
+          Named{"json", Output::json},
+          Named{"zsh", Output::zsh},
+          Named{"bash", Output::bash},
+          Named{"fish", Output::fish},
+      };
+
+      for (const auto& [name, format] : formats) {
+        if (name == value) {
+          return format;
+        }
+      }
+
+      throw std::invalid_argument{"UnknownHistoryExportFormat"};
+    }
+
     void historyOption(tbc::mut_a<HistoryOptions> self, std::string_view arg, Cursor& cursor) {
       using Action = HistoryOptions::Action;
 
-      if (scopeOption(self, arg, cursor) || (self.action == Action::prune && pruneOption(self, arg, cursor))) {
+      const bool listing = self.action == Action::list || self.action == Action::search;
+      if (scopeOption(self, arg, cursor) || filterOption(self, arg, cursor) || (self.action == Action::prune && pruneOption(self, arg, cursor)) || (listing && listOption(self, arg, cursor))) {
         return;
       }
 
       if (arg == "--file" && self.action == Action::import) {
         self.import_file = cursor.take("MissingHistoryFile");
+      } else if (arg == "--format" && self.action == Action::export_history) {
+        self.output = exportFormat(cursor.take("MissingHistoryFormat"));
+      } else if (arg == "--ngram-size" && self.action == Action::stats) {
+        const auto size = number<std::uint16_t>(cursor.take("MissingHistoryNgramSize"), "InvalidHistoryNgramSize");
+        if (size == 0 || size > HistoryOptions::max_ngram_size) {
+          throw std::invalid_argument{"InvalidHistoryNgramSize"};
+        }
+
+        self.ngram_size = static_cast<std::uint8_t>(size);
       } else if (arg == "--period" && self.action == Action::stats) {
-        self.period_days = periodDays(cursor.take("MissingHistoryPeriod"));
+        const auto period = cursor.take("MissingHistoryPeriod");
+
+        self.period_days = periodDays(period);
+        self.period_today = period == "today";
       } else if (arg == "--limit") {
         self.limit = parseInt<std::uint16_t>(cursor.take("MissingHistoryLimit"));
         if (self.limit == 0 || self.limit > HistoryOptions::max_results) {
@@ -1519,6 +2122,11 @@ namespace telar::runtime::cli {
     historyAction(self, words, cursor);
     while (const auto word = cursor.next()) {
       historyOption(self, *word, cursor);
+    }
+
+    checkPaging(self);
+    if (self.keep_runs != 0 && self.prune_filters) {
+      throw std::invalid_argument{"ConflictingHistoryPruneOptions"};
     }
 
     return self;

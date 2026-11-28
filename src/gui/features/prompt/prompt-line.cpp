@@ -123,6 +123,69 @@ namespace telar::gui::features::prompt {
       return true;
     }
 
+    // The bytes of `words`' last word as the `syntax`'s shell splits it; none where the lexer
+    // cannot follow the line to its end (a comment, an operator, more than it holds).
+    ds::Option<shell::Range> lastWordSource(tbc::mut_a<Memory> memory, std::string_view words, shell::Syntax syntax) {
+      ds::Vec<shell::Token, Memory> tokens{memory};
+
+      tokens.resize(words.size() + 1);
+      const auto lexed = shell::lex(words, syntax, tokens.viewMut(), words.size());
+      if (!lexed.cursor_completable || lexed.overflow) {
+        return ds::none;
+      }
+
+      ds::Vec<shell::Word, Memory> located_words{memory};
+      ds::Vec<char, Memory> unquoted{memory};
+
+      located_words.resize(words.size() + 1);
+      unquoted.resize((2 * words.size()) + 2);
+      const auto located = shell::commandAt(words, syntax, tokens.view().first(lexed.tokens), lexed, located_words.viewMut(), unquoted.viewMut());
+      if (located.overflow || located.words == 0) {
+        return ds::none;
+      }
+
+      return located_words[located.words - 1].source;
+    }
+
+    // The last word of `command` as the `syntax`'s shell splits it, as typed: `"a b"` with its
+    // quotes, `$(date +%s)` whole, `out.txt` after `>`. Where the lexer cannot follow the line,
+    // the last run of non-blanks.
+    tbc::val_a<std::string_view> lastWord(tbc::mut_b<Memory> memory, tbc::val_a<std::string_view> command, shell::Syntax syntax) { // NOLINT(bugprone-exception-escape): substr is given offsets within the text, which cannot throw
+      const auto words = command.substr(0, command.find_last_not_of(" \t\n") + 1);
+      const auto source = lastWordSource(memory, words, syntax);
+
+      return source ? words.substr(source->begin, source->end - source->begin) : words.substr(words.find_last_of(" \t\n") + 1);
+    }
+
+    // `menu`'s choices: those of all it holds that match `word`, best first (score).
+    void narrow(tbc::mut_a<Menu> menu, tbc::val_b<std::string_view> word, tbc::mut_c<Memory> memory) {
+      // The choices that match the word, best first, as fzf ranks them: those that start with it
+      // as typed lead, so typing what a choice starts with narrows as it always did. When none
+      // matches as typed, the word's capitals match either case.
+      ds::Vec<std::pair<std::int64_t, std::size_t>, Memory> ranked{memory};
+
+      ranked.reserve(menu.all.size());
+      for (const bool folded : {false, true}) {
+        if (folded && (!ranked.empty() || !foldable(word))) {
+          break;
+        }
+
+        const Ranking ranking{word, folded};
+
+        for (std::size_t index = 0; index < menu.all.size(); ++index) {
+          if (const auto rank = ranking.score(menu.all[index].text.view())) {
+            ranked.push({*rank, index});
+          }
+        }
+      }
+
+      std::ranges::stable_sort(ranked.viewMut(), std::ranges::greater{}, &std::pair<std::int64_t, std::size_t>::first);
+      menu.choices.clear();
+      for (const auto& [rank, index] : ranked) {
+        menu.choices.push(menu.all[index].clone());
+      }
+    }
+
     // The first word of `rest`, with the blanks before it and through a slash that ends it.
     std::string_view nextWord(std::string_view rest) {
       const auto start = rest.find_first_not_of(' ');
@@ -137,7 +200,10 @@ namespace telar::gui::features::prompt {
       : editor_(memory, keymap),
         recent_(memory),
         draft_(memory),
-        delivery_(memory) {}
+        delivery_(memory),
+        walk_(memory),
+        correction_(memory),
+        ranked_(memory) {}
 
   Editor& Line::editorMut() noexcept {
     return editor_;
@@ -177,6 +243,10 @@ namespace telar::gui::features::prompt {
     return recent_.view();
   }
 
+  void Line::useDialect(shell::Dialect dialect) noexcept {
+    dialect_ = dialect;
+  }
+
   void Line::setKeymap(Keymap keymap) {
     if (editor_.keymap() != keymap) {
       editor_.setKeymap(keymap);
@@ -184,8 +254,14 @@ namespace telar::gui::features::prompt {
     }
   }
 
-  tbc::val_a<std::string_view> Line::suggestion(tbc::val_a<History> history) const noexcept {
+  tbc::val_a<std::string_view> Line::suggestion(tbc::ref_a<Recall> recall, const Place& place) const noexcept { // NOLINT(bugprone-exception-escape): substr is given offsets within the text, which cannot throw
     const auto& text = editor_.text();
+    const bool typing = editor_.keymap() == Keymap::emacs || editor_.mode() == Mode::insert;
+
+    // The empty line after a command the shell did not find suggests the one it likely meant.
+    if (text.empty() && !correction_.empty() && !menu_ && typing) {
+      return correction_.view();
+    }
 
     if (textIsSmallAndInVimMode(text)) {
       return {};
@@ -193,38 +269,56 @@ namespace telar::gui::features::prompt {
 
     const auto view = text.view();
 
-    for (const auto& entry : std::views::reverse(recent_)) {
-      if (isCommandExtendedBy(entry, view)) {
-        auto rest = entry.view();
-
-        rest.remove_prefix(view.size());
-        return rest;
-      }
+    // The runtime's index ranked it first for this text: its priors know more than the recall.
+    if (isCommandExtendedBy(ranked_.view(), view)) {
+      return ranked_.view().substr(view.size());
     }
 
-    for (const auto& command : history) {
-      if (isCommandExtendedBy(command, view)) {
-        auto rest = command.view();
+    constexpr unsigned place_rotation = 17;
+    const ds::Hash hash;
+    const SuggestionKey key{
+        .line = revision(),
+        .recall = recall.revision(),
+        .pane = place.pane_id,
+        .place = hash(place.directory) ^ std::rotl(hash(place.workspace), place_rotation),
+        .found = true,
+    };
 
-        rest.remove_prefix(view.size());
-        return rest;
-      }
+    // Found again only when the line, the recall or where the line is changed: a key reads it
+    // to claim itself, to take it and to draw it.
+    if (suggested_for_.get() != key) {
+      suggested_.set(recall.suggest(recent_.view(), view, place));
+      suggested_for_.set(key);
     }
 
-    return {};
+    const auto suggested = suggested_.get();
+    std::string_view command;
+
+    switch (suggested.source) {
+    case Suggested::Source::none:
+      return {};
+    case Suggested::Source::own:
+      command = recent_[suggested.index].view();
+      break;
+    case Suggested::Source::recall:
+      command = recall.command(suggested.index);
+      break;
+    }
+
+    return isCommandExtendedBy(command, view) ? command.substr(view.size()) : std::string_view{};
   }
 
-  bool Line::claims(const KeyPress& key, History history) const noexcept {
+  bool Line::claims(const KeyPress& key, const Recalling& recalling) const noexcept {
     if (menu_) {
       return true;
     }
 
-    return (takesSuggestion(key) || takesSuggestedWord(key)) && !suggestion(history).empty();
+    return (takesSuggestion(key) || takesSuggestedWord(key)) && !suggestion(recalling.recall, recalling.place).empty();
   }
 
-  Outcome Line::pressKey(Surface surface, const KeyPress& key, const Continuation& incomplete, History history) {
+  Outcome Line::pressKey(Surface surface, const KeyPress& key, const Continuation& incomplete, const Recalling& recalling) {
     delivery_.clear();
-    const auto rest = suggestion(history);
+    const auto rest = suggestion(recalling.recall, recalling.place);
     // → and Ctrl-E at the end take the whole suggestion, Alt-F its next word, as fish does.
     if (!rest.empty()) {
       const bool all = takesSuggestion(key);
@@ -234,6 +328,10 @@ namespace telar::gui::features::prompt {
         const auto taken = word ? nextWord(rest) : rest;
         // Copied: the suggestion views the history the insert may change.
         const ds::String<Memory> copy{draft_.memory(), taken};
+
+        if (!word) {
+          noteTaken(rest);
+        }
 
         editor_.textMut().insert(copy);
         return Outcome::edited;
@@ -256,30 +354,32 @@ namespace telar::gui::features::prompt {
       return Outcome::edited;
     }
 
-    const auto outcome = handle(editor_.press(key), surface, incomplete, history);
+    const auto outcome = handle(editor_.press(key), surface, incomplete, recalling);
 
     return refining && menu_ ? refine(outcome) : outcome;
   }
 
-  Outcome Line::performAction(Surface surface, Action action, const Continuation& incomplete, History history) {
+  Outcome Line::performAction(Surface surface, Action action, const Continuation& incomplete, const Recalling& recalling) {
     delivery_.clear();
     closeMenu();
     if (action == Action::accept_suggestion) {
-      if (const auto rest = suggestion(history); !rest.empty()) {
+      if (const auto rest = suggestion(recalling.recall, recalling.place); !rest.empty()) {
         const ds::String<Memory> copy{draft_.memory(), rest};
 
+        noteTaken(rest);
         editor_.textMut().insert(copy);
       }
 
       return Outcome::edited;
     }
 
-    return handle(editor_.perform(action), surface, incomplete, history);
+    return handle(editor_.perform(action), surface, incomplete, recalling);
   }
 
-  void Line::insertText(std::string_view text) {
+  bool Line::insertText(std::string_view text) {
     closeMenu();
-    editor_.insertText(text);
+    correction_.clear();
+    return editor_.insertText(text);
   }
 
   void Line::replaceText(std::size_t begin, std::size_t end, std::string_view text) {
@@ -289,6 +389,7 @@ namespace telar::gui::features::prompt {
 
   void Line::write(std::string_view command) {
     closeMenu();
+    correction_.clear();
     history_index_.reset();
     auto& text = editor_.textMut();
 
@@ -350,14 +451,11 @@ namespace telar::gui::features::prompt {
       if (menu_->all.size() < Menu::capacity && std::ranges::none_of(menu_->all, [&](const Choice& choice) {
             return choice.text == path.text;
           })) {
-        if (path.text.view().starts_with(word.view())) {
-          menu_.getMut().choices.push(path.clone());
-        }
-
         menu_.getMut().all.push(std::move(path));
       }
     }
 
+    narrow(menu_.getMut(), word.view(), draft_.memory());
     settle();
     ++revision_;
     return true;
@@ -390,6 +488,9 @@ namespace telar::gui::features::prompt {
   }
 
   void Line::committed(std::string_view command) {
+    correction_.clear();
+    ranked_.clear();
+    ranked_id_ = 0;
     remember(command);
     editor_.clear();
     history_index_.reset();
@@ -425,6 +526,49 @@ namespace telar::gui::features::prompt {
     }
 
     recent_.emplace(recent_.memory(), command);
+    ++revision_;
+  }
+
+  bool Line::rank(std::string_view command, std::uint64_t id) {
+    if (ranked_.view() == command && ranked_id_ == id) {
+      return false;
+    }
+
+    ranked_.assign(command);
+    ranked_id_ = id;
+    ++revision_;
+    return true;
+  }
+
+  ds::Option<std::uint64_t> Line::takeChosen() noexcept {
+    const auto chosen = std::exchange(chosen_, 0);
+
+    return chosen == 0 ? ds::none : ds::Option{chosen};
+  }
+
+  void Line::noteTaken(std::string_view rest) noexcept {
+    const auto text = editor_.text().view();
+
+    // The runtime's when the text and the rest make it up: the line's text before the take.
+    if (ranked_id_ != 0 && ranked_.size() == text.size() + rest.size() && ranked_.view().starts_with(text) && ranked_.view().ends_with(rest)) {
+      chosen_ = ranked_id_;
+    }
+  }
+
+  void Line::correct(std::string_view command) {
+    correction_.assign(command);
+    ++revision_;
+  }
+
+  std::string_view Line::correction() const noexcept {
+    return correction_.view();
+  }
+
+  void Line::settleCorrection() noexcept {
+    if (!correction_.empty() && !editor_.text().empty()) {
+      correction_.clear();
+      ++revision_;
+    }
   }
 
   bool Line::textIsSmallAndInVimMode(const Text& text) const {
@@ -435,7 +579,7 @@ namespace telar::gui::features::prompt {
     return command.size() > text.size() && command.starts_with(text);
   }
 
-  Outcome Line::handle(Request request, Surface surface, const Continuation& incomplete, History history) {
+  Outcome Line::handle(Request request, Surface surface, const Continuation& incomplete, const Recalling& recalling) {
     switch (request) {
     case Request::none:
       return Outcome::edited;
@@ -443,9 +587,9 @@ namespace telar::gui::features::prompt {
       // An answer is the running program's to read, not the shell's to continue.
       return submit(surface, (surface != Surface::running || !answering_) && incomplete.incomplete(editor_.text().view()));
     case Request::history_previous:
-      return travel(-1, history);
+      return travel(-1, recalling);
     case Request::history_next:
-      return travel(1, history);
+      return travel(1, recalling);
     case Request::cancel:
       if (surface == Surface::running && editor_.text().empty()) {
         return Outcome::terminal;
@@ -471,7 +615,7 @@ namespace telar::gui::features::prompt {
     case Request::history_search:
       return surface == Surface::editor ? Outcome::search_history : Outcome::edited;
     case Request::last_argument:
-      return lastArgument(history);
+      return lastArgument(recalling);
     case Request::unhandled:
       return Outcome::ignored;
     }
@@ -652,22 +796,7 @@ namespace telar::gui::features::prompt {
     // Owned, as the choices are rebuilt while it is compared.
     const auto word = std::move(typed.getMut().partial);
 
-    // As typed first; ignoring case when nothing matches so.
-    menu.choices.clear();
-    for (const auto& choice : menu.all) {
-      if (choice.text.view().starts_with(word.view())) {
-        menu.choices.push(choice.clone());
-      }
-    }
-
-    if (menu.choices.empty()) {
-      for (const auto& choice : menu.all) {
-        if (startsFolded(choice.text.view(), word.view())) {
-          menu.choices.push(choice.clone());
-        }
-      }
-    }
-
+    narrow(menu, word.view(), draft_.memory());
     menu.selected = 0;
     menu.refined = true;
     if (menu.choices.empty() && menu.requests.empty()) {
@@ -710,7 +839,7 @@ namespace telar::gui::features::prompt {
     return Outcome::run;
   }
 
-  Outcome Line::travel(int direction, History history) {
+  Outcome Line::travel(int direction, const Recalling& recalling) {
     // An edit of what Up brought back makes it the line being written: moving through it, as
     // between the lines of a command of several, does not.
     if (history_index_ && editor_.text().revision() != recalled_) {
@@ -722,7 +851,15 @@ namespace telar::gui::features::prompt {
         return Outcome::edited;
       }
 
-      if (!back(1, history)) {
+      // The commands to walk are taken once, as Up begins: they start with the line written, and
+      // stay as they are while other panes run commands or the history arrives. A command of
+      // several lines being written is no search: Up walks every command from it.
+      const auto written = editor_.text().view();
+      const auto prefix = written.contains('\n') ? std::string_view{} : written;
+
+      recalling.recall.walk(walk_, recent_.view(), prefix, recalling.place, recalling.scope);
+      argument_steps_ = 0;
+      if (walk_.empty()) {
         return Outcome::edited;
       }
 
@@ -735,9 +872,9 @@ namespace telar::gui::features::prompt {
     if (steps == 0) {
       history_index_.reset();
       editor_.textMut().assign(draft_);
-    } else if (const auto entry = back(steps, history)) {
-      // Copied: the entry views the history the assignment may outlive.
-      const ds::String<Memory> command{draft_.memory(), *entry};
+    } else if (steps <= walk_.size()) {
+      // Copied: the walk is the line's own, and the text the line's too.
+      const ds::String<Memory> command{draft_.memory(), walk_[steps - 1]};
 
       history_index_ = steps;
       editor_.textMut().assign(command);
@@ -751,20 +888,23 @@ namespace telar::gui::features::prompt {
     return Outcome::edited;
   }
 
-  Outcome Line::lastArgument(History history) {
+  Outcome Line::lastArgument(const Recalling& recalling) {
     auto& text = editor_.textMut();
     const bool again = argument_steps_ != 0 && text.revision() == argument_revision_ && text.cursor() == argument_end_;
     const auto steps = again ? argument_steps_ + 1 : 1;
-    const auto command = back(steps, history);
-    if (!command) {
+
+    // Every command, newest first, taken at the first Alt-. and stepped through by the next.
+    if (!again) {
+      history_index_.reset();
+      recalling.recall.walk(walk_, recent_.view(), {}, recalling.place, UpScope::global);
+    }
+
+    if (steps > walk_.size()) {
       return Outcome::edited;
     }
 
-    // Its last word, as the shell splits words on blanks.
-    const auto words = command->substr(0, command->find_last_not_of(" \t\n") + 1);
-    const auto argument = words.substr(words.find_last_of(" \t\n") + 1);
     // Copied: the history the argument views may change as the text does.
-    const ds::String<Memory> copy{draft_.memory(), argument};
+    const ds::String<Memory> copy{draft_.memory(), lastWord(draft_.memory(), walk_[steps - 1], shell::Syntax{.dialect = dialect_})};
     const auto start = again ? argument_start_ : text.cursor();
 
     text.replace(start, again ? argument_end_ : start, copy.view());
@@ -774,40 +914,6 @@ namespace telar::gui::features::prompt {
     argument_revision_ = text.revision();
     ++revision_;
     return Outcome::edited;
-  }
-
-  ds::Option<std::string_view> Line::back(std::size_t steps, History history) const noexcept {
-    const auto own = recent_.view();
-    std::size_t seen = 0;
-
-    for (std::size_t index = own.size(); index-- > 0;) {
-      const auto command = own[index].view();
-      const auto newer = own.subspan(index + 1);
-      if (std::ranges::any_of(newer, [command](const ds::String<Memory>& sent) {
-            return sent.view() == command;
-          })) {
-        continue;
-      }
-
-      if (++seen == steps) {
-        return command;
-      }
-    }
-
-    for (const auto& entry : history) {
-      const auto command = entry.view();
-      if (std::ranges::any_of(own, [command](const ds::String<Memory>& sent) {
-            return sent.view() == command;
-          })) {
-        continue;
-      }
-
-      if (++seen == steps) {
-        return command;
-      }
-    }
-
-    return ds::none;
   }
 
 }

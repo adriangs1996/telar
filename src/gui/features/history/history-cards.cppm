@@ -21,10 +21,13 @@ export {
       float command = 0;
       float cwd = 0;
       float time = 0;
+      // How long the command ran and how it failed, as the configuration shows them.
+      float detail = 0;
       bool agent = false;
       bool show_cwd = true;
       bool has_cwd = false;
       bool has_time = false;
+      bool has_detail = false;
       bool expanded = false;
     };
 
@@ -52,6 +55,7 @@ export {
       Rect provider;
       Rect cwd;
       Rect time;
+      Rect detail;
 
       [[nodiscard]] static HistoryRowGeometry derive(Rect bounds, ChromeMetrics chrome, float row_height, HistoryRowMeasurements measurements) noexcept;
 
@@ -61,6 +65,7 @@ export {
       enum class Kind : std::uint8_t {
         provider,
         cwd,
+        detail,
         time,
       };
 
@@ -70,7 +75,7 @@ export {
       };
 
       struct Facts {
-        static constexpr std::size_t capacity = 3;
+        static constexpr std::size_t capacity = 4;
         ds::Array<Token, capacity> tokens{};
         std::size_t count = 0;
         float width = 0;
@@ -79,7 +84,7 @@ export {
 
         void remove(std::size_t index, float gap) noexcept;
 
-        void removeCwd(float gap) noexcept;
+        void removeKind(Kind kind, float gap) noexcept;
       };
     };
 
@@ -222,8 +227,8 @@ export {
       bool inspecting = false;
       bool enter_runs = false;
       bool has_more = false;
-      bool fuzzy = false;
-      bool has_query = false;
+      // How the query matches, which the footer tells with the key that steps it.
+      HistoryMatch match = HistoryMatch::fuzzy;
     };
 
     struct HistoryFooter {

@@ -157,6 +157,9 @@ namespace telar::gui::application {
     if (settings.delivery && *settings.delivery != ClientSettings::Delivery::terminal) {
       configuration.notification_delivery = *settings.delivery == ClientSettings::Delivery::system ? NotificationDelivery::system : NotificationDelivery::telar;
     }
+
+    configuration.long_commands.enabled = settings.long_commands.enabled.valueOr(configuration.long_commands.enabled);
+    configuration.long_commands.after_ms = settings.long_commands.after_ms.valueOr(configuration.long_commands.after_ms);
   }
 
   void ConfigurationReader::sound(const ClientSettings::Sound& settings, SoundPolicy& policy) noexcept {
@@ -188,6 +191,11 @@ namespace telar::gui::application {
     }
 
     prompt.max_lines = settings.max_lines.valueOr(prompt.max_lines);
+    if (settings.up_scope) {
+      prompt.up_scope = mapped<PromptUpScope>(*settings.up_scope);
+    }
+
+    prompt.expand_aliases = settings.expand_aliases.valueOr(prompt.expand_aliases);
   }
 
   void ConfigurationReader::history(const ClientSettings::History& settings, HistoryConfiguration& history) noexcept {
@@ -198,6 +206,14 @@ namespace telar::gui::application {
 
     if (settings.match) {
       history.match_fts = *settings.match == ClientSettings::HistoryMatch::fts;
+    }
+
+    history.show_duration = settings.duration.valueOr(history.show_duration);
+    history.show_exit = settings.exit.valueOr(history.show_exit);
+    history.show_directory = settings.directory.valueOr(history.show_directory);
+    history.show_host = settings.host.valueOr(history.show_host);
+    if (settings.time) {
+      history.relative_time = *settings.time == ClientSettings::HistoryTime::relative;
     }
   }
 
@@ -1103,6 +1119,11 @@ namespace telar::gui::application {
       object.member("history_show_agent_commands", configuration.history.show_agent_commands);
       object.member("history_enter_runs", configuration.history.enter_runs);
       object.member("history_match_fts", configuration.history.match_fts);
+      object.member("history_show_duration", configuration.history.show_duration);
+      object.member("history_show_exit", configuration.history.show_exit);
+      object.member("history_show_directory", configuration.history.show_directory);
+      object.member("history_show_host", configuration.history.show_host);
+      object.member("history_relative_time", configuration.history.relative_time);
       object.member("sections", writeSections);
     });
 

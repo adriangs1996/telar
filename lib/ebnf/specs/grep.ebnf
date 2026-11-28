@@ -3,6 +3,7 @@
    them, its description names both meanings. The first operand is the pattern
    unless -e or -f gives one; the rest are files. After `--` the pattern may start
    with a dash. *)
+(* telar: complete *)
 
 grep = { option | @file } , [ "--" , { @any } ] ;
 

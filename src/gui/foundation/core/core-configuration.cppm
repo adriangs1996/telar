@@ -46,6 +46,14 @@ export {
       bool show_agent_commands = false;
       bool enter_runs = false;
       bool match_fts = false;
+      // The facts a row shows beside its command: how long it ran, how it failed (a command that
+      // succeeded shows none), where it ran and on which machine, when the page holds runs of
+      // more than one; and whether its time reads as how long ago.
+      bool show_duration = true;
+      bool show_exit = true;
+      bool show_directory = true;
+      bool show_host = true;
+      bool relative_time = false;
     };
 
     enum class PromptMode : std::uint8_t {
@@ -107,6 +115,14 @@ export {
     };
 
     // `client.prompt`: the shell prompt as the shell draws it, or telar's own command editor.
+    // How far Up reaches back in the command editor: the pane's own commands, then its
+    // workspace's, then every one.
+    enum class PromptUpScope : std::uint8_t {
+      global,
+      workspace,
+      pane,
+    };
+
     struct PromptConfiguration {
       static constexpr std::uint8_t default_max_lines = 12;
       static constexpr std::uint8_t maximum_max_lines = 64;
@@ -121,6 +137,10 @@ export {
       // others.
       ds::Option<bool> macos_option_as_alt;
       std::uint8_t max_lines = default_max_lines;
+      PromptUpScope up_scope = PromptUpScope::global;
+      // Space after a command word that names an alias the shell reported writes what it stands
+      // for, as fish's abbreviations; Alt-Space types a space without it.
+      bool expand_aliases = false;
       PromptBindings bindings;
 
       bool operator==(const PromptConfiguration&) const = default;
@@ -135,6 +155,15 @@ export {
     enum class NotificationDelivery : std::uint8_t {
       telar,
       system,
+    };
+
+    // A notice when a command that ran at least `after_ms` ends while the window is in the
+    // background or its pane out of view.
+    struct LongCommandNotice {
+      static constexpr std::uint32_t default_after_ms = 30'000;
+
+      bool enabled = true;
+      std::uint32_t after_ms = default_after_ms;
     };
 
     // How panes scroll: by pixels, a wheel notch settling in `wheel_ms`, with `overscan` views of
@@ -181,6 +210,7 @@ export {
       PromptConfiguration prompt;
       SoundPolicy sound;
       NotificationDelivery notification_delivery = NotificationDelivery::telar;
+      LongCommandNotice long_commands;
       Theme theme;
       ThemeSelection themes;
       CursorShape cursor = CursorShape::block;

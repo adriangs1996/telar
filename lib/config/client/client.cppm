@@ -2073,10 +2073,17 @@ export {
       vim,
     };
 
+    enum class PromptUpScope : std::uint8_t {
+      global,
+      workspace,
+      pane,
+    };
+
     inline constexpr ds::Array<std::string_view, 2> prompt_mode_names{"classic", "telar"};
     inline constexpr ds::Array<std::string_view, 3> prompt_skin_names{"halo", "glass", "ink"};
     inline constexpr ds::Array<std::string_view, 3> prompt_motion_names{"spring", "ease", "none"};
     inline constexpr ds::Array<std::string_view, 2> prompt_keymap_names{"emacs", "vim"};
+    inline constexpr ds::Array<std::string_view, 3> prompt_up_scope_names{"global", "workspace", "pane"};
     inline constexpr ds::Array<std::string_view, 2> prompt_binding_mode_names{"insert", "normal"};
 
     struct PromptBounds {
@@ -2101,6 +2108,8 @@ export {
       ds::Option<bool> ghost;
       ds::Option<bool> macos_option_as_alt;
       ds::Option<std::uint8_t> max_lines;
+      ds::Option<PromptUpScope> up_scope;
+      ds::Option<bool> expand_aliases;
       // Whether it lists bindings, which replace the defaults even when empty.
       bool bindings = false;
     };
@@ -2411,16 +2420,37 @@ export {
         fts,
       };
 
+      // How a row of the history tells when a command ran: its clock time, or how long ago.
+      enum class HistoryTime : std::uint8_t {
+        clock,
+        relative,
+      };
+
       struct History {
         ds::Option<bool> show_agent_commands;
         ds::Option<HistoryEnter> enter;
         ds::Option<HistoryMatch> match;
+        // `history.columns`: the facts a row shows beside its command.
+        ds::Option<bool> duration;
+        ds::Option<bool> exit;
+        ds::Option<bool> directory;
+        ds::Option<bool> host;
+        ds::Option<HistoryTime> time;
       };
 
       struct Sound {
         ds::Option<bool> enabled;
         ds::Option<bool> ready;
         ds::Option<bool> needs_input;
+      };
+
+      // `client.notifications.long_commands`: a notice when a command that ran at least
+      // `after_ms` ends where nobody watches it.
+      struct LongCommands {
+        static constexpr Bounds<std::uint64_t> after_ms_bounds{.minimum = 1'000, .maximum = 86'400'000};
+
+        ds::Option<bool> enabled;
+        ds::Option<std::uint32_t> after_ms;
       };
 
       // `client.theme_picker`: the command the theme picker runs with the chosen theme's name.
@@ -2438,6 +2468,7 @@ export {
       History history;
       Sound sound;
       ds::Option<Delivery> delivery;
+      LongCommands long_commands;
       ClientInputSettings input;
       PromptSettings prompt;
       ExplorerKeys explorer_keys;

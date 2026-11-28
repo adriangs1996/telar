@@ -1,0 +1,15 @@
+telar history export: Print the history oldest first, as JSON lines or a zsh, bash or fish histfile
+
+Usage: telar history export [--format json|zsh|bash|fish] [--cwd | --workspace PATH | --pane ID] [--failed] [--author all|human|agent] [--socket PATH]
+
+Arguments:
+  --format F       `json` (default): one object per line, as `list --json`.
+                   `zsh`: extended history, with zsh's escapes. `bash`: a
+                   `#<epoch>` line before each command. `fish`: fish_history.
+
+Effects: reads the entries a page at a time from one snapshot and prints them
+a page at a time, so memory stays bounded however long the history is. What the
+runtime records meanwhile is not included; an entry deleted meanwhile neither
+skips nor repeats another.
+
+Results: the entries on stdout. Exit 0.

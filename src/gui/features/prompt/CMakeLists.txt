@@ -2,10 +2,13 @@ telar_add_domain(gui features/prompt
   SOURCES
     prompt.cpp
     prompt-completion.cpp
+    prompt-correction.cpp
     prompt-editor.cpp
     prompt-layout.cpp
     prompt-line.cpp
     prompt-menu.cpp
+    prompt-ranking.cpp
+    prompt-recall.cpp
     prompt-routing.cpp
     prompt-specs.cpp
     prompt-text.cpp

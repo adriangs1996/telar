@@ -10,6 +10,7 @@ import telar.base.text.utf8;
 import telar.ghostty.vt;
 import telar.runtime.diagnostics.line;
 import telar.runtime.terminal.grid;
+import telar.sys.process;
 import telar.base.ds;
 
 namespace telar::runtime {
@@ -32,9 +33,48 @@ namespace telar::runtime {
       return static_cast<unsigned char>(byte) >= first_printable && static_cast<unsigned char>(byte) != delete_byte;
     }
 
+    // At most `capacity` bytes of `text` cut on a character, or nothing when a client could not
+    // show it: what a shell reports is not always UTF-8 or free of controls.
+    std::string_view displayed(std::string_view text, std::size_t capacity) noexcept {
+      const auto kept = utf8Prefix(text, capacity);
+
+      return inspectUtf8(kept) == Utf8Validation::valid && std::ranges::all_of(kept, printable) ? kept : std::string_view{};
+    }
+
+    // A host or user name as a remote shell reports it: printable, without blanks, that fits.
+    bool nameFits(std::string_view name, std::size_t capacity) noexcept {
+      return name.size() <= capacity && std::ranges::all_of(name, [](char byte) {
+        return byte != ' ' && printable(byte);
+      });
+    }
+
+    // A socket path as ssh.sh names one: absolute, without a `.` or `..` part or an empty one,
+    // of characters that need no quoting anywhere, that fits a socket address.
+    bool controlFits(std::string_view path) {
+      const auto plain = [](char byte) {
+        return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || std::string_view{"/._@+,:=-"}.contains(byte);
+      };
+
+      if (path.size() < 2 || path.size() > CommandZones::control_capacity || !path.starts_with('/') || path.ends_with('/') || !std::ranges::all_of(path, plain)) {
+        return false;
+      }
+
+      for (auto rest = path.substr(1); !rest.empty();) {
+        const auto end = std::min(rest.find('/'), rest.size());
+        const std::string_view part{rest.data(), end};
+        if (part.empty() || part == "." || part == "..") {
+          return false;
+        }
+
+        rest.remove_prefix(std::min(end + 1, rest.size()));
+      }
+
+      return true;
+    }
+
     // A mark for a sink that places it on the terminal the bytes reach.
-    void note(CommandZoneSink& sink, char action, std::size_t end) {
-      sink.mark(CommandMark{.action = action, .end = end});
+    void note(CommandZoneSink& sink, char action, std::size_t end, ds::Option<int> status = ds::none) {
+      sink.mark(CommandMark{.action = action, .end = end, .status = status});
     }
 
     IntegratedShell shellNamed(std::string_view name) noexcept {
@@ -56,6 +96,10 @@ namespace telar::runtime {
       nest,
       shell,
       path,
+      typeahead,
+      user,
+      control,
+      jobs,
     };
 
     constexpr std::string_view optionKey(ReportOption key) noexcept {
@@ -70,6 +114,14 @@ namespace telar::runtime {
         return "shell=";
       case ReportOption::path:
         return "path=";
+      case ReportOption::typeahead:
+        return "typeahead=";
+      case ReportOption::user:
+        return "user=";
+      case ReportOption::control:
+        return "control=";
+      case ReportOption::jobs:
+        return "jobs=";
       }
 
       // A value no enumerator names has no key, which no option starts with.
@@ -342,6 +394,8 @@ namespace telar::runtime {
     shell.memory_ = shell_.memory_;
     shell.token_ = shell_.token_;
     shell.directory_ = shell_.directory_;
+    // Clients tell a report from the ones they heard by its count, which goes on.
+    shell.typeahead_serial_ = shell_.typeahead_serial_;
     shell_ = std::move(shell);
     parser_ = ParserState::ground;
     length_ = 0;
@@ -390,6 +444,18 @@ namespace telar::runtime {
     return shell_.remote_ ? shell_.remote_directory_.view() : std::string_view{};
   }
 
+  std::string_view CommandZones::remoteControl() const noexcept {
+    return shell_.remote_ ? shell_.control_.view() : std::string_view{};
+  }
+
+  std::string_view CommandZones::typeahead() const noexcept {
+    return shell_.typeahead_.view();
+  }
+
+  std::uint64_t CommandZones::typeaheadSerial() const noexcept {
+    return shell_.typeahead_serial_;
+  }
+
 #if TELAR_DIAGNOSTICS
   diagnostics::CommandCaptureCounters CommandZones::takeMetrics() noexcept {
     return std::exchange(shell_.metrics_, {});
@@ -416,6 +482,10 @@ namespace telar::runtime {
       shell_.semantic(body, time, sink, end);
     } else if (code == "7") {
       shell_.directoryReport(body);
+    } else if (code == private_code && shell_.endReport(body)) {
+      note(sink, 'E', end);
+    } else if (const auto above = code == private_code ? shell_.jobsReport(body) : ds::none) {
+      note(sink, 'J', end, above);
     } else if (code == private_code && shell_.privateReport(body)) {
       note(sink, 'N', end);
     }
@@ -424,7 +494,8 @@ namespace telar::runtime {
   // telar's own reports, OSC 6973. The pane's shell signs three: its PATH, so completion finds
   // the commands it runs (telar=<token>;path=<PATH>), its aliases and functions
   // (telar=<token>;names=<blank-separated names>), and the one-time nonce `ssh` hands the
-  // remote host before it connects (telar=<token>;nest=<nonce>). The remote shell answers
+  // remote host before it connects (telar=<token>;nest=<nonce>, with ;control=<socket> when the
+  // session shares its connection). The remote shell answers
   // with the nonce and the token its own marks carry (nest=<nonce>;token=<token>;shell=<name>):
   // the nonce stands in for a signature, once, so the pane's token never leaves the host.
   // True when the remote shell took over.
@@ -440,6 +511,13 @@ namespace telar::runtime {
         nest_.reset();
         remote_ = token;
         remote_shell_ = shellNamed(option(body, ReportOption::shell));
+        // Older remote scripts name no user.
+        const auto user = option(body, ReportOption::user);
+
+        remote_user_.assign(nameFits(user, user_capacity) ? user : std::string_view{});
+        // Only the pane's own shell names the socket; the remote one cannot.
+        control_ = nest_control_;
+        nest_control_.assign(std::string_view{});
         // Unknown until the remote shell reports them.
         host_.assign(std::string_view{});
         remote_directory_.assign(std::string_view{});
@@ -452,6 +530,19 @@ namespace telar::runtime {
     }
 
     if (!token_->signs(signature)) {
+      // The shell `ssh` reached signs its line with its own token: it runs the commands telar's
+      // editor sends while it hosts the pane.
+      if (remote_ && remote_->signs(signature)) {
+        if (const auto line = option(body, ReportOption::typeahead); !line.empty()) {
+          typeaheadReport(line);
+        }
+      }
+
+      return false;
+    }
+
+    if (const auto line = option(body, ReportOption::typeahead); !line.empty()) {
+      typeaheadReport(line);
       return false;
     }
 
@@ -473,7 +564,7 @@ namespace telar::runtime {
     }
 
     if (const auto nonce = option(body, ReportOption::nest); !nonce.empty()) {
-      nest_ = ShellToken::parse(nonce);
+      nestReport(body);
       return false;
     }
 
@@ -488,6 +579,13 @@ namespace telar::runtime {
     return false;
   }
 
+  void CommandZones::Shell::nestReport(std::string_view body) {
+    const auto control = option(body, ReportOption::control);
+
+    nest_ = ShellToken::parse(option(body, ReportOption::nest));
+    nest_control_.assign(nest_ && controlFits(control) ? control : std::string_view{});
+  }
+
   void CommandZones::Shell::semantic(std::string_view body, ObservationTime time, CommandZoneSink& sink, std::size_t end) {
     const auto separator = body.find(';');
     const auto action = body.substr(0, separator);
@@ -497,8 +595,12 @@ namespace telar::runtime {
       return;
     }
 
-    if (action.size() == 1 && (action == "A" || action == "B" || action == "C" || action == "D")) {
+    if (action == "A" || action == "B") {
       note(sink, action.front(), end);
+    } else if (action == "C") {
+      sink.mark(CommandMark{.action = 'C', .end = end, .place = place()});
+    } else if (action == "D") {
+      note(sink, 'D', end, parseExitCode(options));
     }
 
     if (action == "A" || action == "P") {
@@ -513,6 +615,12 @@ namespace telar::runtime {
     } else if (action == "B") {
       TELAR_DIAGNOSTIC(diagnostics::accumulate(metrics_.input_markers));
       markers_ready_ |= zone_ == Zone::prompt;
+      // A prompt where output was due: the line editor took the command back before it ran, as
+      // zsh's spelling correction does when the answer is e(dit). It never ran, so nothing ends.
+      if (zone_ == Zone::output) {
+        running_ = false;
+      }
+
       // A line editor redrawing its prompt mid-edit (zsh after a paste) keeps what was typed.
       has_input_ = zone_ == Zone::input && has_input_;
       zone_ = Zone::input;
@@ -566,20 +674,22 @@ namespace telar::runtime {
 
       ds::Array<char, directory_capacity> decoded; // NOLINT(cppcoreguidelines-pro-type-member-init): percentDecode writes each byte it counts before the directory reads it, so zeroing 4 KiB for every report would be waste
       const auto count = percentDecode(remainder.substr(slash), decoded.viewMut());
+      const auto host = remainder.substr(0, slash);
 
       if (!remote_) {
         if (count) {
           directory_.assign({decoded.data(), *count});
         }
 
+        if (nameFits(host, host_capacity)) {
+          local_host_.assign(host);
+        }
+
         return;
       }
 
       // A remote shell's report names a place on its host, which clients show as text.
-      const auto host = remainder.substr(0, slash);
-      if (host.size() <= host_capacity && std::ranges::all_of(host, [&](char byte) {
-            return byte != ' ' && printable(byte);
-          })) {
+      if (nameFits(host, host_capacity)) {
         host_.assign(host);
       }
 
@@ -591,6 +701,83 @@ namespace telar::runtime {
     }
   }
 
+  bool CommandZones::Shell::endReport(std::string_view body) const noexcept {
+    constexpr std::string_view ended = ";ended";
+    const auto signature = option(body, ReportOption::telar);
+
+    if (!body.ends_with(ended) || signature.empty()) {
+      return false;
+    }
+
+    // The pane's shell, or the one ssh reached while it hosts the pane.
+    return (token_ && token_->signs(signature)) || (remote_ && remote_->signs(signature));
+  }
+
+  // The end of what the shell reported of its background jobs once a command ended
+  // (telar=<token>;jobs=<lines>), with the count of lines bash may have reported above where the
+  // command's output ended, as it waited for the command: at most a screen's worth.
+  ds::Option<int> CommandZones::Shell::jobsReport(std::string_view body) const noexcept {
+    constexpr int most_lines = 256;
+    const auto signature = option(body, ReportOption::telar);
+    const auto lines = option(body, ReportOption::jobs);
+    if (signature.empty() || lines.empty() || !((token_ && token_->signs(signature)) || (remote_ && remote_->signs(signature)))) {
+      return ds::none;
+    }
+
+    const auto count = parseExact<int>(lines);
+    if (!count || *count < 0) {
+      return ds::none;
+    }
+
+    return std::min(*count, most_lines);
+  }
+
+  CommandPlace CommandZones::Shell::place() const noexcept {
+    if (remote_) {
+      return {.directory = remote_directory_.view(), .host = host_.view(), .user = remote_user_.view(), .remote = true};
+    }
+
+    return {.directory = directory_.view(), .host = local_host_.view()};
+  }
+
+  // The line the shell's editor held (telar=<token>;typeahead=<%-encoded line>), which its
+  // integration reports and clears when telar types its flush key before a command. A line
+  // longer than telar keeps is cut on a character; one that is not UTF-8 is not text to show.
+  void CommandZones::Shell::typeaheadReport(std::string_view encoded) {
+    // Room for the rest of a character the capacity cuts, which the prefix below drops.
+    constexpr std::size_t scalar_rest = 3;
+    ds::Array<char, typeahead_capacity + scalar_rest> decoded; // NOLINT(cppcoreguidelines-pro-type-member-init): the loop writes each byte it counts before the line reads it
+    std::size_t count = 0;
+
+    for (std::size_t index = 0; index < encoded.size() && count < decoded.size(); ++index) {
+      auto byte = encoded[index];
+      if (byte == '%') {
+        const auto value = encoded.size() - index < 3 ? ds::none : parseExact<unsigned>(textPrefix(textAfter(encoded, index + 1), 2), hexadecimal);
+        if (!value) {
+          return;
+        }
+
+        byte = static_cast<char>(*value);
+        index += 2;
+      }
+
+      decoded.atMut(count++) = byte;
+    }
+
+    const auto size = utf8Prefix({decoded.data(), count}, typeahead_capacity).size();
+    if (inspectUtf8({decoded.data(), size}) != Utf8Validation::valid) {
+      return;
+    }
+
+    // What the editor shows: a control byte the line held (a ^V-quoted one, say) is a blank.
+    for (auto& byte : decoded.viewMut().first(size)) {
+      byte = printable(byte) || byte == '\n' || byte == '\t' ? byte : ' ';
+    }
+
+    typeahead_.assign({decoded.data(), size});
+    ++typeahead_serial_;
+  }
+
   // CommandOutputWindow
 
   void CommandOutputWindow::append(std::span<std::uint8_t> storage, std::span<const std::uint8_t> bytes) noexcept {
@@ -599,25 +786,110 @@ namespace telar::runtime {
     }
 
     observed_ += std::min<std::uint64_t>(bytes.size(), std::numeric_limits<std::uint64_t>::max() - observed_);
-    if (bytes.size() >= capacity) {
-      std::ranges::copy(bytes.last(capacity), storage.begin());
-      length_ = capacity;
+    if (bytes.size() >= storage.size()) {
+      std::ranges::copy(bytes.last(storage.size()), storage.begin());
+      head_ = 0;
+      length_ = storage.size();
       return;
     }
 
-    if (length_ + bytes.size() > capacity) {
-      const auto keep = std::min(capacity / 2, capacity - bytes.size());
+    const auto write = (head_ + length_) % storage.size();
+    const auto first = std::min(bytes.size(), storage.size() - write);
 
-      std::ranges::move(storage.subspan(length_ - keep, keep), storage.begin());
-      length_ = keep;
-    }
-
-    std::ranges::copy(bytes, storage.subspan(length_).begin());
+    std::ranges::copy(bytes.first(first), storage.subspan(write).begin());
+    std::ranges::copy(bytes.subspan(first), storage.begin());
     length_ += bytes.size();
+    if (length_ > storage.size()) {
+      head_ = (head_ + length_ - storage.size()) % storage.size();
+      length_ = storage.size();
+    }
   }
 
-  tbc::val_a<std::span<const std::uint8_t>> CommandOutputWindow::bytes(tbc::val_a<std::span<const std::uint8_t>> storage) const noexcept {
-    return storage.first(length_);
+  namespace {
+
+    constexpr std::uint8_t escape_byte = 0x1b;
+
+    // Where the escape sequence that starts at `start` ends, one past its last byte, or the end of
+    // `bytes` for one they leave open: a CSI at its final byte, a string (OSC, DCS, APC, PM, SOS)
+    // at its terminator, any other at the byte that completes it.
+    std::size_t sequenceEnd(std::span<const std::uint8_t> bytes, std::size_t start) noexcept {
+      constexpr std::uint8_t bell = 0x07;
+      constexpr std::uint8_t first_intermediate = 0x20;
+      constexpr std::uint8_t last_intermediate = 0x2f;
+      constexpr std::uint8_t last_parameter = 0x3f;
+      auto index = start + 1;
+
+      if (index >= bytes.size()) {
+        return bytes.size();
+      }
+
+      const auto kind = bytes[index++];
+
+      if (kind == '[') {
+        while (index < bytes.size() && bytes[index] >= first_intermediate && bytes[index] <= last_parameter) {
+          ++index;
+        }
+
+        return std::min(index + 1, bytes.size());
+      }
+
+      if (kind == ']' || kind == 'P' || kind == 'X' || kind == '^' || kind == '_') {
+        for (; index < bytes.size(); ++index) {
+          if (bytes[index] == bell) {
+            return index + 1;
+          }
+
+          if (bytes[index] == escape_byte) {
+            return index + 1 < bytes.size() && bytes[index + 1] == '\\' ? index + 2 : index;
+          }
+        }
+
+        return bytes.size();
+      }
+
+      while (kind >= first_intermediate && kind <= last_intermediate && index < bytes.size() && bytes[index] >= first_intermediate && bytes[index] <= last_intermediate) {
+        ++index;
+      }
+
+      return kind >= first_intermediate && kind <= last_intermediate ? std::min(index + 1, bytes.size()) : index;
+    }
+
+    // The first byte at or after `start` that begins a character outside an escape sequence: an
+    // escape that began in the lookback before it and is still open there is skipped, and so are
+    // the continuation bytes of a character the cut split.
+    std::size_t boundary(std::span<const std::uint8_t> bytes, std::size_t start) noexcept {
+      constexpr std::uint8_t continuation_mask = 0xc0;
+      constexpr std::uint8_t continuation_tag = 0x80;
+      constexpr std::size_t longest_character = 4;
+      const auto floor = start > CommandOutputWindow::lookback ? start - CommandOutputWindow::lookback : 0;
+
+      for (auto index = start; index > floor; --index) {
+        if (bytes[index - 1] == escape_byte) {
+          start = std::max(start, sequenceEnd(bytes, index - 1));
+          break;
+        }
+      }
+
+      for (std::size_t skipped = 1; skipped < longest_character && start < bytes.size() && (bytes[start] & continuation_mask) == continuation_tag; ++skipped) {
+        ++start;
+      }
+
+      return start;
+    }
+
+  }
+
+  tbc::val_a<std::span<const std::uint8_t>> CommandOutputWindow::bytes(tbc::val_a<std::span<std::uint8_t>> storage) noexcept {
+    // A ring starts anywhere but at the front only once it is full, so it fills the storage.
+    if (head_ != 0) {
+      std::ranges::rotate(storage, storage.begin() + static_cast<std::ptrdiff_t>(head_));
+      head_ = 0;
+    }
+
+    const std::span<const std::uint8_t> held = storage.first(length_);
+    const auto cut = held.size() > capacity ? held.size() - capacity : 0;
+
+    return held.subspan(cut == 0 ? 0 : boundary(held, cut));
   }
 
   std::uint64_t CommandOutputWindow::observed() const noexcept {
@@ -625,6 +897,7 @@ namespace telar::runtime {
   }
 
   void CommandOutputWindow::clear() noexcept {
+    head_ = 0;
     length_ = 0;
     observed_ = 0;
   }
@@ -905,10 +1178,17 @@ namespace telar::runtime {
     }
   }
 
-  CommandBlockRing::CommandBlockRing(tbc::val_a<GhosttyTerminal> terminal)
-      : selection_(terminal) {}
+  CommandBlockRing::Place::Place(ConcurrentMemory& memory)
+      : directory(memory),
+        host(memory),
+        user(memory),
+        branch(memory) {}
 
-  void CommandBlockRing::mark(char action, std::chrono::steady_clock::time_point now) {
+  CommandBlockRing::CommandBlockRing(tbc::mut_c<ConcurrentMemory> memory, tbc::val_a<GhosttyTerminal> terminal)
+      : memory_(memory),
+        selection_(terminal) {}
+
+  void CommandBlockRing::mark(char action, std::chrono::steady_clock::time_point now, const CommandPlace& place) {
     switch (action) {
     case 'A':
       if (running_) {
@@ -920,13 +1200,42 @@ namespace telar::runtime {
         closeSession(CommandBlockState::interrupted, 0, now);
       }
 
+      // What the shell reported of its jobs once the command ended is no part of its output.
+      background(now, true);
+      report_.reset();
+
       prompt_ = CommandSelection::primary(screen()) ? track() : ds::none;
+      prompt_height_.reset();
+      if (prompt_) {
+        if (const auto prompt_row = row(*prompt_)) {
+          cover(*prompt_row);
+        }
+      }
+
       break;
-    case 'B':
+    case 'B': {
+      // A prompt while a command runs: the line editor took the command back before it ran, as
+      // zsh's spelling correction does when the answer is e(dit).
+      const bool taken = running_;
+
+      if (taken) {
+        takeBack();
+      }
+
+      redrawn(now, !taken);
       selection_.begin(screen());
       break;
+    }
     case 'C':
-      start(now);
+      report_.reset();
+      reported_.reset();
+      start(now, place);
+      break;
+    case 'E':
+      if (!report_) {
+        reportStarts();
+      }
+
       break;
     case 'D':
       if (running_) {
@@ -961,9 +1270,32 @@ namespace telar::runtime {
     }
   }
 
+  void CommandBlockRing::place(CommandMark mark, std::chrono::steady_clock::time_point now) {
+    if (mark.action == 'D') {
+      // bash and fish say nothing between the command's output and its end mark.
+      if (!report_) {
+        reportStarts();
+      }
+
+      finished(mark.status, now);
+    } else if (mark.action == 'J') {
+      reportEnds(static_cast<std::uint32_t>(std::max(mark.status.valueOr(0), 0)));
+    } else {
+      this->mark(mark.action, now, mark.place);
+    }
+  }
+
   void CommandBlockRing::finished(ds::Option<int> status, std::chrono::steady_clock::time_point now) {
+    // A shell reports a command a signal ended as 128 plus the signal: Ctrl-C's SIGINT, or the
+    // SIGPIPE of a pipeline whose reader stopped early (`yes | head`). Neither failed.
+    constexpr int interrupted_status = 128 + SIGINT;
+    constexpr int broken_pipe_status = 128 + SIGPIPE;
     const auto code = status.valueOr(0);
-    const auto state = code == 0 ? CommandBlockState::succeeded : CommandBlockState::failed;
+    auto state = code == 0 ? CommandBlockState::succeeded : CommandBlockState::failed;
+
+    if (code == interrupted_status || code == broken_pipe_status) {
+      state = CommandBlockState::interrupted;
+    }
 
     if (closing_) {
       closeSession(state, code, now);
@@ -977,28 +1309,64 @@ namespace telar::runtime {
       return;
     }
 
+    // Restored blocks come first and have no rows to follow.
+    std::size_t live = 0;
+
+    while (live < count_ && entry(live).restored) {
+      ++live;
+    }
+
+    if (live == count_) {
+      return;
+    }
+
     if (!reflowed) {
-      const auto oldest = row(entry(0).anchor);
-      if (oldest && *oldest == entry(0).row) {
+      const auto oldest = row(entry(live).anchor);
+      if (oldest && *oldest == entry(live).row) {
         return;
       }
+    }
+
+    // Newest first, so a block whose rows were erased, or that a later prompt was drawn over,
+    // goes: its output would start below the next block's prompt.
+    ds::Array<bool, capacity> keep{};
+    auto limit = std::numeric_limits<std::uint32_t>::max();
+
+    for (std::size_t index = 0; index < live; ++index) {
+      keep.atMut(index) = true;
+    }
+
+    for (auto index = count_; index-- > live;) {
+      auto& current = entryMut(index);
+      const auto first = row(current.anchor);
+      const auto last = outputRow(current, first);
+      if (!last || *last > limit || (current.state == CommandBlockState::background && *first >= limit)) {
+        continue;
+      }
+
+      current.row = *first;
+      current.rows = static_cast<std::uint16_t>(std::min<std::uint32_t>(*last - *first, std::numeric_limits<std::uint16_t>::max()));
+      limit = *first;
+      keep.atMut(index) = true;
     }
 
     std::size_t kept = 0;
 
     for (std::size_t index = 0; index < count_; ++index) {
-      auto& current = entryMut(index);
-      const auto position = row(current.anchor);
-      if (!position) {
+      if (!keep[index]) {
         continue;
       }
 
-      current.row = *position;
       if (kept != index) {
-        std::swap(entryMut(kept), current);
+        std::swap(entryMut(kept), entryMut(index));
       }
 
       ++kept;
+    }
+
+    // The anchors of the blocks that went stop costing the terminal its tracking.
+    for (auto index = kept; index < count_; ++index) {
+      entryMut(index) = Entry{};
     }
 
     count_ = kept;
@@ -1021,10 +1389,85 @@ namespace telar::runtime {
     for (std::size_t index = 0; index < count_; ++index) {
       const auto& current = entry(index);
 
-      storage.atMut(index) = CommandBlock{.row = current.row, .rows = current.rows, .lines = current.lines, .state = current.state, .status = current.status, .duration_ms = current.duration_ms, .command = current.command.view(), .nest = current.nest};
+      auto& block = storage.atMut(index);
+
+      block = CommandBlock{.row = current.row, .rows = current.rows, .lines = current.lines, .state = current.state, .status = current.status, .duration_ms = current.duration_ms, .command = current.command.view(), .nest = current.nest, .started_ms = current.started_ms, .restored = current.restored};
+      if (current.restored) {
+        block.row = 0;
+        block.rows = 0;
+      }
+
+      if (current.place) {
+        block.directory = current.place->directory.view();
+        block.host = current.place->host.view();
+        block.user = current.place->user.view();
+        block.branch = current.place->branch.view();
+      }
     }
 
     return PaneBlocks{.pane_id = pane_id, .blocks = std::span<const CommandBlock>{storage}.first(count_)};
+  }
+
+  tbc::val_b<std::span<const CommandBlockRecord>> CommandBlockRing::records(tbc::mut_b<ds::Array<CommandBlockRecord, capacity>> storage) const {
+    std::size_t count = 0;
+
+    for (std::size_t index = 0; index < count_; ++index) {
+      const auto& current = entry(index);
+      if (current.state == CommandBlockState::background) {
+        continue;
+      }
+
+      auto& record = storage.atMut(count++);
+
+      record = CommandBlockRecord{.state = current.state, .status = current.status, .duration_ms = current.duration_ms, .started_ms = current.started_ms, .lines = current.lines, .nest = current.nest, .command = current.command.view()};
+      if (current.place) {
+        record.directory = current.place->directory.view();
+        record.host = current.place->host.view();
+        record.user = current.place->user.view();
+        record.branch = current.place->branch.view();
+      }
+    }
+
+    return std::span<const CommandBlockRecord>{storage}.first(count);
+  }
+
+  void CommandBlockRing::restore(const CommandBlockRecord& block) {
+    if (count_ == capacity) {
+      return;
+    }
+
+    // After the restored ones, which come first: the blocks of this runtime move back one.
+    std::size_t restored = 0;
+
+    while (restored < count_ && entry(restored).restored) {
+      ++restored;
+    }
+
+    for (auto index = count_; index > restored; --index) {
+      std::swap(entryMut(index), entryMut(index - 1));
+    }
+
+    ++count_;
+    auto& added = entryMut(restored);
+    const bool ended = block.state == CommandBlockState::succeeded || block.state == CommandBlockState::failed || block.state == CommandBlockState::interrupted;
+
+    added = Entry{};
+    added.restored = true;
+    added.lines = block.lines;
+    added.state = ended ? block.state : CommandBlockState::interrupted;
+    added.nest = block.nest;
+    added.status = ended ? block.status : 0;
+    added.duration_ms = block.duration_ms;
+    added.started_ms = block.started_ms;
+    added.command.assign(displayed(block.command, command_bytes));
+
+    auto& where = added.place.emplace(memory_);
+
+    where.directory.assign(displayed(block.directory, max_block_directory_bytes));
+    where.host.assign(displayed(block.host, max_block_host_bytes));
+    where.user.assign(displayed(block.user, max_block_user_bytes));
+    where.branch.assign(displayed(block.branch, max_branch_bytes));
+    ++revision_;
   }
 
   CommandBlockRing::Entry& CommandBlockRing::entryMut(std::size_t index) noexcept {
@@ -1050,8 +1493,255 @@ namespace telar::runtime {
     return tracked;
   }
 
+  ds::Option<CommandBlockRing::TrackedReference> CommandBlockRing::track(std::uint16_t row) {
+    TrackedReference tracked;
+    const GhosttyPoint point{.tag = GHOSTTY_POINT_TAG_ACTIVE, .value = {.coordinate = {.x = 0, .y = row}}};
+    if (ghostty_terminal_grid_ref_track(screen().terminal, point, tracked.output()) != GHOSTTY_SUCCESS) {
+      return ds::none;
+    }
+
+    return tracked;
+  }
+
+  void CommandBlockRing::redrawn(std::chrono::steady_clock::time_point now, bool idle) {
+    const auto view = screen();
+    if (!prompt_ || !CommandSelection::primary(view)) {
+      return;
+    }
+
+    std::uint16_t cursor_row = 0;
+
+    checkGhostty(ghostty_terminal_get(view.terminal, GHOSTTY_TERMINAL_DATA_CURSOR_Y, &cursor_row));
+    const auto bottom = coordinates(view.terminal, gridReference(view.terminal, GHOSTTY_POINT_TAG_ACTIVE, {.x = 0, .y = cursor_row})).y;
+
+    // The first B after the A: how tall the shell's prompt is.
+    if (!prompt_height_) {
+      const auto top = row(*prompt_);
+
+      prompt_height_ = top && *top <= bottom ? bottom - *top : 0;
+      return;
+    }
+
+    const auto height = static_cast<std::uint16_t>(std::min<std::uint32_t>(*prompt_height_, cursor_row));
+    const auto top = row(*prompt_);
+    auto moved = track(static_cast<std::uint16_t>(cursor_row - height));
+    if (!moved) {
+      return;
+    }
+
+    // Drawn lower, though not at the top of a screen cleared for it (Ctrl-L): output came at the
+    // prompt, a background job's that zsh's job report follows, or one bash's line editor finds
+    // when telar's key redraws the line. It is a block of its own, not the last command's.
+    if (idle && top && *top < bottom - height && cursor_row != height) {
+      background(now);
+    }
+
+    prompt_ = std::move(moved);
+    cover(bottom - height);
+  }
+
+  void CommandBlockRing::background(std::chrono::steady_clock::time_point now, bool reported) {
+    auto anchor = std::exchange(reported ? reported_ : prompt_, ds::none);
+    const auto first = anchor ? row(*anchor) : ds::none;
+    if (!first) {
+      return;
+    }
+
+    cover(*first);
+    if (count_ == capacity) {
+      first_ = (first_ + 1) % capacity;
+      --count_;
+    }
+
+    auto& added = entryMut(count_++);
+
+    added = Entry{};
+    added.anchor = std::move(anchor.getMut());
+    added.row = *first;
+    added.rows = 0;
+    added.state = CommandBlockState::background;
+    added.nest = nested_ ? CommandBlockNest::inside : CommandBlockNest::none;
+    added.started = now;
+    added.started_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    ++revision_;
+  }
+
+  void CommandBlockRing::reportStarts() {
+    const auto view = screen();
+    if (!CommandSelection::primary(view)) {
+      return;
+    }
+
+    const auto position = cursor(view.terminal);
+
+    report_ = track();
+    // The shell's report starts on a line of its own.
+    report_next_row_ = position.x != 0;
+  }
+
+  void CommandBlockRing::reportEnds(std::uint32_t above) {
+    const auto start = report_ ? row(*report_) : ds::none;
+    const auto view = screen();
+    if (!start || !CommandSelection::primary(view)) {
+      report_.reset();
+      return;
+    }
+
+    const auto position = cursor(view.terminal);
+    const auto end = coordinates(view.terminal, gridReference(view.terminal, GHOSTTY_POINT_TAG_ACTIVE, position)).y + (position.x != 0 ? 1U : 0U);
+    auto first = *start + (report_next_row_ ? 1U : 0U);
+
+    report_.reset();
+    // Never above where the newest command's output starts.
+    if (above != 0 && count_ != 0 && !entry(count_ - 1).restored) {
+      const auto& newest = entry(count_ - 1);
+      const auto floor = outputRow(newest, row(newest.anchor));
+
+      if (floor && *floor < first) {
+        first = reportsAbove(first, above, *floor);
+      }
+    }
+
+    if (end > first) {
+      reported_ = trackScreen(first);
+    }
+  }
+
+  namespace {
+
+    bool wrapped(GhosttyTerminal terminal, std::uint32_t row) {
+      const auto reference = gridReference(terminal, GHOSTTY_POINT_TAG_SCREEN, {.x = 0, .y = row});
+      GhosttyRow found = 0;
+      bool wraps = false;
+
+      return ghostty_grid_ref_row(&reference, &found) == GHOSTTY_SUCCESS && ghostty_row_get(found, GHOSTTY_ROW_DATA_WRAP, &wraps) == GHOSTTY_SUCCESS && wraps;
+    }
+
+    char32_t codepointAt(GhosttyGridRef row, std::uint16_t column) {
+      const auto value = cell(row, column);
+
+      return cellHasText(value) ? static_cast<char32_t>(cell_layout::codepoint(value)) : U' ';
+    }
+
+    // Whether the row starts as bash reports a job: [<number>], the mark of the current or the
+    // previous job or a blank, then two blanks.
+    bool jobReportLine(CommandScreen view, std::uint32_t row) {
+      // [1]+ and the two blanks.
+      constexpr std::uint16_t shortest = 6;
+      const auto columns = view.columns;
+      const auto reference = gridReference(view.terminal, GHOSTTY_POINT_TAG_SCREEN, {.x = 0, .y = row});
+      std::uint16_t column = 1;
+
+      if (columns < shortest || codepointAt(reference, 0) != U'[') {
+        return false;
+      }
+
+      while (column < columns && codepointAt(reference, column) >= U'0' && codepointAt(reference, column) <= U'9') {
+        ++column;
+      }
+
+      if (column == 1 || column + 4 > columns || codepointAt(reference, column) != U']') {
+        return false;
+      }
+
+      const auto mark = codepointAt(reference, column + 1);
+
+      return (mark == U'+' || mark == U'-' || mark == U' ') && codepointAt(reference, column + 2) == U' ' && codepointAt(reference, column + 3) == U' ';
+    }
+
+  }
+
+  std::uint32_t CommandBlockRing::reportsAbove(std::uint32_t row, std::uint32_t above, std::uint32_t floor) const {
+    const auto view = screen();
+
+    for (; above != 0 && row > floor; --above) {
+      // The first row of the line that ends just above `row`.
+      auto first = row - 1;
+
+      while (first > floor && wrapped(view.terminal, first - 1)) {
+        --first;
+      }
+
+      if (!jobReportLine(view, first)) {
+        break;
+      }
+
+      row = first;
+    }
+
+    return row;
+  }
+
+  ds::Option<CommandBlockRing::TrackedReference> CommandBlockRing::trackScreen(std::uint32_t row) {
+    TrackedReference tracked;
+    const GhosttyPoint point{.tag = GHOSTTY_POINT_TAG_SCREEN, .value = {.coordinate = {.x = 0, .y = row}}};
+    if (ghostty_terminal_grid_ref_track(screen().terminal, point, tracked.output()) != GHOSTTY_SUCCESS) {
+      return ds::none;
+    }
+
+    return tracked;
+  }
+
+  ds::Option<std::uint32_t> CommandBlockRing::outputRow(const Entry& block, ds::Option<std::uint32_t> first) const {
+    if (!first) {
+      return ds::none;
+    }
+
+    if (block.state == CommandBlockState::background) {
+      return first;
+    }
+
+    const auto output = row(block.output);
+    if (!output || *output <= *first) {
+      return ds::none;
+    }
+
+    return *output;
+  }
+
+  void CommandBlockRing::cover(std::uint32_t row) {
+    while (count_ != 0) {
+      auto& newest = entryMut(count_ - 1);
+      if (newest.restored) {
+        return;
+      }
+
+      const auto first = this->row(newest.anchor);
+      const auto output = outputRow(newest, first);
+      if (output && *output <= row && *first < row) {
+        return;
+      }
+
+      newest = Entry{};
+      --count_;
+      ++revision_;
+    }
+  }
+
+  // The command never ran: its block goes, and the prompt it was typed at, drawn again, is the
+  // next block's.
+  void CommandBlockRing::takeBack() {
+    running_ = false;
+    if (count_ != 0 && entry(count_ - 1).state == CommandBlockState::running) {
+      auto& newest = entryMut(count_ - 1);
+
+      prompt_ = std::move(newest.anchor);
+      newest = Entry{};
+      --count_;
+      ++revision_;
+    }
+
+    latest_ = std::move(previous_);
+    previous_.reset();
+    ++command_revision_;
+  }
+
   // The row `tracked` is on, from the top of the scrollback; nothing once it was dropped.
   ds::Option<std::uint32_t> CommandBlockRing::row(const TrackedReference& tracked) const {
+    if (tracked.get() == nullptr) {
+      return ds::none;
+    }
+
     auto reference = ghosttySized<GhosttyGridRef>();
     if (ghostty_tracked_grid_ref_snapshot(tracked.get(), &reference) != GHOSTTY_SUCCESS) {
       return ds::none;
@@ -1066,18 +1756,20 @@ namespace telar::runtime {
   }
 
   // The command starts: its block takes the rows from its prompt down to the output.
-  void CommandBlockRing::start(std::chrono::steady_clock::time_point now) {
+  void CommandBlockRing::start(std::chrono::steady_clock::time_point now, const CommandPlace& place) {
     auto prompt = std::exchange(prompt_, ds::none);
     if (!prompt || !CommandSelection::primary(screen())) {
       return;
     }
 
     const auto first = row(*prompt);
-    const auto output = track();
+    auto output = track();
     const auto last = output ? row(*output) : ds::none;
     if (!first || !last || *last <= *first) {
       return;
     }
+
+    cover(*first);
 
     TELAR_TRACE("history.captureSelection");
     const auto selection = selection_.select(screen());
@@ -1116,6 +1808,7 @@ namespace telar::runtime {
     auto& added = entryMut(count_++);
 
     added.anchor = std::move(prompt.getMut());
+    added.output = std::move(output.getMut());
     added.row = *first;
     added.rows = static_cast<std::uint16_t>(std::min<std::uint32_t>(*last - *first, std::numeric_limits<std::uint16_t>::max()));
     added.lines = static_cast<std::uint16_t>(std::min<std::size_t>(lines, std::numeric_limits<std::uint16_t>::max()));
@@ -1125,10 +1818,18 @@ namespace telar::runtime {
     added.status = 0;
     added.duration_ms = 0;
     added.started = now;
+    added.started_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    auto& where = added.place.emplace(memory_);
+
+    where.directory.assign(displayed(place.directory, max_block_directory_bytes));
+    where.host.assign(displayed(place.host, max_block_host_bytes));
+    where.user.assign(displayed(place.user, max_block_user_bytes));
+    where.branch.assign(displayed(place.branch, max_branch_bytes));
     added.command.assign({clean.data(), clean_size});
     running_ = true;
     ++revision_;
 
+    previous_ = latest_;
     auto& latest = latest_.emplace();
 
     latest.truncated = added.lines != 0 || added.cut;
@@ -1139,7 +1840,8 @@ namespace telar::runtime {
 
   void CommandBlockRing::finish(CommandBlockState state, std::int32_t status, std::chrono::steady_clock::time_point now) {
     running_ = false;
-    if (count_ != 0) {
+    // A prompt drawn over the running block's rows dropped it; the newest is an older one.
+    if (count_ != 0 && entry(count_ - 1).state == CommandBlockState::running) {
       end(entryMut(count_ - 1), state, status, now);
     }
 
@@ -1201,15 +1903,41 @@ namespace telar::runtime {
   // its output there, and what follows is the next prompt's.
   class CommandTrackerCore::CompletionRelay final : public CommandZoneSink {
   public:
-    CompletionRelay(tbc::mut_a<CommandTrackerCore> tracker, tbc::mut_a<CapturedCommandEmitter> emitter, tbc::val_a<std::span<const Byte>> bytes) noexcept
+    CompletionRelay(tbc::mut_a<CommandTrackerCore> tracker, tbc::mut_a<CapturedCommandEmitter> emitter, tbc::val_a<std::span<const Byte>> bytes, bool committed) noexcept
         : tracker_(tracker),
           emitter_(emitter),
-          bytes_(bytes) {}
+          bytes_(bytes),
+          committed_(committed) {}
 
     void complete(CommandCompletion completion) override;
 
     void mark(CommandMark mark) override {
       mark_end_ = mark.end;
+      // The command starts here: what the line editor drew as it gave the line up (its last
+      // redraw, the bracketed paste's end) is the shell's, not the command's output.
+      if (mark.action == 'C') {
+        tracker_.output_.clear();
+        tracker_.marks_.reset();
+        tracker_.output_ended_ = false;
+        appended_ = std::max(appended_, mark.end);
+      }
+
+      // The command's output ends here; what the shell prints until its end mark is not the
+      // command's.
+      if (mark.action == 'E' && tracker_.phase_ == Phase::running && !tracker_.output_ended_) {
+        if (mark.end > appended_) {
+          tracker_.appendOutput(bytes_.subspan(appended_, mark.end - appended_));
+          appended_ = mark.end;
+        }
+
+        tracker_.output_ended_ = true;
+      }
+
+      // The line editor took the command back before it ran: there is nothing to record. A
+      // prompt drawn before the newline that started the command is the one it was typed at.
+      if (mark.action == 'B' && tracker_.phase_ == Phase::running && !committed_) {
+        tracker_.reset();
+      }
     }
 
     // The bytes the output has not taken yet.
@@ -1223,6 +1951,7 @@ namespace telar::runtime {
     tbc::val_a<std::span<const Byte>> bytes_;
     std::size_t appended_ = 0;
     std::size_t mark_end_ = 0;
+    bool committed_ = false;
   };
 
   void CommandTrackerCore::CompletionRelay::complete(CommandCompletion completion) {
@@ -1305,47 +2034,64 @@ namespace telar::runtime {
 
       feedTerminal(part);
       if (committed) {
-        ds::Option<bool> captured{false};
-
-        if (!adoptSubmitted()) {
-          TELAR_TRACE("history.captureSelection");
-          const auto selection = selection_.select(screen());
-
-          captured = selection ? capture(*selection) : ds::none;
-        }
-
-        if (captured) {
-          TELAR_DIAGNOSTIC(diagnostics::accumulate(metrics_.captures));
-          truncated_ = *captured;
-          phase_ = Phase::running;
-        } else {
-          TELAR_DIAGNOSTIC(diagnostics::accumulate(metrics_.capture_failures));
-          reset();
-        }
+        commit(emitter);
       }
 
-      afterOutput({.bytes = part, .time = observation.time, .shell_foreground = observation.shell_foreground}, emitter);
+      afterOutput({.bytes = part, .time = observation.time, .shell_foreground = observation.shell_foreground}, emitter, committed);
       observation.bytes = observation.bytes.subspan(count);
     }
+  }
+
+  void CommandTrackerCore::commit(CapturedCommandEmitter& emitter) {
+    ds::Option<bool> taken{false};
+
+    if (!adoptSubmitted()) {
+      TELAR_TRACE("history.captureSelection");
+      const auto selection = selection_.select(screen());
+
+      taken = selection ? capture(*selection) : ds::none;
+    }
+
+    if (!taken) {
+      TELAR_DIAGNOSTIC(diagnostics::accumulate(metrics_.capture_failures));
+      reset();
+      return;
+    }
+
+    TELAR_DIAGNOSTIC(diagnostics::accumulate(metrics_.captures));
+    truncated_ = *taken;
+    phase_ = Phase::running;
+    // The history keeps it from now, running, so a long one shows while it runs and a crash
+    // does not lose it.
+    if (!command().empty()) {
+      emitter.start(captured());
+    }
+  }
+
+  CapturedCommand CommandTrackerCore::captured() const noexcept {
+    return {
+        .command = textView(command()),
+        .directory = command_directory_.view(),
+        .host = zones_.remote() ? zones_.remoteHost() : std::string_view{},
+        .started = started_,
+        .status = HistoryStatus::running,
+        .truncated = truncated_,
+    };
   }
 
   void CommandTrackerCore::complete(CommandCompletion completion, CapturedCommandEmitter& emitter) {
     if (phase_ == Phase::running) {
       const auto output = output_.bytes(outputStorage());
-      const auto text = command();
 
-      if (!text.empty()) {
-        emitter.emit(CapturedCommand{
-            .command = textView(text),
-            .directory = command_directory_.view(),
-            .started = started_,
-            .duration_ns = std::max<std::int64_t>(0, completion.time.nanoseconds - started_.nanoseconds),
-            .exit_code = completion.exit_code,
-            .status = completion.status,
-            .truncated = truncated_,
-            .output = output,
-            .output_observed = output_.observed(),
-        });
+      if (!command().empty()) {
+        auto finished = captured();
+
+        finished.duration_ns = std::max<std::int64_t>(0, completion.time.nanoseconds - started_.nanoseconds);
+        finished.exit_code = completion.exit_code;
+        finished.status = completion.status;
+        finished.output = output;
+        finished.output_observed = output_.observed();
+        emitter.emit(finished);
       }
     }
 
@@ -1353,6 +2099,10 @@ namespace telar::runtime {
   }
 
   void CommandTrackerCore::appendOutput(std::span<const Byte> bytes) noexcept {
+    if (output_ended_) {
+      return;
+    }
+
     marks_.feed(bytes, [&](std::span<const std::uint8_t> kept) {
       output_.append(outputStorage(), kept);
     });
@@ -1365,6 +2115,7 @@ namespace telar::runtime {
     output_.clear();
     marks_.reset();
     truncated_ = false;
+    output_ended_ = false;
     saw_foreground_child_ = false;
   }
 
@@ -1400,7 +2151,7 @@ namespace telar::runtime {
   }
 #endif
 
-  void CommandTrackerCore::afterOutput(const CommandByteObservation& observation, CapturedCommandEmitter& emitter) {
+  void CommandTrackerCore::afterOutput(const CommandByteObservation& observation, CapturedCommandEmitter& emitter, bool committed) {
     last_output_ns_ = observation.time.nanoseconds;
     if ((phase_ == Phase::editing || phase_ == Phase::awaiting_commit) && !CommandSelection::primary(screen())) {
       reset();
@@ -1410,7 +2161,7 @@ namespace telar::runtime {
       selection_.rebase(screen(), input_.typedText());
     }
 
-    CompletionRelay relay{*this, emitter, observation.bytes};
+    CompletionRelay relay{*this, emitter, observation.bytes, committed};
 
     zones_.scan(observation.bytes, observation.time, relay);
     if (phase_ == Phase::running) {
@@ -1439,7 +2190,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   void CommandOutputTail<Memory>::enable() {
-    bytes_.resize(capacity);
+    bytes_.resize(CommandOutputWindow::storage_bytes);
   }
 
   template <Allocator Memory>
@@ -1448,8 +2199,8 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  std::span<const std::uint8_t> CommandOutputTail<Memory>::bytes() const noexcept {
-    return window_.bytes(bytes_);
+  std::span<const std::uint8_t> CommandOutputTail<Memory>::bytes() noexcept {
+    return window_.bytes(bytes_.viewMut());
   }
 
   template <Allocator Memory>
@@ -1480,7 +2231,7 @@ namespace telar::runtime {
   }
 
   CommandBlocks::CommandBlocks(ConcurrentMemory& memory, Terminal& terminal)
-      : CommandBlockRing(terminal.handle()),
+      : CommandBlockRing(memory, terminal.handle()),
         terminal_(terminal),
         text_(memory) {}
 
@@ -1508,7 +2259,7 @@ namespace telar::runtime {
   }
 
   void CommandTracker::enableOutputCapture() {
-    output_.resize(CommandOutputWindow::capacity);
+    output_.resize(CommandOutputWindow::storage_bytes);
   }
 
   void CommandTracker::submitCommand(std::span<const Byte> text) {

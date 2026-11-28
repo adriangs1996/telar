@@ -66,6 +66,12 @@ namespace telar::gui::features::history {
     return floorDivide(localSeconds(milliseconds, utc_offset_min), seconds_per_day);
   }
 
+  std::int64_t HistoryLabels::dayEnd(CalendarSample sampled) noexcept {
+    const auto midnight = ((localDay(sampled.now_ms, sampled.utc_offset_min) + 1) * seconds_per_day) - (std::int64_t{sampled.utc_offset_min} * seconds_per_minute);
+
+    return midnight * milliseconds_per_second;
+  }
+
   auto HistoryLabels::clock(std::int64_t milliseconds, std::int16_t utc_offset_min) -> Text {
     const auto seconds = positiveRemainder(localSeconds(milliseconds, utc_offset_min), seconds_per_day);
     Text result;
@@ -212,6 +218,73 @@ namespace telar::gui::features::history {
             {.kind = Kind::fact, .text = directory, .label = "Where", .mono = true},
             {.kind = Kind::fact, .text = pane.view(), .label = "Pane"},
             {.kind = Kind::fact, .text = by.view(), .label = "By"},
+        },
+    };
+  }
+
+  HistoryRunFacts HistoryRunFacts::derive(const HistoryRunStats& stats, CalendarSample sampled) {
+    constexpr std::uint64_t percent = 100;
+    HistoryRunFacts result;
+
+    if (stats.runs == 0) {
+      return result;
+    }
+
+    result.runs.appendDecimal(stats.runs);
+    result.runs.append(stats.runs == 1 ? " run" : " runs");
+    if (stats.measured != 0) {
+      const auto most = static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max() / HistoryLabels::nanoseconds_per_millisecond);
+
+      result.mean = HistoryLabels::duration(static_cast<std::int64_t>(std::min(stats.mean_duration_ms, most)) * HistoryLabels::nanoseconds_per_millisecond);
+    }
+
+    if (stats.ended != 0) {
+      const auto rate = (std::min(stats.succeeded, stats.ended) * percent) / stats.ended;
+
+      result.success.appendDecimal(rate);
+      result.success.append("% of ");
+      result.success.appendDecimal(stats.ended);
+      result.success_color = stats.succeeded == stats.ended ? PaletteRole::green : PaletteRole::text;
+    }
+
+    // When the newest run started, and a tick when it succeeded or its status when it failed.
+    result.last.append(HistoryLabels::ageAt(stats.last_started_ms, sampled).view());
+    if (stats.last_exit) {
+      result.last.append("  ");
+      if (*stats.last_exit == 0) {
+        result.last.append("✓");
+        result.last_color = PaletteRole::green;
+      } else {
+        result.last.append("exit ");
+        result.last.appendDecimal(static_cast<std::uint64_t>(static_cast<std::uint32_t>(*stats.last_exit)));
+        result.last_color = PaletteRole::red;
+      }
+    }
+
+    // Each day's bar rises with its runs against the busiest day's.
+    const auto busiest = std::ranges::max(stats.per_day);
+
+    for (const auto runs : stats.per_day) {
+      result.per_day.append(runs == 0 ? "·" : bars[((std::uint64_t{runs} * bars.size()) - 1) / busiest]);
+    }
+
+    result.per_day.append("  ");
+    result.per_day.appendDecimal(stats.per_day.view().back());
+    result.per_day.append(" today");
+
+    return result;
+  }
+
+  auto HistoryRunFacts::lines() const noexcept -> ds::Array<HistoryInspectionLine, count> {
+    using Kind = HistoryInspectionLine::Kind;
+
+    return {
+        {
+            {.kind = Kind::fact, .text = runs.view(), .label = "Runs"},
+            {.kind = Kind::fact, .text = mean.view(), .label = "Mean"},
+            {.kind = Kind::fact, .text = success.view(), .label = "Success", .color = success_color},
+            {.kind = Kind::fact, .text = last.view(), .label = "Last", .color = last_color},
+            {.kind = Kind::fact, .text = per_day.view(), .label = "Per day", .mono = true},
         },
     };
   }

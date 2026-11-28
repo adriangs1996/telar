@@ -70,10 +70,11 @@ namespace telar::runtime {
   }
 
   template <Allocator Memory>
-  ShellIntegration<Memory>::ShellIntegration(Memory& memory, std::string_view directory, bool ssh)
+  ShellIntegration<Memory>::ShellIntegration(Memory& memory, std::string_view directory, bool ssh, std::string_view control)
       : directory_(memory, directory),
         sentinel_(memory),
         ssh_(memory),
+        control_(memory),
         memory_(memory) {
     if (!directory_.empty()) {
       sentinel_.assign(directory_);
@@ -89,6 +90,7 @@ namespace telar::runtime {
       ssh_.append(shell_files::ssh.directory);
       ssh_.push('/');
       ssh_.append(shell_files::ssh.name);
+      control_.assign(control);
     }
   }
 
@@ -104,7 +106,7 @@ namespace telar::runtime {
 
   template <Allocator Memory>
   ds::Option<ShellLaunch> ShellIntegration<Memory>::apply(Command<Memory>& command, bool bare_prompt) const {
-    for (const auto* const name : {"TELAR_SHELL_TOKEN", "TELAR_SHELL_SSH", "TELAR_PROMPT_MODE", "TELAR_ZSH_ZDOTDIR", "TELAR_BASH_LOGIN", "TELAR_FISH_XDG_DATA_DIRS"}) {
+    for (const auto* const name : {"TELAR_SHELL_TOKEN", "TELAR_SHELL_SSH", "TELAR_SHELL_SSH_CONTROL", "TELAR_PROMPT_MODE", "TELAR_ZSH_ZDOTDIR", "TELAR_BASH_LOGIN", "TELAR_FISH_XDG_DATA_DIRS"}) {
       command.removeEnvironment(name);
     }
 
@@ -118,6 +120,10 @@ namespace telar::runtime {
     command.setEnvironment({.name = "TELAR_SHELL_TOKEN", .value = token.text()});
     if (!ssh_.empty()) {
       command.setEnvironment({.name = "TELAR_SHELL_SSH", .value = ssh_});
+    }
+
+    if (!control_.empty()) {
+      command.setEnvironment({.name = "TELAR_SHELL_SSH_CONTROL", .value = control_});
     }
 
     if (bare_prompt) {

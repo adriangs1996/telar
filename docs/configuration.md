@@ -247,6 +247,11 @@ the client's startup `$EDITOR`; if neither is set, opening a file reports
 `EditorUnavailable`. Reloading the configuration changes future file openings
 without restarting existing editor panes.
 
+`client.notifications.long_commands = { enabled = true, after_ms = 30000 }`
+tells when a command that ran that long ends while the window is behind
+another or its pane is out of view; see
+[notifications](notifications.md#long-commands).
+
 `client.sound` controls audible agent notifications. All three fields default
 to `true`. `ready` applies only to `working -> ready`; `needs_input` applies
 only to `working -> blocked`. Initial snapshots, reconnects, repeated states,
@@ -1568,9 +1573,11 @@ client = {
 | --- | --- | --- |
 | `mode` | `"classic"` | `"telar"` for telar's editor in place of the shell's prompt. |
 | `keymap` | `"emacs"` | `"emacs"`, readline's keys, or `"vim"`, which starts each command in insert mode. |
-| `ghost` | `true` | Suggest the rest of a command from the history, dimmed after the caret. |
+| `ghost` | `true` | Suggest the rest of a command from the history, dimmed after the caret: the newest that ran in the pane's directory, then in its workspace, then anywhere, leaving out one whose last run failed. |
 | `motion` | `"spring"` | How completions and the editor's state changes move: `"spring"`, `"ease"` or `"none"`. What is typed always shows at once. |
 | `max_lines` | `12` | Rows the editor grows to before it scrolls; `1..64`. |
+| `up_scope` | `"global"` | How far Up reaches back: `"pane"`, the pane's own commands; `"workspace"`, then the rest of its workspace's; `"global"`, then every command. |
+| `expand_aliases` | `false` | Space after a command word that names one of the shell's aliases writes what it stands for, as fish's abbreviations do; Alt+Space types a space without it. |
 | `macos_option_as_alt` | the layout's | See above. |
 | `bindings` | none | Up to 256 keys, each to an action: `submit`, `newline`, `cancel`, `complete`, `accept_suggestion`, `history_previous`, `history_next`, `history_search`, `line_start`, `line_end`, `char_left`, `char_right`, `word_left`, `word_right`, `delete_char`, `backspace`, `kill_line`, `kill_to_start`, `kill_word`, `kill_word_back`, `yank`, `undo`, `redo`, `transpose`, `clear_screen`, `normal_mode`, `insert_mode`. `mode = "normal"` binds the key in vim's normal mode instead of insert. A menu of choices, and a suggestion, keep the keys that act on them. |
 
@@ -1589,11 +1596,28 @@ line's ends, Backspace erases to its start, Z undoes, Shift+Z redoes, A
 selects the command, and C and X copy and cut the selection. A click places the
 cursor.
 
+After a command the shell did not find, the empty line suggests the one it
+likely meant, a typo or two away: a command from the history, an alias, a
+command the pane ran or one on the shell's `PATH`. Right or Ctrl+E takes it.
+
+Up and Down past the first and last line walk the commands run before, the
+pane's own first. With a line typed, Up walks only the commands that start with
+it, as fish does: `git` then Up brings back the last `git` command. A command of
+several lines being written walks every command.
+
 Tab completes commands, paths, and what a command's spec offers. What every
 choice starts with is written at once; Tab and Shift+Tab, or the arrows, move
 through the rest, Enter takes the one selected, and so does Space once Tab moved
 to it; Escape closes them.
 Typing narrows them, ignoring case when nothing matches as typed.
+
+For a command no spec describes, Tab also asks the pane's own shell, zsh, bash
+or fish, what it would complete there, in a process apart from the pane that reads none
+of your configuration. `runtime.shell_completion = false` turns this off, and
+`runtime.shell_completion_rc = true` has that shell read your `.zshrc`,
+`.bashrc` or `config.fish` first, which runs whatever they run. In a pane `ssh`
+reached, Tab asks that host for its files and its shell's words, through the
+connection the session shares, which `runtime.ssh_integration` sets up.
 
 While a command runs, the editor takes the next one: Enter queues it to run if
 the running one succeeds, and Alt+Enter sends the line to the program instead.
@@ -1611,7 +1635,11 @@ Down step through the blocks while one is selected; the view moves only when
 the block's separator is out of it.
 
 A separator under the pointer, or selected, offers "copy command" and "copy
-output", and the copy says what it took. Command+C (Ctrl+Shift+C) copies the
+output", and the copy says what it took; "edit" and "sudo" put its command
+back in the editor, as it was or with `sudo` before it, and "rerun" runs it
+again. A command longer than its separator holds, or of several lines, is read
+whole from the rows it was typed on and only goes to the editor, even to run
+again: what a program printed over those rows since is never run unseen. Command+C (Ctrl+Shift+C) copies the
 selected block's output. A block selected with the pointer or the window's
 arrows lets the keys that type go to the editor, which takes them. From vim's
 keys, the selected block also takes:
@@ -1622,15 +1650,34 @@ keys, the selected block also takes:
 | `yc`, `yy` | Copy the command, whole. |
 | `v`, `V` | Select the output in copy mode, by characters or lines. |
 | `/` | Search the output; Tab widens the search to the scrollback. |
+| `&` | Filter the output to the lines that match, as `less` does. |
 | `za`, `zc`, `zo` | Toggle, fold or unfold the output; `zM` and `zR` every block's. |
 | `zt`, `zz`, `zb` | Put the block at the view's top, middle or bottom. |
+| `e`, `E` | Put the command in the editor; with `sudo` before it. |
+| `R` | Run the command again. |
+| `m` and a letter | Mark the block with the letter, `a` to `z`; the rail and the separator show it. |
+| `'` and a letter | Select the marked block, also from the editor's normal mode. |
+| `` ` `` and a letter | Go back to the row the view was on when the mark was set. |
 | `j`, `k` | Move the view a row. |
 | `gg`, `G` | The first block; the live end. |
 | Ctrl+O, Ctrl+I | Back and forth through the jumps, selecting the block each lands in. |
 | Escape, `q` | Back to the editor. |
 
+`&`, or the separator's "filter", opens a bar at the pane's top: only the lines of
+the block's output the query is found in are shown, each match lit, the others
+hidden as a fold hides them, and the bar counts the lines. The query can be a
+regular expression (Alt+R), match case (Alt+C) or keep the lines it is not found
+in (Alt+I), and Alt+Up and Alt+Down show up to 20 lines of context around each
+match. A running command is filtered as it prints. Enter gives the keys back to
+the terminal and keeps the filter, so `Y` and "copy output" copy only the lines
+shown; Escape closes it and takes the view back to where it was. A regular
+expression runs in time linear in each line, never backtracking, and has
+classes, `\d` `\w` `\s`, groups, `|`, greedy and lazy quantifiers, `{m,n}`
+up to 100, `^` `$` and `\b`; a query is at most 256 bytes.
+
 A pane keeps the blocks of the commands whose rows the scrollback still holds,
-up to 256.
+up to 256. A mark follows its block as older rows drop from the scrollback, and
+goes with the block when its rows do.
 
 Copy mode accepts `h`, `j`, `k`, `l` and the arrow keys, `w`, `b`, `e`, `{`,
 `}`, `0`, `^`, `$`, `g`, `G`, Page Up, Page Down, Ctrl-B, Ctrl-F, Ctrl-U, and Ctrl-D.
@@ -1773,9 +1820,12 @@ validated values. No Lua state or closure enters the runtime process.
 `runtime.history.path` is resolved relative to the directory containing
 `config.lua`; its parent directory must already exist.
 `runtime.history.command_filters` and `cwd_filters` each accept at most 64
-substring patterns of up to 256 bytes; a list or pattern past that refuses
-the configuration and names the limit, because dropping a filter would record
-what it hides. `runtime.proxy` accepts
+patterns of up to 256 bytes, substrings or `{ regex = "..." }` entries, of
+which at most 16 regular expressions, compiled when the configuration is read;
+`runtime.history.trivial_commands` accepts at most 64 commands. A list or
+pattern past that, or an expression that does not compile, refuses the
+configuration and names the fault, because dropping a filter would record what
+it hides. `runtime.proxy` accepts
 `enabled`, `anonymous_tunnels`, `pane_https_proxy`, `ca_dir`, `capture`, and `intercept_hosts`. ProxyTLS and exchange
 capture are disabled by default. A
 relative `ca_dir` is also resolved beside `config.lua`; Telar creates it

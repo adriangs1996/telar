@@ -152,9 +152,9 @@ namespace telar::gui::qt {
     const auto output = input_.value(QStringLiteral("output")).toString().toUtf8();
     const auto heading = input_.value(QStringLiteral("heading")).toString().toUtf8();
     const auto records = input_.value(QStringLiteral("facts")).toList();
-    ds::Array<QByteArray, application::history::HistoryInspectionFacts::count> texts;
-    ds::Array<QByteArray, application::history::HistoryInspectionFacts::count> labels;
-    ds::Array<application::history::HistoryInspectionLine, application::history::HistoryInspectionFacts::count> facts;
+    ds::Array<QByteArray, application::history::HistoryInspectionFacts::shown> texts;
+    ds::Array<QByteArray, application::history::HistoryInspectionFacts::shown> labels;
+    ds::Array<application::history::HistoryInspectionLine, application::history::HistoryInspectionFacts::shown> facts;
     const auto fact_count = std::min(facts.size(), static_cast<std::size_t>(records.size()));
 
     // Every text is stored before any fact views one, as Rust lends no element of an array it still

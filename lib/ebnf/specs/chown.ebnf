@@ -2,6 +2,7 @@
    BSD chown of macOS 26 (`man chown`). GNU long options take their value as
    --name=value or as the next word. Operands are OWNER[:GROUP] (or :GROUP),
    unless --reference is given, then the files; files are offered. *)
+(* telar: complete *)
 
 chown = { option | @file } , [ "--" , { @file } ] ;
 

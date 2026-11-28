@@ -52,22 +52,35 @@ namespace telar::gui::application {
     }
   }
 
-  void Session::runCommand(std::uint64_t pane_id, std::string_view text) {
+  ds::Option<std::uint64_t> Session::runCommand(std::uint64_t pane_id, std::string_view text) {
     auto* pane = findPaneMut(pane_id);
     if (pane == nullptr || !pane->attached || pane->exited || text.empty()) {
-      return;
+      return ds::none;
     }
 
     if (!speaks(ClientTag::pane_command)) {
       pasteBytes(pane_id, text);
       input(pane_id, "\r");
-      return;
+      return 0;
     }
 
     static_cast<void>(features::terminal::copy_mode::clearPointer(copy_mode));
     followLiveEnd(*pane);
-    link.send(PaneCommand{.pane_id = pane_id, .text = byteView(text)});
+    std::uint64_t request_id = 0;
+
+    if (speaks(ClientTag::run_pane_command)) {
+      const auto asked = link.ask(RunPaneCommand{.pane_id = pane_id, .text = byteView(text)});
+      if (!asked) {
+        return ds::none;
+      }
+
+      request_id = *asked;
+    } else {
+      link.send(PaneCommand{.pane_id = pane_id, .text = byteView(text)});
+    }
+
     notePaneInput(*pane);
+    return request_id;
   }
 
   void Session::followLiveEnd(Pane<Memory>& pane) {
@@ -229,6 +242,7 @@ namespace telar::gui::application {
         refreshFolds(*pane);
       }
 
+      followFilter(pane->id);
       changed_pane_ = pane->id;
 
       return Change::terminal;
@@ -275,13 +289,24 @@ namespace telar::gui::application {
   Change Session::apply(const PaneClipboard& message) {
     auto text = textView(message.bytes);
 
-    // A command copied from its rows starts where its own text does.
+    // A command copied from its rows starts where its own text does. The rows come unwrapped,
+    // a line for each of the command's.
     if (!command_copy_.empty() && message.pane_id == command_copy_pane_) {
-      if (const auto start = text.find(command_copy_.view()); start != std::string_view::npos) {
-        text.remove_prefix(start);
-      }
+      const auto body = text.substr(0, text.find_last_not_of('\n') + 1);
+      const auto lines = static_cast<std::size_t>(std::ranges::count(body, '\n')) + 1;
+      const auto start = text.find(command_copy_.view());
 
-      command_copy_.clear();
+      if (lines == command_copy_lines_ && start < text.find('\n')) {
+        text.remove_prefix(start);
+        command_copy_.clear();
+        // Read to be used again: it goes to the editor, and the clipboard keeps what it held.
+        if (const auto reuse = std::exchange(command_reuse_, ds::none)) {
+          const ds::String<Memory> command{memory, text};
+
+          reuseCommand(message.pane_id, command, *reuse);
+          return Change::terminal;
+        }
+      }
     }
 
     clipboard_.assign(text);
@@ -473,19 +498,26 @@ namespace telar::gui::application {
 
     if (pane->scrollback_generation != message.generation) {
       pane->live_prompt_row.reset();
+      rememberMarks(*pane);
     }
 
     pane->scrollback_generation = message.generation;
     pane->scrollback_trimmed = message.trimmed;
     pane->rows.number(message.generation);
+    retainMarks(*pane);
     // Rows dropped from the top keep each block's key; renumbered rows leave nothing to find.
     restoreBlock(*pane, renumbered ? ds::none : selected);
     refreshFolds(*pane);
+    followFilter(pane->id);
     changed_pane_ = pane->id;
     return Change::terminal;
   }
 
   Change Session::apply(const PaneRows& message) {
+    if (receiveFilterRows(message)) {
+      return Change::terminal;
+    }
+
     auto* pane = findPaneMut(message.pane_id);
     if (pane == nullptr) {
       return Change::none;

@@ -108,10 +108,113 @@ namespace {
              signature + "\x07\x1b]133;A" + signature + "\x07$ ");
       check(outputs.size() == 1, "the signed D mark ends the command");
       check(!outputs.front().contains("telar="), "the stored output never holds the token");
-      // The echo before the newline that commits the command is kept only when it arrives with it.
-      check(outputs.front().ends_with("\nfile\r\n") && !outputs.front().contains('\x1b'), "the stored output is what the command printed, up to its end");
-      check(piece == 1 || outputs.front() == "ls\r\nfile\r\n", "the stored output is what the command printed");
+      // The line editor's echo of the line comes before the C mark: it is the shell's.
+      check(outputs.front() == "file\r\n", "the stored output is what the command printed, from its start to its end");
     }
+  }
+
+  // The shell's signed report that a command's output ended (zsh's, at the front of what it
+  // prints before its prompt) ends the stored output there; one another program forges does not.
+  void testOutputEndsWhereTheShellSaysSo() {
+    for (const bool signed_report : {true, false}) {
+      telar::testing::TestMemory adapter;
+      ConcurrentMemory& memory = adapter;
+      const auto token = ShellToken::generate();
+      const auto signature = ";telar=" + std::string{token.text()};
+      const auto report = signed_report ? "telar=" + std::string{token.text()} : "telar=" + std::string(ShellToken::length, '0');
+      Terminal terminal{memory, {20, 4, 8, 16}, TerminalPurpose::observation};
+      CommandTracker tracker{memory, terminal, "/initial", true, token};
+      std::vector<std::string> outputs;
+
+      struct Sink {
+        std::vector<std::string>& outputs;
+
+        void emit(const CapturedCommand& command) {
+          outputs.emplace_back(reinterpret_cast<const char*>(command.output.data()), command.output.size());
+        }
+      } sink{outputs};
+
+      const auto output = [&](std::string_view text) {
+        tracker.output({byteSpan(text), {110, 110'000'000}, true}, sink);
+      };
+
+      output("\x1b]133;A" + signature + "\x07$ \x1b]133;B" + signature + "\x07");
+      tracker.input({byteSpan("ls\r"), {100, 100'000'000}, true}, sink);
+      output("ls\r\n\x1b]133;C" + signature + "\x07"
+                                              "file\r\n\x1b]6973;" +
+             report + ";ended\x07%   \r \r\x1b]133;D;0" + signature + "\x07\x1b]133;A" + signature + "\x07$ ");
+      check(outputs.size() == 1, "the D mark ends the command");
+      check(signed_report ? outputs.front() == "file\r\n" : outputs.front().starts_with("file\r\n%"), signed_report ? "what the shell prints once the command ended is not its output" : "a forged report ends nothing");
+    }
+  }
+
+  // What a command printed after `prompt`, fed in chunks of `piece` bytes, as the history stores it.
+  std::string capturedTail(std::string_view printed, std::size_t piece) {
+    CaptureFixture fixture;
+
+    fixture.output("$ ");
+    fixture.input("run\r");
+    fixture.output("run\r\n");
+    for (std::size_t offset = 0; offset < printed.size(); offset += piece) {
+      fixture.output(printed.substr(offset, piece));
+    }
+
+    fixture.finish();
+    check(fixture.commands.size() == 1, std::to_string(fixture.commands.size()) + " commands for " + std::to_string(printed.size()) + " bytes in " + std::to_string(piece));
+    return fixture.commands.empty() ? std::string{} : fixture.commands[0].output;
+  }
+
+  // However the output arrives, the stored tail is the last 64 KiB of it, all of them.
+  void testOutputTailKeepsTheLast64KiB() {
+    constexpr std::size_t kept = std::size_t{64} * 1024;
+    std::string printed;
+
+    for (std::size_t line = 0; printed.size() < 3 * kept; ++line) {
+      printed += "line " + std::to_string(line) + "\r\n";
+    }
+
+    for (const std::size_t piece : {std::size_t{1000}, std::size_t{5000}, std::size_t{40000}, std::size_t{200000}}) {
+      check(capturedTail(printed, piece) == printed.substr(printed.size() - kept), "the tail is exactly the last 64 KiB");
+    }
+  }
+
+  // `count` bytes of lines of `fill`, as a command prints them.
+  std::string lines(char fill, std::size_t count) {
+    std::string text;
+
+    while (text.size() < count) {
+      text += std::string(78, fill) + "\r\n";
+    }
+
+    text.resize(count);
+    return text;
+  }
+
+  // A tail that would start inside a character, or inside an escape sequence, starts after it.
+  void testOutputTailStartsAtABoundary() {
+    constexpr std::size_t kept = std::size_t{64} * 1024;
+    // Lines of two-byte characters, with the cut on the second byte of one.
+    std::string accents;
+
+    while (accents.size() < 2 * kept) {
+      accents += std::string{"\xc3\xa9"} + (accents.size() % 160 == 158 ? "\r\n" : "");
+    }
+
+    while (static_cast<unsigned char>(accents[accents.size() - kept]) != 0xa9) {
+      accents += "y";
+    }
+
+    check(capturedTail(accents, 4096) == accents.substr(accents.size() - kept + 1), "a split character is left out whole");
+
+    // A color sequence with the cut in its parameters.
+    const auto after_color = lines('b', kept - 5);
+    const auto colored = lines('a', 2000) + "\x1b[38;5;196m" + after_color;
+    check(capturedTail(colored, 3000) == after_color, "a split escape sequence is left out whole");
+
+    // A hyperlink whose cut falls in its URL: the tail starts after the sequence's terminator.
+    const auto after_link = lines('d', kept - 100);
+    const auto linked = lines('c', 500) + "\x1b]8;;https://example.com/" + std::string(300, 'p') + "\x1b\\" + after_link;
+    check(capturedTail(linked, 7000) == after_link, "a split hyperlink is left out whole");
   }
 
   void testInputBoundaries() {
@@ -451,6 +554,58 @@ namespace {
     check(!zones.remote());
   }
 
+  // The socket of the connection a session shares comes only from the nonce the pane's own shell
+  // signs, and only a path ssh.sh could have named; it is the pane's while the remote shell is.
+  void testControlComesOnlyFromThePanesOwnNest() {
+    SystemAllocator zone_system;
+    MemoryAdapter<SystemAllocator> zone_adapter{zone_system};
+    ConcurrentMemory& zone_memory = zone_adapter;
+
+    struct Completions {
+      void complete(CommandCompletion) {}
+    };
+
+    const auto token = ShellToken::generate();
+    const auto remote = ShellToken::generate();
+    const auto signature = ";telar=" + std::string{token.text()};
+    Completions sink;
+    // The pane's shell hands a nonce naming `control`; the remote shell answers it, naming `own`.
+    const auto nest = [&](std::string_view control, std::string_view own = {}) {
+      CommandZones zones{zone_memory, "/", token};
+      const auto nonce = ShellToken::generate();
+      const auto named = control.empty() ? std::string{} : ";control=" + std::string{control};
+      const auto answered = own.empty() ? std::string{} : ";control=" + std::string{own};
+
+      zones.feed(byteSpan("\x1b]6973" + signature + ";nest=" + std::string{nonce.text()} + named + "\x07"), {}, sink);
+      check(zones.remoteControl().empty(), "the socket is the session's once its shell answers");
+      zones.feed(byteSpan("\x1b]6973;nest=" + std::string{nonce.text()} + ";token=" + std::string{remote.text()} + ";shell=zsh" + answered + "\x07"), {}, sink);
+      check(zones.remote());
+      return std::string{zones.remoteControl()};
+    };
+
+    // A socket telar named for the session's host, by a digest of it.
+    const auto socket = "/run/user/1000/telar/ssh/" + std::string(40, 'f');
+
+    check(nest(socket) == socket);
+    check(nest("/home/me/.ssh/cm-me@build-01:22") == "/home/me/.ssh/cm-me@build-01:22", "a ControlPath of the user's own");
+    check(nest({}).empty(), "a session that shares nothing");
+    check(nest({}, "/tmp/evil").empty(), "the remote shell cannot name a socket");
+    for (const std::string_view refused : {"relative/socket", "/tmp/../run/socket", "/tmp/./socket", "/tmp//socket", "/tmp/socket/", "/tmp/a b", "/tmp/a%3bb", "/tmp/$(id)"}) {
+      check(nest(refused).empty(), std::format("{} is refused", refused));
+    }
+
+    check(nest("/" + std::string(CommandZones::control_capacity, 'a')).empty(), "a path no socket address holds");
+
+    // ssh returned: the pane's own shell has no shared connection.
+    CommandZones zones{zone_memory, "/", token};
+    const auto nonce = ShellToken::generate();
+
+    zones.feed(byteSpan("\x1b]6973" + signature + ";nest=" + std::string{nonce.text()} + ";control=/run/telar/ssh/m\x07\x1b]6973;nest=" + std::string{nonce.text()} + ";token=" + std::string{remote.text()} + ";shell=bash\x07"), {}, sink);
+    check(zones.remoteControl() == "/run/telar/ssh/m");
+    zones.feed(byteSpan("\x1b]133;A" + signature + "\x07"), {}, sink);
+    check(!zones.remote() && zones.remoteControl().empty());
+  }
+
   // telar's private reports count only when the pane's shell signs them; without a token no mark
   // is signed, so nothing a program prints changes the PATH completion searches.
   void testPrivateReportWithoutToken() {
@@ -566,6 +721,59 @@ namespace {
     check(blocks.commandRevision() == 4 && blocks.latest()->command.view().ends_with("sleep 100"), "the last command went with its block");
   }
 
+  // A command the line editor took back before it ran, as zsh's spelling correction does when
+  // the answer is e(dit), is not recorded: the history holds the command that ran after it.
+  void testCommandTakenBackIsNotRecorded() {
+    CaptureFixture fixture;
+
+    fixture.output("\x1b]133;A\x07$ \x1b]133;B\x07");
+    fixture.input("lss\r", 100, ds::none);
+    fixture.output("lss\r\n\x1b]133;C\x07zsh: correct 'lss' to 'ls' [nyae]? ", 101, ds::none);
+    fixture.input("e", 102, ds::none);
+    fixture.output("e\r\n\x1b]133;B\x07\x1b]133;D;0\x07\x1b]133;A\x07$ \x1b]133;B\x07lss", 103, ds::none);
+    fixture.tracker.submitCommand(byteSpan("ls"));
+    fixture.input("\x15ls\r", 104, ds::none);
+    fixture.output("\r\x1b[K$ \x1b]133;B\x07ls\r\n\x1b]133;C\x07"
+                   "file\r\n\x1b]133;D;0\x07",
+        105,
+        ds::none);
+
+    check(fixture.commands.size() == 1, std::format("{} commands recorded", fixture.commands.size()));
+    check(fixture.commands[0].command == "ls", fixture.commands[0].command);
+  }
+
+  // Ctrl-C (status 130, SIGINT) and a pipeline cut short (141, SIGPIPE) interrupt a command; any
+  // other status but zero fails it.
+  void testSignalStatusInterrupts() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    Terminal terminal{memory, TerminalSize{40, 12, 8, 16}};
+    CommandBlocks blocks{memory, terminal};
+    const auto now = std::chrono::steady_clock::now();
+    const auto run = [&](std::string_view command, int status) {
+      terminal.feed(byteSpan("\x1b]133;A\x07"));
+      blocks.mark('A', now);
+      terminal.feed(byteSpan("$ \x1b]133;B\x07"));
+      blocks.mark('B', now);
+      terminal.feed(byteSpan(command));
+      terminal.feed(byteSpan("\r\n\x1b]133;C\x07"));
+      blocks.mark('C', now);
+      blocks.finished(status, now);
+      return blocks.latest()->state;
+    };
+
+    check(run("sleep 100", 130) == CommandBlockState::interrupted, "Ctrl-C failed the command");
+    check(blocks.latest()->status == 130, "the status was lost");
+    check(run("yes | head -1", 141) == CommandBlockState::interrupted, "a broken pipe failed the command");
+    check(run("false", 1) == CommandBlockState::failed);
+    check(run("kill -TERM $$", 143) == CommandBlockState::failed, "only SIGINT and SIGPIPE interrupt");
+
+    ds::Array<CommandBlock, PaneBlocks::capacity> storage;
+    const auto shown = blocks.message(7, storage).blocks;
+
+    check(shown.size() == 4 && shown[0].state == CommandBlockState::interrupted && shown[1].state == CommandBlockState::interrupted && shown[2].state == CommandBlockState::failed);
+  }
+
   // An OSC longer than the 16 KiB a pane keeps is dropped whole: its kept prefix is never read.
   void testOverlongOscIgnored() {
     SystemAllocator zone_system;
@@ -600,6 +808,75 @@ namespace {
     check(zones.directory() == "/next");
   }
 
+  // The line a shell's editor held, as its integration reports it: %-encoded and signed by the
+  // pane's shell, or by the remote shell ssh reached. What is kept is text to show, at most the
+  // capacity, cut on a character; a report no shell signed, or that is not UTF-8, changes nothing.
+  void testTypeaheadReport() {
+    SystemAllocator zone_system;
+    MemoryAdapter<SystemAllocator> zone_adapter{zone_system};
+    ConcurrentMemory& zone_memory = zone_adapter;
+
+    struct Completions {
+      void complete(CommandCompletion) {}
+    };
+
+    const auto token = ShellToken::generate();
+    const auto report = [&](std::string_view signature, std::string_view line) {
+      return "\x1b]6973;telar=" + std::string{signature} + ";typeahead=" + std::string{line} + "\x07";
+    };
+
+    // Every byte but a letter, a digit or '-' %-encoded: more than an integration encodes, which
+    // the line decodes all the same.
+    const auto encoded = [](std::string_view line) {
+      std::string text;
+
+      for (const char byte : line) {
+        if ((byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '-') {
+          text += byte;
+        } else {
+          text += std::format("%{:02X}", static_cast<unsigned char>(byte));
+        }
+      }
+
+      return text;
+    };
+
+    CommandZones zones{zone_memory, "/", token};
+    Completions sink;
+
+    check(zones.typeaheadSerial() == 0 && zones.typeahead().empty());
+    zones.feed(byteSpan(report(token.text(), encoded("ls -l; x%y\nnext\t\x01"))), {}, sink);
+    check(zones.typeaheadSerial() == 1 && zones.typeahead() == "ls -l; x%y\nnext\t ", std::string{zones.typeahead()});
+
+    // Forged, malformed, or not UTF-8: the line stays.
+    const auto forged = ShellToken::generate();
+
+    zones.feed(byteSpan(report(forged.text(), "rm")), {}, sink);
+    zones.feed(byteSpan(report(token.text(), "bad%2")), {}, sink);
+    zones.feed(byteSpan(report(token.text(), "%FF%FE")), {}, sink);
+    check(zones.typeaheadSerial() == 1 && zones.typeahead().starts_with("ls -l"), "a report that is not the shell's line replaced it");
+
+    // A line longer than kept ends on a whole character.
+    std::string long_line;
+
+    for (std::size_t index = 0; index < CommandZones::typeahead_capacity / 2; ++index) {
+      long_line += "%C3%A9";
+    }
+
+    zones.feed(byteSpan(report(token.text(), "x" + long_line)), {}, sink);
+    check(zones.typeaheadSerial() == 2 && zones.typeahead().size() == CommandZones::typeahead_capacity - 1 && zones.typeahead().ends_with("\xc3\xa9"), std::format("{} bytes kept", zones.typeahead().size()));
+
+    // The shell ssh reached signs its own.
+    const auto nonce = ShellToken::generate();
+    const auto remote = ShellToken::generate();
+
+    zones.feed(byteSpan("\x1b]6973;telar=" + std::string{token.text()} + ";nest=" + std::string{nonce.text()} + "\x07"), {}, sink);
+    zones.feed(byteSpan("\x1b]6973;nest=" + std::string{nonce.text()} + ";token=" + std::string{remote.text()} + ";shell=bash\x07"), {}, sink);
+    check(zones.remote());
+    zones.feed(byteSpan(report(remote.text(), "uptime")), {}, sink);
+    check(zones.typeaheadSerial() == 3 && zones.typeahead() == "uptime", "the remote shell's line was not taken");
+  }
+
   // A prompt while a command runs, with no D mark, ends that command as interrupted.
   void testPromptWhileRunningInterrupts() {
     SystemAllocator zone_system;
@@ -630,6 +907,9 @@ namespace {
   const telar::testing::Case case_output_drops_integration_marks{"command_capture.output_drops_integration_marks", testOutputDropsIntegrationMarks};
   const telar::testing::Case case_signed_marks{"command_capture.signed_marks", testSignedMarks};
   const telar::testing::Case case_nested_marks{"command_capture.nested_marks", testNestedMarks};
+  const telar::testing::Case case_output_ends_where_the_shell_says_so{"command_capture.output_ends_where_the_shell_says_so", testOutputEndsWhereTheShellSaysSo};
+  const telar::testing::Case case_output_tail_keeps_the_last_64_kib{"command_capture.output_tail_keeps_the_last_64_kib", testOutputTailKeepsTheLast64KiB};
+  const telar::testing::Case case_output_tail_starts_at_a_boundary{"command_capture.output_tail_starts_at_a_boundary", testOutputTailStartsAtABoundary};
   const telar::testing::Case case_input_boundaries{"command_capture.input_boundaries", testInputBoundaries};
   const telar::testing::Case case_rendered_command{"command_capture.rendered_command", testRenderedCommand};
   const telar::testing::Case case_wrapped_and_unicode_command{"command_capture.wrapped_and_unicode_command", testWrappedAndUnicodeCommand};
@@ -640,9 +920,13 @@ namespace {
   const telar::testing::Case case_discarded_edits{"command_capture.discarded_edits", testDiscardedEdits};
   const telar::testing::Case case_capture_bounds_and_resize{"command_capture.capture_bounds_and_resize", testCaptureBoundsAndResize};
   const telar::testing::Case case_osc_fragments{"command_capture.osc_fragments", testOscFragments};
+  const telar::testing::Case case_control_from_own_nest{"command_capture.control_comes_only_from_the_panes_own_nest", testControlComesOnlyFromThePanesOwnNest};
   const telar::testing::Case case_private_report_without_token_ignored{"command_capture.private_report_without_token_ignored", testPrivateReportWithoutToken};
   const telar::testing::Case case_block_ring_keeps_newest{"command_capture.block_ring_keeps_newest", testBlockRingKeepsNewest};
   const telar::testing::Case case_latest_command{"command_capture.latest_command", testLatestCommand};
+  const telar::testing::Case case_typeahead_report{"command_capture.typeahead_report", testTypeaheadReport};
+  const telar::testing::Case case_command_taken_back{"command_capture.command_taken_back_is_not_recorded", testCommandTakenBackIsNotRecorded};
+  const telar::testing::Case case_signal_status_interrupts{"command_capture.signal_status_interrupts", testSignalStatusInterrupts};
   const telar::testing::Case case_overlong_osc_ignored{"command_capture.overlong_osc_ignored", testOverlongOscIgnored};
   const telar::testing::Case case_prompt_while_running_interrupts{"command_capture.prompt_while_running_interrupts", testPromptWhileRunningInterrupts};
 

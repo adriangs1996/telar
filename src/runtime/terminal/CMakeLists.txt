@@ -1,5 +1,5 @@
 telar_add_domain(runtime terminal
-  EXCLUDE graphics command_capture shell_integration
+  EXCLUDE graphics command_capture shell_integration shell_completion
   SOURCES
     control/checksum/checksum.cpp
     control/clipboard/clipboard.cpp

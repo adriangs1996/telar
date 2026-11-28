@@ -10,6 +10,7 @@ import telar.gui.features.terminal.graphics;
 import telar.gui.features.history;
 import telar.gui.features.prompt;
 import telar.gui.features.terminal.copy_mode;
+import telar.gui.features.terminal.filter;
 import telar.gui.features.workbench;
 import telar.gui.features.notifications;
 import telar.gui.foundation.model;
@@ -126,6 +127,14 @@ export {
       output,
     };
 
+    // What re-using a block's command does with it: puts it in the editor as it is, or with
+    // `sudo` before it, or runs it again.
+    enum class BlockReuse : std::uint8_t {
+      edit,
+      edit_as_root,
+      run,
+    };
+
     // The last copy of a block, for its view to say so: `copied` false when there was nothing to
     // copy, and `serial` counting the copies from 1.
     struct BlockCopyNote {
@@ -228,8 +237,10 @@ export {
 
       // Runs a command at the pane's prompt. A runtime that takes commands types it there itself and
       // keeps this text for the command's history; an older one (schema cqp00002) gets it pasted,
-      // then Enter, and reads the command back from the screen.
-      void runCommand(std::uint64_t pane_id, std::string_view text);
+      // then Enter, and reads the command back from the screen. The request a runtime of
+      // cqp00015 answers once it typed the command, or refuses; 0 for one that says nothing back;
+      // none when it did not leave, as the transport's queue was full.
+      ds::Option<std::uint64_t> runCommand(std::uint64_t pane_id, std::string_view text);
 
       // Typing returns a scrolled pane to its live end, where the output follows.
       void followLiveEnd(Pane<Memory>& pane);
@@ -272,6 +283,9 @@ export {
 
       [[nodiscard]] bool folded(BlockAt block) const noexcept;
 
+      // The vim marks set on block `index`, a bit each from `a` in the lowest.
+      [[nodiscard]] static std::uint32_t blockMarks(const Pane<Memory>& pane, std::size_t index) noexcept;
+
       // Folds the output of block `index`, or unfolds it. Only a runtime that sends rows apart from
       // the screen can show what follows a fold.
       void fold(BlockAt block, bool fold);
@@ -282,6 +296,9 @@ export {
       // The rows of block `index`'s output, from under its prompt to above the next prompt, or to
       // the live prompt or the scrollback's end for the last; empty when it printed nothing.
       [[nodiscard]] static std::pair<std::uint32_t, std::uint32_t> blockRows(const Pane<Memory>& pane, std::size_t index) noexcept;
+
+      // The first row past the last command's own rows, where the live prompt can start.
+      [[nodiscard]] static std::uint64_t liveFrom(const Pane<Memory>& pane) noexcept;
 
       // The row block `index`'s separator is drawn on: the command's first, where telar's prompt
       // leaves it, with the rows of a command that runs on past it shown under it.
@@ -304,6 +321,20 @@ export {
 
       [[nodiscard]] const BlockCopyNote& lastBlockCopy() const noexcept;
 
+      // Puts block `index`'s command in the pane's editor, or runs it again, back at the live
+      // end. A command the block holds cut short (lines past its first, or longer than a block
+      // carries) is read whole from the rows it was typed on, and goes to the editor even to
+      // run: what a program printed over those rows since is not run unseen. False when the
+      // pane's editor does not stand in for its prompt or the block has no command.
+      bool reuseBlock(BlockAt block, BlockReuse how);
+
+      // The same with the command of block `index` among the ones an earlier runtime kept, which
+      // goes to the editor as it is when it may have been cut short: its rows are gone.
+      bool reuseRestored(std::uint64_t pane_id, std::size_t index, BlockReuse how);
+
+      // Whether `block` holds its command whole: one line, short of the limit a block carries.
+      [[nodiscard]] static bool wholeCommand(const CommandBlock& block) noexcept;
+
       // The window's own step through the blocks, Cmd+Up and Cmd+Down, from any keymap or mode:
       // the block above or below the selected one, or the last from the live end. The keys that
       // type still go to the editor.
@@ -312,6 +343,10 @@ export {
       // prefix+[ where telar's editor stands in for the prompt: the last command block, selected,
       // instead of copy mode from the live end.
       bool enterBlocks();
+
+      // The window that shows the session came to the front, or went behind another, as its host
+      // says. A command that ran long and ends while it is behind tells of its end.
+      void windowActivated(bool active) noexcept;
 
       // Whether a block was selected or left, or copy mode began on one, since the last call.
       [[nodiscard]] bool takeBlockChange() noexcept;
@@ -666,9 +701,14 @@ export {
 
       Change apply(const PaneFacts& message);
 
+      Change apply(const PaneTypeahead& message);
+
+      Change apply(const HistoryChanged& message);
+
       Change apply(const HistoryResults& message);
 
       Change apply(const HistoryOutput& message);
+      Change apply(const HistoryCommandStats& message);
 
       Change apply(const HistoryPruned& message);
 
@@ -769,8 +809,10 @@ export {
       // Ctrl-I back and forth through the jumps. On a selected block: j and k move the view a row,
       // gg to the top and G to the live end; zt, zz and zb put the block at the view's top, middle
       // or bottom; za, zc and zo fold its output, zM and zR every block's; / searches its output;
-      // v and V select its output, Y copies it and yc its command; Esc, q, i, a, I, A and any other
-      // key go back to the prompt.
+      // v and V select its output, Y copies it and yc its command; e puts its command in the
+      // editor, E with sudo before it, and R runs it again; m and a letter mark it. From the normal
+      // mode or a block, ' and a letter select the block a mark names and ` and a letter go to its
+      // row. Esc, q, i, a, I, A and any other key go back to the prompt.
       ds::Option<features::prompt::Outcome> blockKey(std::uint64_t pane_id, const features::prompt::KeyPress& key);
 
       // The block selected in `line` while it is one of `pane`'s.
@@ -796,6 +838,57 @@ export {
       // The chord pending on the line ended by `character`, or `[` or `]` beginning one; false
       // when `character` does neither. A chord it does not end is dropped.
       bool chordKey(std::uint64_t pane_id, ds::Option<std::size_t> selection, char32_t character);
+
+      // A chord of two keys: the one that began it and the one that ends it.
+      struct Chord {
+        char pending = 0;
+        char32_t character = 0;
+      };
+
+      // m and a letter on the selected block set the letter's mark there; ' and a letter select
+      // the block the mark names, and ` and a letter take the view to the row its top was on
+      // when the mark was set. False when `pending` and `character` make no such chord.
+      bool markChord(std::uint64_t pane_id, ds::Option<std::size_t> selection, Chord chord);
+
+      // Drops the marks whose blocks left the scrollback.
+      static void retainMarks(Pane<Memory>& pane) noexcept;
+
+      // The pane's marks by block index while its rows are numbered anew, and again by the
+      // blocks' new rows once they come.
+      static void rememberMarks(Pane<Memory>& pane) noexcept;
+      static void restoreMarks(Pane<Memory>& pane) noexcept;
+
+      // The commands of `pane` that were running among `running`, by their blocks' stable keys,
+      // and have ended since: each that ran long tells of its end where nobody watched it.
+      void alertFinished(const Pane<Memory>& pane, std::span<const std::uint64_t> running);
+
+      // ---- the filter of a block's output, which application::terminal::filter drives --------
+
+      // Opens the filter on `block`; false without it or a runtime that sends rows apart from
+      // the screen.
+      bool openFilter(BlockAt block);
+
+      // Filters the block by `query`, its separator at the view's top; false when the query does
+      // not compile.
+      bool queryFilter(const features::terminal::filter::Query& query);
+
+      // Closes the filter, the view back where it was when it opened.
+      void closeFilter();
+
+      // Pane `pane_id` changed: its screen, its blocks or what its rows are numbered from. The
+      // filter reads what it can and closes when its block is gone.
+      void followFilter(std::uint64_t pane_id);
+
+      // Rows the runtime sent; false when they are not the filter's.
+      bool receiveFilterRows(const PaneRows& reply);
+
+      // Asks for the filter's next rows of block `index` of `pane`, and refolds the pane when what
+      // the filter shows changed since `revision`.
+      void advanceFilter(std::uint64_t revision, Pane<Memory>& pane, std::size_t index);
+
+      // The output of `block` as the filter shows it into the clipboard; false when the filter is
+      // not on it.
+      bool copyFiltered(BlockAt block);
 
       // The z chord ended by `character` on block `index`; false when `character` ends none.
       bool foldChord(BlockAt block, char32_t character);
@@ -846,6 +939,13 @@ export {
       // own text is its first line, cut short.
       void copyBlockCommand(const Pane<Memory>& pane, std::size_t index);
 
+      // Asks the runtime for the rows block `index`'s command was typed on, which come back as
+      // the pane's clipboard; false when the command has no rows.
+      bool readBlockCommand(const Pane<Memory>& pane, std::size_t index);
+
+      // `command` in pane `pane_id`'s editor as `how` says, the block selection left for it.
+      void reuseCommand(std::uint64_t pane_id, std::string_view command, BlockReuse how);
+
       // The row the shell's live prompt starts on, from the top of the scrollback, while the pane
       // shows its live end.
       [[nodiscard]] static ds::Option<std::uint32_t> livePromptRow(const Pane<Memory>& pane);
@@ -853,6 +953,7 @@ export {
       bool chrome_changed_ = false;
       bool clipboard_written_ = false;
       bool block_changed_ = false;
+      bool window_active_ = true;
 
     public:
       // The features' states, which their use cases in application::<feature> reach directly, as Rust
@@ -860,6 +961,8 @@ export {
       tbc::val_a<features::prompt::State> prompt;
       tbc::val_a<features::prompt::Lines> prompt_lines;
       tbc::val_a<features::terminal::copy_mode::State> copy_mode;
+      // The filter of a command's output, on one block at a time.
+      tbc::val_a<features::terminal::filter::State> block_filter;
       features::terminal::links::State links;
       features::status_bar::State status_bar;
 
@@ -930,9 +1033,16 @@ export {
       tbc::val_a<ds::Vec<Byte, Memory>> decode_;
       tbc::val_a<ds::String<Memory>> clipboard_;
       // The start of a command whose rows a copy reads: what the rows hold before it is a
-      // prompt's, which the copy leaves out. Empty when no such copy is on its way.
+      // prompt's, which the copy leaves out. Empty when no such copy is on its way. The pane's
+      // clipboard answers carry no request, and another copy of the pane (its output, a
+      // selection, a program's OSC 52) may arrive first: the answer is the one whose first line
+      // holds that start and whose lines are the command's.
       tbc::val_a<ds::String<Memory>> command_copy_;
       std::uint64_t command_copy_pane_ = 0;
+      std::size_t command_copy_lines_ = 0;
+      // Set while the command whose rows a copy reads goes to the editor instead of the
+      // clipboard.
+      ds::Option<BlockReuse> command_reuse_;
       BlockCopyNote block_copy_;
       tbc::val_a<ds::String<Memory>> error_;
       tbc::val_a<ds::String<Memory>> command_response_;

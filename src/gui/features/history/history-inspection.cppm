@@ -50,6 +50,9 @@ export {
 
       [[nodiscard]] static std::int64_t localDay(std::int64_t milliseconds, std::int16_t utc_offset_min) noexcept;
 
+      // The local midnight that ends the day of `sampled`.
+      [[nodiscard]] static std::int64_t dayEnd(CalendarSample sampled) noexcept;
+
       [[nodiscard]] static Text clock(std::int64_t milliseconds, std::int16_t utc_offset_min);
 
       [[nodiscard]] static Text dayLabel(std::int64_t day, std::int64_t today);
@@ -125,8 +128,36 @@ export {
       bool pane_open = false;
     };
 
+    // What the inspector tells of a command's runs: how many the history keeps, how long they
+    // take on average, how often they succeed, when the last one ran and how it ended, and how
+    // many ran each of the last days, as a strip of bars.
+    struct HistoryRunFacts {
+      static constexpr std::size_t count = 5;
+      static constexpr std::size_t text_capacity = 48;
+      // A bar of three bytes a day, and the count of today's runs after it.
+      static constexpr std::size_t strip_capacity = (3 * HistoryRunStats::days) + 32;
+      // The bars a day's runs rise to, the fewest first; a day without runs is a dot.
+      static constexpr ds::Array<std::string_view, 8> bars{"▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"};
+
+      BoundedText<text_capacity> runs;
+      HistoryLabels::Text mean;
+      BoundedText<text_capacity> success;
+      BoundedText<text_capacity> last;
+      BoundedText<strip_capacity> per_day;
+      PaletteRole success_color = PaletteRole::text;
+      PaletteRole last_color = PaletteRole::text;
+
+      // The last run's age is told as of `sampled`.
+      [[nodiscard]] static HistoryRunFacts derive(const HistoryRunStats& stats, CalendarSample sampled);
+
+      // A line whose text is empty tells nothing and is left out.
+      [[nodiscard]] ds::Array<HistoryInspectionLine, count> lines() const noexcept;
+    };
+
     struct HistoryInspectionFacts {
       static constexpr std::size_t count = 6;
+      // Every fact the inspector shows: the run's, its command's runs and the commands around it.
+      static constexpr std::size_t shown = count + HistoryRunFacts::count + (2 * HistoryLimits::context_entries);
       static constexpr std::size_t text_capacity = 128;
       static constexpr std::size_t pane_capacity = std::numeric_limits<std::uint64_t>::digits10 + 1 + std::string_view{"  ·  tab "}.size() + TabCaption::capacity;
       static constexpr std::int64_t last_timestamp_ms = 253'402'300'799'999;

@@ -1,6 +1,7 @@
 module telar.runtime.history.store;
 
 import std;
+import telar.tbc;
 import telar.native.sqlite;
 import telar.sys.posix;
 
@@ -91,6 +92,11 @@ namespace telar::runtime {
   }
 
   Database::~Database() {
+    // A connection with a statement left closes as a zombie that is never freed.
+    for (const auto& kept : kept_.view()) {
+      sqlite3_finalize(kept.statement);
+    }
+
     sqlite3_close(database_);
   }
 
@@ -104,6 +110,89 @@ namespace telar::runtime {
 
   sqlite3* Database::handle() const noexcept {
     return database_;
+  }
+
+  std::int64_t Database::changes() const noexcept {
+    return sqlite3_changes64(database_);
+  }
+
+  void Database::interruptWhen(const std::atomic<bool>* cancelled) noexcept {
+    // How many virtual machine steps run between two looks at the flag: a few microseconds.
+    constexpr int steps = 4096;
+
+    if (cancelled == nullptr) {
+      sqlite3_progress_handler(database_, 0, nullptr, nullptr);
+      return;
+    }
+
+    // SQLite's context is a void*, which the handler only reads through.
+    void* flag = tbc::raw(const_cast<std::atomic<bool>*>(cancelled)); // NOLINT(cppcoreguidelines-pro-type-const-cast): as above
+
+    sqlite3_progress_handler(database_, steps, [](void* context) noexcept -> int {
+      return static_cast<const std::atomic<bool>*>(context)->load(std::memory_order_relaxed) ? 1 : 0;
+    },
+        flag);
+  }
+
+  Database::Prepared Database::prepared(std::string_view sql) {
+    constexpr std::uint64_t offset_basis = 0xcbf29ce484222325;
+    constexpr std::uint64_t prime = 0x100000001b3;
+    std::uint64_t hash = offset_basis;
+
+    for (const char byte : sql) {
+      hash = (hash ^ static_cast<unsigned char>(byte)) * prime;
+    }
+
+    const auto same = [&](const Kept& kept) noexcept {
+      return kept.statement != nullptr && kept.hash == hash && std::string_view{sqlite3_sql(kept.statement)} == sql;
+    };
+
+    Kept* room = nullptr;
+    bool in_use = false;
+
+    for (auto& kept : kept_.viewMut()) {
+      if (same(kept)) {
+        if (!kept.busy) {
+          kept.busy = true;
+          kept.used = ++kept_clock_;
+          return {.statement = kept.statement, .kept = true};
+        }
+
+        in_use = true;
+      }
+
+      if (!kept.busy && (room == nullptr || kept.used < room->used)) {
+        room = &kept;
+      }
+    }
+
+    sqlite3_stmt* statement = nullptr;
+    const bool keep = !in_use && room != nullptr;
+
+    // Without SQLITE_PREPARE_PERSISTENT: that hint keeps a statement out of the connection's
+    // lookaside memory, and a run then reads a row of the history 13 us slower (35 us to 48 us
+    // for an entry, history-store-bench's inspect.entry), more than preparing it again costs.
+    checkSqlite(sqlite3_prepare_v3(database_, sql.data(), static_cast<int>(sql.size()), 0, &statement, nullptr));
+    if (!keep) {
+      return {.statement = statement, .kept = false};
+    }
+
+    sqlite3_finalize(room->statement);
+    *room = {.hash = hash, .used = ++kept_clock_, .statement = statement, .busy = true};
+    return {.statement = statement, .kept = true};
+  }
+
+  void Database::release(sqlite3_stmt* statement) noexcept {
+    // A failed step left its error with the statement, which its caller already had.
+    static_cast<void>(sqlite3_reset(statement));
+    static_cast<void>(sqlite3_clear_bindings(statement));
+
+    for (auto& kept : kept_.viewMut()) {
+      if (kept.statement == statement) {
+        kept.busy = false;
+        return;
+      }
+    }
   }
 
   Transaction::Transaction(Database& database)
@@ -122,12 +211,41 @@ namespace telar::runtime {
     committed_ = true;
   }
 
-  Statement::Statement(Database& database, std::string_view sql) {
-    checkSqlite(sqlite3_prepare_v3(database.handle(), sql.data(), static_cast<int>(sql.size()), 0, &statement_, nullptr));
+  WriteScope::WriteScope(Database& database)
+      : database_(database) {
+    database_.execute("SAVEPOINT history_write");
+  }
+
+  WriteScope::~WriteScope() {
+    if (!committed_) {
+      database_.tryExecute("ROLLBACK TO history_write");
+      database_.tryExecute("RELEASE history_write");
+    }
+  }
+
+  void WriteScope::commit() {
+    database_.execute("RELEASE history_write");
+    committed_ = true;
+  }
+
+  Statement::Statement(Database& database, std::string_view sql, Preparation preparation) {
+    if (preparation == Preparation::once) {
+      checkSqlite(sqlite3_prepare_v3(database.handle(), sql.data(), static_cast<int>(sql.size()), 0, &statement_, nullptr));
+      return;
+    }
+
+    const auto prepared = database.prepared(sql);
+
+    statement_ = prepared.statement;
+    keeper_ = prepared.kept ? &database : nullptr;
   }
 
   Statement::~Statement() {
-    sqlite3_finalize(statement_);
+    if (keeper_ != nullptr) {
+      keeper_->release(statement_);
+    } else {
+      sqlite3_finalize(statement_);
+    }
   }
 
   void Statement::bind(int index, std::int64_t value) {
@@ -140,6 +258,14 @@ namespace telar::runtime {
 
   void Statement::bind(int index, std::span<const Byte> value) {
     checkSqlite(sqlite3_bind_blob(statement_, index, value.data(), static_cast<int>(value.size()), SQLITE_TRANSIENT));
+  }
+
+  void Statement::bind(int index, ds::Option<std::int32_t> value) {
+    if (value) {
+      bind(index, std::int64_t{*value});
+    } else {
+      bindNull(index);
+    }
   }
 
   void Statement::bindNull(int index) {

@@ -35,6 +35,34 @@ namespace {
     check(historyScore("ÉCOLE", "éc") && !historyScore("\xc3\x83\xc2\xa9", "é"), "the score compares characters, not bytes");
   }
 
+  // Latin Extended-B, which the fold once missed, and the scripts past the first plane fold as
+  // Unicode's simple case folding does.
+  void foldsEveryScriptUnicodeFolds() {
+    check(folded("ǍƁȂƑ ǅ") == "ǎɓȃƒ ǆ", "Latin Extended-B folds");
+    check(folded("\U00010400\U0001E900") == "\U00010428\U0001E922", "Deseret and Adlam fold");
+    check(historyFold(U'ⱥ') == historyFold(U'Ⱥ') && folded("ⱥȺ") == "ȺȺ", "letters that fold together meet on the shorter one");
+    check(historyScore("ǍBC", "ǎb").hasValue(), "the score folds them too");
+  }
+
+  // Every character folds to one that folds to itself, and never to a longer UTF-8 sequence,
+  // so a folded text fits where the text was.
+  void foldsEveryCharacterToAFixedPointNoLonger() {
+    const auto length = [](std::uint32_t character) {
+      return character < 0x80 ? 1 : character < 0x800 ? 2
+                                : character < 0x10000 ? 3
+                                                      : 4;
+    };
+
+    for (std::uint32_t character = 0; character < 0x110000; ++character) {
+      const auto fold = historyFold(character);
+
+      check(historyFold(fold) == fold, "a fold is folded");
+      check(length(fold) <= length(character), "a fold is no longer");
+    }
+  }
+
+  const telar::testing::Case case_folds_every_script{"history_fold.folds_every_script_unicode_folds", foldsEveryScriptUnicodeFolds};
+  const telar::testing::Case case_folds_to_a_fixed_point{"history_fold.folds_every_character_to_a_fixed_point_no_longer", foldsEveryCharacterToAFixedPointNoLonger};
   const telar::testing::Case case_folds_letters_of_several_scripts{"history_fold.folds_letters_of_several_scripts", foldsLettersOfSeveralScripts};
 
 }

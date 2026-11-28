@@ -1,7 +1,7 @@
 # The lifetime annotations its interfaces declare come from telar.tbc, and the socket
 # addresses text.cpp parses from telar.sys.
 telar_add_library(telar-base
-  SOURCES diagnostics/diagnostics.cpp editors/editors.cpp history/history.cpp text/text.cpp text/json/json.cpp text/utf8/utf8.cpp memory/allocators/allocators.cpp memory/containers/containers.cpp memory/sensitive/sensitive.cpp
+  SOURCES diagnostics/diagnostics.cpp editors/editors.cpp history/history.cpp history/history-match.cpp history/history-pattern.cpp history/history-rank.cpp history/secrets/secrets.cpp text/text.cpp text/json/json.cpp text/pattern/pattern.cpp text/utf8/utf8.cpp memory/allocators/allocators.cpp memory/containers/containers.cpp memory/sensitive/sensitive.cpp
   INCLUDES "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>" "$<INSTALL_INTERFACE:include>"
   DEPS telar::tbc telar::sys)
 # A ThinLTO archive holds bitcode, which a linker reads only through the compiler's LTO: ld64
@@ -31,7 +31,11 @@ if(BUILD_TESTING)
   file(GLOB_RECURSE base_interfaces CONFIGURE_DEPENDS "*.cppm")
   list(FILTER base_interfaces EXCLUDE REGEX "/(tests|out(-[^/]*)?|CMakeFiles)/")
   foreach(interface IN LISTS base_interfaces)
+    # Only a primary interface can be imported; a partition is its module's own.
     file(STRINGS "${interface}" declaration REGEX "^export module ")
+    if(NOT declaration OR declaration MATCHES ":")
+      continue()
+    endif()
     string(REGEX MATCH "^export module ([A-Za-z0-9_.]+)" module_match "${declaration}")
     set(module_name "${CMAKE_MATCH_1}")
     set(probe "${CMAKE_CURRENT_BINARY_DIR}/imports/${module_name}.cpp")
@@ -57,6 +61,12 @@ if(BUILD_TESTING)
   target_link_libraries(ds-bench PRIVATE telar::base)
   target_compile_options(ds-bench PRIVATE ${TELAR_WARNINGS})
   set_target_properties(ds-bench PROPERTIES EXCLUDE_FROM_ALL ON)
+
+  # The history's matcher over a million commands, run by hand in a Release tree, never by CTest.
+  add_executable(history-bench tools/history_bench.cpp)
+  target_link_libraries(history-bench PRIVATE telar::base)
+  target_compile_options(history-bench PRIVATE ${TELAR_WARNINGS})
+  set_target_properties(history-bench PROPERTIES EXCLUDE_FROM_ALL ON)
 endif()
 
 include(CMakePackageConfigHelpers)

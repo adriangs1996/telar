@@ -1,14 +1,29 @@
-telar history import: Import an existing shell histfile once; running it again adds only new lines
+telar history import: Import a shell's histfile or another tool's history; running it again adds only new runs
 
-Usage: telar history import [auto|zsh|bash|fish] [--file PATH] [--socket PATH]
+Usage: telar history import [KIND] [--file PATH] [--socket PATH]
 
 Arguments:
-  KIND             The histfile format (default `auto`: by the file's name, else
-                   ~/.zsh_history, ~/.bash_history, then fish's).
-  --file PATH      The file to read instead of the shell's default.
+  KIND             auto (default), zsh, bash, fish, nushell, xonsh, powershell,
+                   atuin, mcfly or histdb. `auto` reads the format a --file's name
+                   and first bytes suggest, else ~/.zsh_history, ~/.bash_history,
+                   then fish's. Without --file, a KIND reads that shell's or tool's
+                   own history where it keeps it.
+  --file PATH      The file to read instead: a histfile, a SQLite database
+                   (atuin, mcfly, zsh-histdb, nushell's history.sqlite3), or for
+                   xonsh a session file or the history_json directory.
 
-Effects: the entries join the history under a source pinned to the file, so an
-import is safe to repeat. A file past 32 MiB keeps its newest lines; a command
-past 63 KiB is skipped; either reports the limit and exits 1.
+Effects: the entries join the history under a source pinned to the file's real
+path, so `./h`, an absolute path and a link to it are one source. An entry is
+known by what it ran and when, so importing a file again after its shell trimmed
+or grew it adds exactly the runs it did not have. Lines pass the history's
+filters: one that starts with a space or matches a filter is skipped, and a
+secret in one is redacted. Bytes that are not UTF-8 become U+FFFD. Databases are
+opened read only. The directory, exit status and duration are kept where the
+source has them: atuin, zsh-histdb, nushell's database, mcfly (no duration),
+xonsh (no directory) and zsh's extended lines (the duration).
 
-Results: `imported N commands from PATH`. Exit 0; 1 when no histfile was found.
+A histfile past 32 MiB keeps its newest lines from the first whole entry; a
+command past 63 KiB is skipped; either reports the limit and exits 1.
+
+Results: `imported N commands from PATH` once the runtime wrote every batch.
+Exit 0; 1 when no history was found, a write failed, or a limit was reached.

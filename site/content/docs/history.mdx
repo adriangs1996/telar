@@ -85,7 +85,9 @@ any. `pageup` and `pagedown` scroll it. `ctrl+o` or `escape` returns to the
 list.
 
 Output is captured only when `runtime.history.output` is `"bounded"`. Telar
-then keeps the last 64 KiB of each command's output.
+then keeps the last 64 KiB of each command's output, from the first whole
+character after the cut, so the kept part never starts inside a UTF-8
+character or an escape sequence. Secrets in it are redacted, as below.
 
 ## What gets recorded
 
@@ -112,18 +114,32 @@ integration. See [Agents](/docs/agents).
 Telar skips a command when:
 
 - it starts with a space (shell commands only),
-- it contains text that looks like a secret,
-- it contains one of your `runtime.history.command_filters` patterns,
-- its working directory contains one of your `runtime.history.cwd_filters`
-  patterns.
+- it is mostly a key, as a token pasted at the prompt,
+- it contains one of your `runtime.history.command_filters` strings or
+  matches one of their `{ regex = "..." }` expressions,
+- its working directory contains or matches one of your
+  `runtime.history.cwd_filters`,
+- it is one of your `runtime.history.trivial_commands`, as the whole command
+  line.
 
-The secret filter is on by default. It catches AWS access key ids, GitHub,
-npm, Stripe and Slack tokens, Slack webhook URLs, PEM blocks (`-----BEGIN`)
-and assignments to `password=`, `passwd=`, `token=`, `secret=` and
-`api_key=`. Set `runtime.history.secrets_filter = false` to turn it off.
+The secret filter is on by default. A command that only uses a secret is kept
+with the secret replaced by `[redacted]`: `export GITHUB_TOKEN=[redacted] &&
+make`, `git clone https://me:[redacted]@example.com/repo`. It finds the keys
+of AWS (access key ids and the secret and session variables), Azure, Google,
+GitHub, GitLab, Slack (tokens and webhooks), Stripe, npm, Netlify, Pulumi,
+Anthropic, OpenAI, OpenRouter, Groq, xAI and Hugging Face, private keys (PEM
+blocks), passwords in URLs, and values assigned to names ending in
+`PASSWORD`, `PASSWD`, `PASSPHRASE`, `TOKEN`, `SECRET`, `API_KEY`,
+`ACCESS_KEY`, `SECRET_KEY` or `PRIVATE_KEY`, in a command or in JSON. The
+same redaction applies to captured output, so `cat .env` keeps everything but
+the secrets it printed. Set `runtime.history.secrets_filter = false` to turn
+it off.
 
-The filters apply to commands as Telar records them. `telar history import`
-adds a histfile's lines as they are.
+The filters apply to every command the history records, the shell's, an
+agent's and the lines `telar history import` reads. `telar history prune
+--filters` removes what today's filters would have kept out of entries
+recorded before them and redacts what they would now redact, in commands and
+in captured output.
 
 ## The database
 
@@ -150,38 +166,91 @@ telar history list --failed --author agent
 `list` and `search` print one line per command, newest first:
 `#ID  DATE TIMEZ  STATUS  DURATIONms  CWD  [provider] COMMAND`. STATUS is
 `RUN`, `INT`, the exit code or `?`. `search` finds commands that contain the
-text, up to 1024 bytes.
+text, up to 1024 bytes, or with `--fuzzy` its characters in order.
+`--offset N` skips the N newest, `--distinct` lists each command once,
+`--json` prints one JSON object per line with stable field names, and
+`--format` prints each line as a template:
+
+```sh
+telar history list --json | jq -r .command
+telar history search docker --format '{time}\t{duration}\t{command}'
+```
+
+The template's fields are `{id}`, `{time}`, `{timestamp}` (milliseconds),
+`{duration}` (milliseconds), `{exit}`, `{status}`, `{author}`, `{provider}`,
+`{cwd}`, `{workspace}` and `{command}`. `--workspace` takes a path relative to
+the current directory too.
 
 | Command | What it does |
 | --- | --- |
 | `telar history list` | Show recent commands |
 | `telar history search QUERY` | Search commands by text |
 | `telar history show ID` | Print the output captured for one entry |
-| `telar history import [auto\|zsh\|bash\|fish]` | Import a shell histfile |
+| `telar history import [KIND]` | Import a shell's histfile or another tool's history |
+| `telar history export` | Print the history oldest first, as JSON lines or a histfile |
 | `telar history delete ID` | Remove one entry, without asking |
 | `telar history prune` | Remove every entry matching the filters, after a preview and a confirmation |
 | `telar history stats` | Count commands and show the most frequent ones |
 
 ### Import a shell history
 
-Import your existing shell history once to search it alongside new commands.
-Running the import again adds only new lines.
+Import your existing history to search it alongside new commands. Running the
+import again adds only the runs it did not have, even after your shell
+trimmed or grew the file: an entry is known by what it ran and when, not by
+its line.
 
 ```sh
 telar history import zsh --file "$HOME/.zsh_history"
+telar history import atuin
 ```
 
-Without a kind or `--file`, Telar picks the format from the file name, or
-looks for `~/.zsh_history`, `~/.bash_history` and then fish's history. A file
-past 32 MiB keeps its newest lines, and a command past 63 KiB is skipped.
-Imported commands have no directory, exit status or output.
+| Kind | Reads |
+| --- | --- |
+| `zsh` | `~/.zsh_history`, extended or plain, with zsh's escapes |
+| `bash` | `~/.bash_history`, with or without `HISTTIMEFORMAT` timestamps |
+| `fish` | fish's `fish_history` |
+| `nushell` | nushell's `history.txt` or `history.sqlite3` |
+| `xonsh` | xonsh's JSON sessions, one file or the `history_json` directory |
+| `powershell` | PSReadLine's `ConsoleHost_history.txt` |
+| `atuin` | atuin's `history.db`, without the entries deleted there |
+| `mcfly` | mcfly's `history.db` |
+| `histdb` | zsh-histdb's `zsh-history.db` |
+
+Without a kind, Telar picks the format from `--file`'s name and first bytes,
+or looks for `~/.zsh_history`, `~/.bash_history` and then fish's history.
+With a kind and no `--file`, it reads that shell's or tool's own file where it
+keeps it. The source is the file's real path, so a link or a relative path to
+it imports into the same entries. Databases are opened read only, and nothing
+they define runs.
+
+Imported lines pass the same filters as recorded commands, and bytes that are
+not UTF-8 become U+FFFD. A file past 32 MiB keeps its newest lines from its
+first whole entry, and a command past 63 KiB is skipped. Imported commands
+keep when they started, and the directory, exit status and duration where the
+source has them: atuin, zsh-histdb and nushell's database keep all three,
+mcfly the directory and status, xonsh the status and duration, and zsh's
+extended lines the duration. They keep no output.
+
+### Export
+
+```sh
+telar history export --format zsh > zsh_history
+telar history export > history.jsonl
+```
+
+`export` prints every entry the filters match, oldest first, as JSON lines
+(the default, as `list --json`) or as a `zsh`, `bash` or `fish` histfile that
+shell reads back. It holds one page at a time, however long the history is.
 
 ### Prune
 
-`prune` previews how many entries match, asks you to type `yes`, then removes
-them. `--match TEXT` limits it to commands containing TEXT and `--before DATE`
-to entries before a `YYYY-MM-DD` date (UTC) or a Unix time. `--dry-run` only
-previews; `--yes` skips the confirmation. `--author` is not applied.
+`prune` previews exactly how many entries it removes, asks you to type `yes`,
+then removes them. `--match TEXT` limits it to commands containing TEXT and
+`--before DATE` to entries before a `YYYY-MM-DD` date (UTC) or a Unix time; a
+date the calendar does not have is refused. `--filters` passes the
+matching entries through the filters the runtime has today: what they would
+not have recorded is removed and what they would redact is redacted. `--dry-run` only previews;
+`--yes` skips the preview and the confirmation. `--author` is not applied.
 
 ```sh
 telar history prune --match "curl -u" --dry-run
@@ -194,8 +263,10 @@ telar history stats --period week --cwd
 ```
 
 `stats` prints the number of commands, the number of unique ones and the 10
-most frequent. `--period` takes `today`, `week`, `month`, `year` or `all`
-(the default).
+most frequent. `--period` takes `today` (since local midnight), `week`,
+`month` or `year` (the last 7, 30 or 365 days) or `all` (the default).
+`--ngram-size N` counts sequences of N commands run one after another, as
+`git add . ; git commit`, up to 10.
 
 ### Open the palette from the CLI
 
@@ -227,8 +298,9 @@ return telar.config({
     history = {
       output = "bounded",
       secrets_filter = true,
-      command_filters = { "vault login" },
+      command_filters = { "vault login", { regex = "^ssh .*prod" } },
       cwd_filters = { "/secrets/" },
+      trivial_commands = { "ls", "clear" },
     },
   },
 })
@@ -240,12 +312,14 @@ return telar.config({
 | `client.history.match` | `"fuzzy"` | `"fuzzy"` or `"fts"`: how the search matches |
 | `client.history.show_agent_commands` | `false` | Open the palette with agents' commands included |
 | `runtime.history.output` | `"off"` | `"bounded"` captures the last 64 KiB of each command's output |
-| `runtime.history.secrets_filter` | `true` | Skip commands that look like they hold a secret |
-| `runtime.history.command_filters` | none | Skip commands containing any of these substrings |
-| `runtime.history.cwd_filters` | none | Skip commands whose directory contains any of these substrings |
+| `runtime.history.secrets_filter` | `true` | Redact secrets in commands and output, and skip commands that are a key |
+| `runtime.history.command_filters` | none | Skip commands containing any of these strings or matching any `{ regex = ... }` |
+| `runtime.history.cwd_filters` | none | Skip commands whose directory contains or matches any of these |
+| `runtime.history.trivial_commands` | none | Skip these commands when they are the whole command line |
 | `runtime.history.path` | see [The database](#the-database) | Where the database lives |
 
-Each filter list holds at most 64 patterns of up to 256 bytes. A list past
-that refuses the configuration rather than recording what a dropped pattern
-would hide. Runtime settings take effect when the runtime starts. See
+Each filter list holds at most 64 patterns of up to 256 bytes, of which at
+most 16 regular expressions, and `trivial_commands` at most 64 commands. A
+list past that, or an expression that does not compile, refuses the
+configuration rather than recording what a dropped pattern would hide. Runtime settings take effect when the runtime starts. See
 [Config](/docs/config#history).

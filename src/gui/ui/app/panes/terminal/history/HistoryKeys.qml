@@ -18,27 +18,17 @@ QtObject {
     // The rows run newest first from the top, so down goes to older ones.
     property bool downward: false
     readonly property var state: root.controller.state
-    readonly property bool actionable: !root.controller.loading && root.state.phase === "ready" && root.state.count > 0
     // Escape or Control+H outside the inspector: the window closes the search.
     signal cancelled()
 
+    // Moves `delta` rows, positive to older commands, across pages. The controller keeps the
+    // moves made while rows load for the rows that replace them.
     function moveSelection(delta) {
-        if (!root.actionable) {
-            return;
-        }
-
-        const selected = root.state.selection + delta;
-        if (selected >= root.state.count && root.state.canOlder) {
-            root.controller.execute(HistoryController.Action.older);
-        } else if (selected < 0 && root.state.canNewer) {
-            root.controller.execute(HistoryController.Action.newer);
-        } else {
-            root.controller.select(Math.max(0, Math.min(root.state.count - 1, selected)));
-        }
+        root.controller.move(delta);
     }
 
     function cycleScope() {
-        const scopes = ["global", "workspace", "cwd", "pane"];
+        const scopes = ["global", "workspace", "cwd", "pane", "session"];
         const next = (scopes.indexOf(root.state.scope) + 1) % scopes.length;
         root.controller.setFilters({scope: scopes[next]});
     }
@@ -50,7 +40,19 @@ QtObject {
     }
 
     function cycleFilter(event) {
-        if (event.key === Qt.Key_Backtab || (event.modifiers & Qt.ShiftModifier) !== 0) {
+        // Tab completes a filter's name the last word begins, `ex` to `exit:`, before it cycles.
+        const backward = event.key === Qt.Key_Backtab || (event.modifiers & Qt.ShiftModifier) !== 0;
+        if (!backward && root.queryField) {
+            const completed = root.controller.completeFilter(root.queryField.text);
+            if (completed.length > 0) {
+                root.queryField.text = completed;
+                root.queryField.cursorPosition = completed.length;
+                root.controller.search(completed);
+                return;
+            }
+        }
+
+        if (backward) {
             root.cycleAuthor();
         } else {
             root.cycleScope();
@@ -95,6 +97,58 @@ QtObject {
         const control = (event.modifiers & root.controlModifier) !== 0;
         const command = (event.modifiers & root.superModifier) !== 0;
         const shift = (event.modifiers & Qt.ShiftModifier) !== 0;
+        const alt = (event.modifiers & Qt.AltModifier) !== 0;
+        // Backspace in an empty search takes the last chip back.
+        if (event.key === Qt.Key_Backspace && !control && !command && !alt && root.queryField && root.queryField.text.length === 0 && (root.state.chips ?? []).length > 0) {
+            root.controller.removeChip(-1);
+            return true;
+        }
+
+        // Alt and a digit run that row of the page, newest first, as atuin's quick select does;
+        // with Shift, that pin. Shift reports a digit as the sign above it.
+        const shifted = [Qt.Key_Exclam, Qt.Key_At, Qt.Key_NumberSign, Qt.Key_Dollar, Qt.Key_Percent, Qt.Key_AsciiCircum, Qt.Key_Ampersand, Qt.Key_Asterisk, Qt.Key_ParenLeft];
+        const digit = event.key >= Qt.Key_1 && event.key <= Qt.Key_9 ? event.key - Qt.Key_0 : shifted.indexOf(event.key) + 1;
+        if (alt && !control && !command && digit > 0) {
+            if (shift) {
+                root.controller.usePin(digit - 1);
+            } else {
+                root.controller.quickUse(digit - 1);
+            }
+            return true;
+        }
+
+        // Alt+S orders by rank or by time, Alt+U searches what the commands printed, Alt+R shows
+        // the runs around each match and Alt+M steps how the query matches (fuzzy, substring,
+        // prefix, regex); each shows as a chip. Control+S stays the newer match.
+        if (alt && !control && !command && (event.key === Qt.Key_S || event.key === Qt.Key_U || event.key === Qt.Key_R || event.key === Qt.Key_M)) {
+            const names = {[Qt.Key_S]: "sort", [Qt.Key_U]: "output", [Qt.Key_R]: "raw", [Qt.Key_M]: "mode"};
+            root.controller.toggle(names[event.key]);
+            return true;
+        }
+
+        // Alt+P pins the command to the top of the panel, or unpins it.
+        if (alt && !control && !command && event.key === Qt.Key_P) {
+            root.controller.execute(HistoryController.Action.pin);
+            return true;
+        }
+
+        // Alt+D changes the shell to the command's directory; Alt+O opens a pane there.
+        if (alt && !control && !command && (event.key === Qt.Key_D || event.key === Qt.Key_O)) {
+            root.controller.execute(event.key === Qt.Key_D ? HistoryController.Action.enter : HistoryController.Action.open);
+            return true;
+        }
+
+        // Control+Space, or Shift+Space, marks the command to be used with the others marked.
+        if (event.key === Qt.Key_Space && (control || shift) && !command && !alt) {
+            root.controller.execute(HistoryController.Action.mark);
+            return true;
+        }
+
+        // Undo takes the last delete back while its notice shows.
+        if (event.key === Qt.Key_Z && (command || (control && !shift)) && root.state.hidden) {
+            root.controller.execute(HistoryController.Action.undo);
+            return true;
+        }
         // Deleting takes Command+Backspace, or Control with Shift and D: Control+D alone is the
         // shell's delete-forward, which must not delete a command from the history.
         if ((command && event.key === Qt.Key_Backspace) || (control && shift && event.key === Qt.Key_D)) {
@@ -124,12 +178,12 @@ QtObject {
             root.cancel();
             return true;
         // Control+R again goes to an older match and Control+S to a newer one, as the shell's own
-        // search steps.
+        // search steps, whichever way the rows run.
         case Qt.Key_R:
-            root.moveSelection(root.downward ? 1 : -1);
+            root.moveSelection(1);
             return true;
         case Qt.Key_S:
-            root.moveSelection(root.downward ? -1 : 1);
+            root.moveSelection(-1);
             return true;
         case Qt.Key_O:
             root.controller.execute(HistoryController.Action.inspect);

@@ -867,44 +867,6 @@ Item {
         }
     }
 
-    // `text` on one line in runs, with the letters `query` finds in it marked: the query itself
-    // if it shows, else its letters in order, as the fuzzy search reads it.
-    function marked(text, query) {
-        const line = text.length > 240 ? text.slice(0, 240).replace(/\n/g, " ↵ ") : text.replace(/\n/g, " ↵ ");
-        if (query.length === 0) {
-            return [{text: line, marked: false}];
-        }
-
-        const lower = line.toLowerCase();
-        const wanted = query.toLowerCase();
-        const marks = new Array(line.length).fill(false);
-        const at = lower.indexOf(wanted);
-        if (at >= 0) {
-            marks.fill(true, at, at + wanted.length);
-        } else {
-            let next = 0;
-            for (let index = 0; index < line.length && next < wanted.length; ++index) {
-                if (lower[index] === wanted[next]) {
-                    marks[index] = true;
-                    ++next;
-                }
-            }
-            if (next < wanted.length) {
-                return [{text: line, marked: false}];
-            }
-        }
-
-        const runs = [];
-        for (let index = 0; index < line.length; ++index) {
-            if (runs.length > 0 && runs[runs.length - 1].marked === marks[index]) {
-                runs[runs.length - 1].text += line[index];
-            } else {
-                runs.push({text: line[index], marked: marks[index]});
-            }
-        }
-        return runs;
-    }
-
     // The scrollback searched as it is typed: what it reads and how many it found on the
     // context's row, the query on the editor's. Every match is lit in the pane, the one the
     // cursor is on more.
@@ -1154,7 +1116,7 @@ Item {
                 width: Math.max(0, found.x - x - root.cell * 2)
                 height: root.line
                 clip: true
-                text: view.history ? view.current.scopeLabel + (view.current.scopeValue ? " " + view.current.scopeValue : "") + " · " + view.current.authorLabel + (view.current.failedOnly ? " · Failed" : "") : view.current.rootLabel
+                text: view.history ? view.current.scopeLabel + (view.current.scopeValue ? " " + view.current.scopeValue : "") + " · " + view.current.authorLabel + (view.current.failedOnly ? " · Failed" : "") + (view.current.chips ?? []).map(chip => " · " + chip.label + (chip.applied ? "" : " (not applied)")).join("") + ((view.current.marks ?? []).length > 0 ? " · " + view.current.marks.length + " marked" : "") : view.current.rootLabel
                 grid: root.grid
                 color: root.colors.subtext0
             }
@@ -1164,7 +1126,7 @@ Item {
                 readonly property bool failed: view.history ? (view.current.error ?? "").length > 0 : view.current.failed
                 x: parent.width - implicitWidth - root.cell * 2
                 height: root.line
-                text: view.history ? (found.failed ? view.current.error : root.history.loading ? "searching…" : view.count + (view.current.hasMore ? "+" : "") + (view.count === 1 ? " command" : " commands")) : found.failed ? view.current.status : view.current.countText
+                text: view.history ? (found.failed ? view.current.error : view.current.hidden ? "deleted · " + view.current.undoKey + " undo" : root.history.loading ? "searching…" : view.count + (view.current.hasMore ? "+" : "") + (view.count === 1 ? " command" : " commands")) : found.failed ? view.current.status : view.current.countText
                 grid: root.grid
                 color: found.failed ? root.colors.red : root.colors.overlay1
             }
@@ -1303,8 +1265,21 @@ Item {
                     id: historyEntry
                     required property int index
                     required property var record
+                    // What the search read in the output, in place of where and when it ran.
+                    readonly property bool excerpted: (record?.excerpt ?? "").length > 0
                     width: commands.width
                     height: root.line
+                    // A run a raw listing shows around a match, which does not match itself.
+                    opacity: record?.neighbour === true && index !== commands.currentIndex ? 0.5 : 1
+
+                    // A command marked to be used with the others marked.
+                    Rectangle {
+                        x: root.pillX
+                        width: 2 * root.ratio
+                        height: parent.height
+                        color: root.colors.accent
+                        visible: (view.current.marks ?? []).indexOf(historyEntry.record?.key ?? "") >= 0
+                    }
 
                     CellText {
                         x: root.pillX + root.cell
@@ -1316,7 +1291,7 @@ Item {
 
                     Item {
                         x: root.textX
-                        width: Math.max(0, meta.x - x - root.cell * 2)
+                        width: Math.max(0, (historyEntry.excerpted ? excerptRow.x : meta.x) - x - root.cell * 2)
                         height: parent.height
                         clip: true
 
@@ -1324,7 +1299,7 @@ Item {
                             anchors.verticalCenter: parent.verticalCenter
 
                             Repeater {
-                                model: root.marked(historyEntry.record?.command ?? "", view.current.query ?? "")
+                                model: root.history.marked(historyEntry.record?.command ?? "", historyEntry.record?.ranges ?? [])
                                 delegate: CellText {
                                     required property var modelData
                                     text: modelData.text
@@ -1342,9 +1317,29 @@ Item {
                         readonly property bool spans: view.current.effectiveScope === "global" || view.current.effectiveScope === "workspace"
                         x: parent.width - implicitWidth - root.cell * 2
                         anchors.verticalCenter: parent.verticalCenter
-                        text: (meta.spans && (historyEntry.record?.compactCwd ?? "").length > 0 ? historyEntry.record.compactCwd + "  " : "") + (historyEntry.record?.date ?? "")
+                        text: (meta.spans && (historyEntry.record?.compactCwd ?? "").length > 0 ? historyEntry.record.compactCwd + "  " : "") + ((view.current.relativeTime ? historyEntry.record?.age : historyEntry.record?.date) ?? "")
                         grid: root.grid
                         color: root.colors.overlay1
+                        visible: !historyEntry.excerpted
+                    }
+
+                    Row {
+                        id: excerptRow
+                        objectName: "promptHistoryExcerpt"
+                        x: parent.width - width - root.cell * 2
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: historyEntry.excerpted
+
+                        Repeater {
+                            model: historyEntry.excerpted ? root.history.excerpt(historyEntry.record.excerpt, historyEntry.record.excerptRanges ?? []) : []
+                            delegate: CellText {
+                                required property var modelData
+                                text: modelData.text
+                                grid: root.grid
+                                bold: modelData.marked
+                                color: modelData.marked ? root.colors.accent : root.colors.overlay1
+                            }
+                        }
                     }
 
                     MouseArea {

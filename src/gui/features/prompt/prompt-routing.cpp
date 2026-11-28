@@ -8,6 +8,19 @@ import telar.base.ds;
 
 namespace telar::gui::features::prompt {
 
+  namespace {
+
+    // A letter of a word a question offers: ASCII's, or a byte of a character past it (`sí`),
+    // without the C library's locale, which reads those bytes as Latin-1.
+    constexpr bool letter(char byte) noexcept {
+      constexpr unsigned char first_non_ascii = 0x80;
+      const auto value = static_cast<unsigned char>(byte);
+
+      return (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z') || value >= first_non_ascii;
+    }
+
+  }
+
   Surface surface(const PaneShell& shell, bool alternate_screen, bool telar_mode) noexcept {
     if (!telar_mode || shell.shell == IntegratedShell::none || alternate_screen) {
       return Surface::none;
@@ -53,8 +66,48 @@ namespace telar::gui::features::prompt {
     return line;
   }
 
-  bool PendingPrompt::likely(std::uint32_t cursor_column, std::chrono::nanoseconds since_output) noexcept {
-    return cursor_column != 0 && since_output >= quiet;
+  bool PendingPrompt::question(std::string_view asked) noexcept { // NOLINT(bugprone-exception-escape): substr is given offsets within the text, which cannot throw
+    // The longest choice of words read inside brackets: `[y/n/a/q/d]`, `(yes/no/all)`.
+    constexpr std::size_t longest_choice = 24;
+
+    const auto end = asked.find_last_not_of(" \t");
+    if (end == std::string_view::npos) {
+      return false;
+    }
+
+    const auto text = asked.substr(0, end + 1);
+    const char last = text.back();
+
+    // The full-width marks a CJK question ends in, as the ASCII ones.
+    if (last == '?' || last == ':' || text.ends_with("\uff1f") || text.ends_with("\uff1a")) {
+      return true;
+    }
+
+    if (last == '>') {
+      const char before = text.size() < 2 ? ' ' : text[text.size() - 2];
+
+      return before == '>' || before == ' ' || before == ')' || letter(before) || (before >= '0' && before <= '9');
+    }
+
+    if (last != ']' && last != ')') {
+      return false;
+    }
+
+    const auto open = text.find_last_of(last == ']' ? '[' : '(');
+    if (open == std::string_view::npos || text.size() - open - 2 > longest_choice) {
+      return false;
+    }
+
+    const auto choice = text.substr(open + 1, text.size() - open - 2);
+    const bool words = std::ranges::all_of(choice, [](char byte) {
+      return byte == '/' || letter(byte);
+    });
+
+    return words && choice.contains('/') && !choice.starts_with('/') && !choice.ends_with('/');
+  }
+
+  bool PendingPrompt::likely(std::string_view asked, std::chrono::nanoseconds since_output) noexcept {
+    return since_output >= quiet && question(asked);
   }
 
 }

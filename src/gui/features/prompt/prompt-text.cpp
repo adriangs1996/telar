@@ -270,17 +270,20 @@ namespace telar::gui::features::prompt {
     }
 
     // The step's range grows over the change: what it takes beyond the range is still the text
-    // the step began from.
+    // the step began from. Grown in place, as typing at the step's end takes nothing beyond it
+    // and so copies nothing at all.
     auto& step = undo_.backMut();
     const auto from = std::min(step.start, start);
     const auto until = std::max(step.end, end);
-    ds::String<Memory> removed{memory};
 
-    removed.reserve((step.start - from) + step.removed.size() + (until - step.end));
-    removed.append(view.substr(from, step.start - from));
-    removed.append(step.removed);
-    removed.append(view.substr(step.end, until - step.end));
-    step.removed = std::move(removed);
+    if (from < step.start) {
+      step.removed.insert(0, view.substr(from, step.start - from));
+    }
+
+    if (until > step.end) {
+      step.removed.append(view.substr(step.end, until - step.end));
+    }
+
     step.start = from;
     step.end = until - (end - start) + inserted;
   }

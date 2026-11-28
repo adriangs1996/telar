@@ -66,6 +66,40 @@ namespace telar::gui::features::prompt {
       return checks;
     }
 
+    // Whether a command that ended with `status` failed, for the suggestions to skip it: an
+    // interrupt, 128 + SIGINT, is how `tail -f` and servers end as they should.
+    constexpr bool failure(std::int32_t status) noexcept {
+      constexpr std::int32_t interrupted = 130;
+
+      return status != 0 && status != interrupted;
+    }
+
+    // The bytes [first, second) of `command` its first simple command's command word takes, as the
+    // `dialect`'s shell reads it; none without one.
+    ds::Option<std::pair<std::size_t, std::size_t>> firstCommand(Memory& memory, std::string_view command, shell::Dialect dialect) {
+      ds::Vec<Style, Memory> styles{memory};
+      ds::Vec<shell::Token, Memory> tokens{memory};
+
+      styles.resize(command.size());
+      classify(command, styles.viewMut(), tokens, shell::Syntax{.dialect = dialect});
+      const auto classes = styles.view();
+      const auto start = std::ranges::find_if(classes, [](Style style) {
+        return style == Style::command || style == Style::pending;
+      });
+      if (start == classes.end()) {
+        return ds::none;
+      }
+
+      const auto first = static_cast<std::size_t>(start - classes.begin());
+      auto end = first;
+
+      while (end < classes.size() && classes[end] == classes[first]) {
+        ++end;
+      }
+
+      return std::pair{first, end};
+    }
+
     // Pane `pane_id`'s line, or null.
     PaneLine* lineOf(Lines& lines, std::uint64_t pane_id) noexcept {
       auto* found = lines.findMut(pane_id);
@@ -119,6 +153,7 @@ namespace telar::gui::features::prompt {
   PaneLine::PaneLine(Memory& memory, std::uint64_t pane, Keymap keymap)
       : line(memory, keymap),
         pane_id(pane),
+        typeahead(memory),
         jumps(memory) {}
 
   CompletionPlan::Question::Question(Memory& memory)
@@ -136,18 +171,21 @@ namespace telar::gui::features::prompt {
       : memory(allocator),
         specs(allocator),
         scratch(allocator),
-        history(allocator),
+        recall(allocator),
         completions(allocator),
         command_requests(allocator),
         command_checks(allocator),
         spec_requests(allocator),
         spec_completions(allocator),
-        command_root(allocator) {}
+        command_root(allocator),
+        sent_commands(allocator),
+        corrections(allocator),
+        suggestions(allocator) {}
 
   // ---- lines ------------------------------------------------------------------------------------
 
   tbc::val_a<Opened> open(State& state, tbc::mut_a<Lines> lines, std::uint64_t pane_id, Keymap keymap) {
-    const bool wants_history = state.history.empty();
+    const bool wants_history = state.recall.empty();
     auto* found = lines.findMut(pane_id);
     const bool inserted = found == nullptr;
 
@@ -178,6 +216,12 @@ namespace telar::gui::features::prompt {
     static_cast<void>(state.completions.retain(other));
     static_cast<void>(state.command_checks.remove(pane_id));
     static_cast<void>(state.spec_completions.remove(pane_id));
+    static_cast<void>(state.sent_commands.retain(other));
+    static_cast<void>(state.corrections.retain(other));
+    static_cast<void>(state.suggestions.retain([pane_id](const auto&, std::uint64_t asked) {
+      return asked != pane_id;
+    }));
+
     static_cast<void>(lines.remove(pane_id));
   }
 
@@ -242,24 +286,72 @@ namespace telar::gui::features::prompt {
     return ds::none;
   }
 
-  void remember(State& state, std::string_view command) {
-    auto& history = state.history;
-    // Copied first: `command` may be one of the entries the history drops.
-    Name entry{state.memory, command};
+  void remember(State& state, std::string_view command, const Place& place) {
+    state.recall.remember(command, place);
+  }
 
-    static_cast<void>(history.retain([&entry](const Name& kept) {
-      return kept.view() != entry.view();
-    }));
-
-    history.insert(0, std::move(entry));
-    history.truncate(State::history_limit);
+  void ended(State& state, PaneLine& line, std::int32_t status) noexcept {
+    if (std::exchange(line.awaiting_end, false)) {
+      state.recall.ended(line.pane_id, failure(status));
+    }
   }
 
   void committed(PaneLine& line, std::string_view command) {
+    line.awaiting_end = !command.empty();
     line.line.committed(command);
   }
 
-  void insert(State& state, PaneLine& line, std::string_view text) {
+  bool sent(State& state, PaneLine& line, std::uint64_t request_id, std::string_view command, bool kept) {
+    auto& waiting = state.sent_commands;
+    if (waiting.size() >= sent_commands_limit) {
+      return false;
+    }
+
+    static_cast<void>(waiting.insert(request_id, SentCommand{.pane_id = line.pane_id, .command = Name{state.memory, command}, .kept = kept}));
+    line.line.committed({});
+    return true;
+  }
+
+  ds::Option<std::uint64_t> sentFrom(const State& state, std::uint64_t request_id) noexcept {
+    const auto* found = state.sent_commands.find(request_id);
+
+    return found == nullptr ? ds::none : ds::Option{found->pane_id};
+  }
+
+  bool accepted(State& state, Lines& lines, std::uint64_t request_id, const Place& place) {
+    const auto taken = state.sent_commands.remove(request_id);
+    if (!taken) {
+      return false;
+    }
+
+    const auto& command = *taken;
+    if (!command.kept) {
+      return true;
+    }
+
+    if (auto* line = lineOf(lines, command.pane_id)) {
+      line->awaiting_end = true;
+      line->line.remember(command.command.view());
+    }
+
+    state.recall.remember(command.command.view(), place);
+    return true;
+  }
+
+  tbc::val_a<ds::Option<SentCommand>> refused(tbc::mut_a<State> state, Lines& lines, std::uint64_t request_id) {
+    auto taken = state.sent_commands.remove(request_id);
+    // Written back only into an empty line: what was typed since is the person's.
+    auto* line = taken ? lineOf(lines, taken->pane_id) : nullptr;
+
+    if (line != nullptr && line->line.editor().text().empty()) {
+      line->line.write(taken->command.view());
+      state.written = taken->pane_id;
+    }
+
+    return taken;
+  }
+
+  bool insert(State& state, PaneLine& line, std::string_view text) {
     constexpr unsigned char first_printable = 0x20;
     constexpr unsigned char delete_control = 0x7f;
     // U+0080 to U+009F, the C1 controls, are C2 80 to C2 9F in UTF-8.
@@ -282,8 +374,12 @@ namespace telar::gui::features::prompt {
       }
     }
 
-    line.line.insertText(clean.view());
+    if (!line.line.insertText(clean.view())) {
+      return false;
+    }
+
     state.written = line.pane_id;
+    return true;
   }
 
   void write(State& state, PaneLine& line, std::string_view command) {
@@ -307,6 +403,33 @@ namespace telar::gui::features::prompt {
     typed.replaceText(word.begin, end, text);
     state.written = word.pane_id;
     return true;
+  }
+
+  bool expand(const State& state, Line& line, std::uint64_t pane_id, shell::Dialect dialect) {
+    auto& editor = line.editorMut();
+    auto& text = editor.textMut();
+    const auto* checks = state.command_checks.find(pane_id);
+    if (checks == nullptr || checks->aliases.empty() || text.selecting() || (editor.keymap() == Keymap::vim && editor.mode() != Mode::insert)) {
+      return false;
+    }
+
+    // The word right before the caret, in a command's place and typed as it reads: a quoted or
+    // escaped word is no alias to the shell either.
+    const auto cursor = text.cursor();
+    const auto context = completionContext(state.memory, text.view(), cursor, shell::Syntax{.dialect = dialect});
+    if (!context || !context->command_position || context->replace_end != cursor || context->partial.empty() || text.view().substr(context->replace_begin, cursor - context->replace_begin) != context->partial.view()) {
+      return false;
+    }
+
+    const auto* expansion = checks->aliases.find(context->partial.view());
+    if (expansion == nullptr) {
+      return false;
+    }
+
+    Name written{state.memory, expansion->view()};
+
+    written.push(' ');
+    return text.replace(context->replace_begin, cursor, written.view());
   }
 
   ds::Option<std::uint64_t> takeWrite(State& state) noexcept {
@@ -444,24 +567,9 @@ namespace telar::gui::features::prompt {
 
   void learn(State& state, std::uint64_t pane_id, std::string_view command, shell::Dialect dialect) {
     auto& memory = state.memory;
-    ds::Vec<Style, Memory> styles{memory};
-    ds::Vec<shell::Token, Memory> tokens{memory};
-
-    styles.resize(command.size());
-    classify(command, styles.viewMut(), tokens, shell::Syntax{.dialect = dialect});
-    const auto classes = styles.view();
-    const auto start = std::ranges::find_if(classes, [](Style style) {
-      return style == Style::command || style == Style::pending;
-    });
-    if (start == classes.end()) {
+    const auto range = firstCommand(memory, command, dialect);
+    if (!range) {
       return;
-    }
-
-    const auto first = static_cast<std::size_t>(start - classes.begin());
-    auto end = first;
-
-    while (end < classes.size() && classes[end] == classes[first]) {
-      ++end;
     }
 
     auto& checks = checksOf(state.command_checks, state.memory, pane_id);
@@ -469,7 +577,7 @@ namespace telar::gui::features::prompt {
       checks.learned.clear();
     }
 
-    const auto word = command.substr(first, end - first);
+    const auto word = command.substr(range->first, range->second - range->first);
 
     static_cast<void>(checks.learned.insert(Name{memory, word}, true));
     if (auto* known = checks.words.findMut(word)) {
@@ -605,8 +713,13 @@ namespace telar::gui::features::prompt {
       *known = available;
     }
 
-    if (available == SpecState::available && !expansion.empty()) {
+    // What an alias stands for is kept whether or not a spec describes it: Space writes it in its
+    // place (expand), and completion reads it only for a command with a spec.
+    if (!expansion.empty()) {
       static_cast<void>(checks.aliases.assign(Name{memory, command}, Name{memory, expansion}));
+    }
+
+    if (available == SpecState::available && !expansion.empty()) {
       if (checks.alias_targets.size() >= alias_targets_limit) {
         checks.alias_targets.clear();
       }
@@ -752,6 +865,31 @@ namespace telar::gui::features::prompt {
       }
     }
 
+    // A command no spec describes, or whose spec offers nothing but files here: the pane's own
+    // shell may know it. It reads the line from its start to the cursor, one line the wire carries,
+    // and answers whole words. On a host `ssh` reached, where a provider's program or file may be
+    // missing, the shell's words stand in for what the spec's providers cannot find there.
+    void askShell(tbc::mut_a<CompletionPlan> result, tbc::mut_a<Memory> memory, const PaneLine& line, bool specified, bool remote) {
+      const auto& completion = result.completion;
+      const bool files_only = std::ranges::all_of(completion.providers, [](const Name& name) {
+        return name.view() == "file" || name.view() == "directory";
+      });
+
+      const auto& text = line.line.editor().text();
+      const auto typed = text.view().substr(0, text.cursor());
+      if ((specified && (!completion.choices.empty() || (!files_only && !remote))) || typed.size() > CompleteWords::maximum_prefix_bytes || std::ranges::any_of(typed, [](char character) {
+            return static_cast<unsigned char>(character) < ' ' || character == '\x7f';
+          })) {
+        return;
+      }
+
+      CompletionPlan::Question question{memory};
+
+      question.provider = CompletionProvider::shell;
+      question.query.assign(typed);
+      result.questions.push(std::move(question));
+    }
+
     // The heading names where the choices come from.
     tbc::val_b<std::string_view> sourceLabel(tbc::ref_b<CompletionContext> context, const Completion& completion) {
       static constexpr ds::Array<std::pair<std::string_view, std::string_view>, 12> sources{{{"branch", "branches · git"}, {"ref", "refs · git"}, {"remote", "remotes · git"}, {"stash", "stashes · git"}, {"ssh_host", "hosts · ssh"}, {"make_target", "targets · make"}, {"just_recipe", "recipes · just"}, {"package_script", "scripts · package.json"}, {"compose_service", "services · compose"}, {"process", "processes"}, {"file", "files"}, {"directory", "directories"}}};
@@ -772,7 +910,7 @@ namespace telar::gui::features::prompt {
   }
 
   tbc::val_a<CompletionPlan> plan(State& state, const PaneLine& line, tbc::val_a<CompletionContext> context, const CompletionSources& sources) {
-    const auto& [specified, asks, directory, dialect, reads_directories, reads_references] = sources;
+    const auto& [specified, asks, directory, dialect, reads_directories, reads_references, reads_shell, remote] = sources;
     auto& memory = state.memory;
     const auto& specs = state.specs;
     const ebnf::command_spec* found = nullptr;
@@ -793,8 +931,8 @@ namespace telar::gui::features::prompt {
       partial.remove_prefix(result.completion.provider_prefix.size());
     }
 
-    // A remote shell's files, branches and commands are on its host: only the spec's own choices
-    // apply there.
+    // A remote shell's files, branches and commands are on its host, which the runtime asks; the
+    // window's own search of paths reads this host's.
     const bool files = wants(result.completion, "file");
 
     if (asks && reads_directories && context.command_position && partial.contains('/')) {
@@ -804,11 +942,15 @@ namespace telar::gui::features::prompt {
       askDirectory(result, memory, partial, files ? CompletionProvider::path : CompletionProvider::directory);
       askProviders(result, memory, context.command_position, partial, reads_references);
     } else if (asks) {
-      if (files || wants(result.completion, "directory")) {
+      if (!remote && (files || wants(result.completion, "directory"))) {
         askPaths(result, directory, memory, partial);
       }
 
       askProviders(result, memory, context.command_position, partial, reads_references);
+    }
+
+    if (asks && reads_shell && !context.command_position) {
+      askShell(result, memory, line, found != nullptr, remote);
     }
 
     const auto label = sourceLabel(context, result.completion);
@@ -935,6 +1077,21 @@ namespace telar::gui::features::prompt {
     // A history query that failed is asked again.
     if (request_id != 0 && request_id == state.history_request) {
       state.history_request = 0;
+      state.history_loaded = state.history_loaded && !std::exchange(state.history_again, false);
+      return 0;
+    }
+
+    // A correction the runtime could not look further for keeps the one the line found.
+    if (state.corrections.remove(request_id)) {
+      return 0;
+    }
+
+    // A ranked suggestion the runtime could not give leaves the recall's.
+    if (const auto pane_id = state.suggestions.remove(request_id)) {
+      if (auto* line = lineOf(lines, *pane_id); line != nullptr && line->suggesting == request_id) {
+        line->suggesting = 0;
+      }
+
       return 0;
     }
 
@@ -972,6 +1129,17 @@ namespace telar::gui::features::prompt {
 
   void failAll(State& state, Lines& lines) noexcept {
     state.history_request = 0;
+    state.history_again = false;
+    // A lost connection may have typed them or not: brought back, one could run twice.
+    state.sent_commands.clear();
+    state.corrections.clear();
+    for (const auto& asked : state.suggestions) {
+      if (auto* line = lineOf(lines, asked.value)) {
+        line->suggesting = 0;
+      }
+    }
+
+    state.suggestions.clear();
     try {
       while (!state.command_requests.empty()) {
         const auto request_id = (*state.command_requests.begin()).key;
@@ -999,6 +1167,228 @@ namespace telar::gui::features::prompt {
     }
   }
 
+  // ---- what the shell's own line held ----------------------------------------------------------
+
+  void typeahead(PaneLine& line, std::string_view typed) {
+    line.typeahead.assign(typed.substr(0, std::min(typed.size(), max_pane_typeahead_bytes)));
+  }
+
+  bool takeTypeahead(State& state, PaneLine& line) {
+    if (line.typeahead.empty()) {
+      return false;
+    }
+
+    // Typed into the shell before what was typed here since: it goes first, the caret after it.
+    const Name typed{state.memory, line.typeahead.view()};
+
+    line.typeahead.clear();
+    line.line.replaceText(0, 0, typed.view());
+    state.written = line.pane_id;
+    return true;
+  }
+
+  // ---- the runtime's ranked suggestion ---------------------------------------------------------
+
+  tbc::val_a<ds::Option<QueryHistory>> suggestionQuery(tbc::ref_a<PaneLine> line, tbc::val_a<Place> place, std::uint64_t request_id) {
+    const auto& editor = line.line.editor();
+    const auto& text = editor.text();
+    const bool typing = editor.keymap() == Keymap::emacs || editor.mode() == Mode::insert;
+    if (text.size() < 2 || text.cursor() != text.size() || !typing || text.size() > QueryHistory::maximum_query_bytes || line.suggesting != 0) {
+      return ds::none;
+    }
+
+    // Four, so a candidate the line cannot take (cut short) leaves others.
+    constexpr std::uint16_t candidates = 4;
+
+    return QueryHistory{
+        .request_id = request_id,
+        .query = text.view(),
+        .author = HistoryAuthorFilter::human,
+        .match = HistoryMatch::prefix,
+        .distinct = true,
+        .limit = candidates,
+        .sort = HistorySort::rank,
+        .origin_pane = place.pane_id,
+        .origin_cwd = place.directory.substr(0, std::min(place.directory.size(), max_path_bytes)),
+    };
+  }
+
+  void askedSuggestion(State& state, PaneLine& line, std::uint64_t request_id, bool sent) {
+    if (!sent) {
+      return;
+    }
+
+    line.suggesting = request_id;
+    line.suggest_again = false;
+    static_cast<void>(state.suggestions.insert(request_id, line.pane_id));
+  }
+
+  ds::Option<std::uint64_t> ranked(State& state, Lines& lines, const HistoryResults& message) {
+    const auto pane_id = state.suggestions.remove(message.request_id);
+    if (!pane_id) {
+      return ds::none;
+    }
+
+    auto* line = lineOf(lines, *pane_id);
+    if (line == nullptr || line->suggesting != message.request_id) {
+      return 0;
+    }
+
+    line->suggesting = 0;
+    const auto text = line->line.editor().text().view();
+
+    for (const auto& entry : message.entries) {
+      if (!entry.command_truncated && entry.command.size() > text.size() && entry.command.starts_with(text)) {
+        return line->line.rank(entry.command, entry.id) ? *pane_id : 0;
+      }
+    }
+
+    return 0;
+  }
+
+  ds::Option<std::uint64_t> takeChosen(PaneLine& line) noexcept {
+    return line.line.takeChosen();
+  }
+
+  // ---- did you mean ----------------------------------------------------------------------------
+
+  namespace {
+
+    // 127 is what bash, zsh and fish return for a command they did not find.
+    constexpr std::int32_t not_found = 127;
+
+    // Offers `closest` the commands the line knows: the first command of each in the history, and
+    // pane `pane_id`'s aliases and the commands its shell ran.
+    void offerKnown(tbc::mut_a<Closest> closest, tbc::ref_a<State> state, std::uint64_t pane_id, shell::Dialect dialect) {
+      const auto& recall = state.recall;
+
+      for (std::size_t index = 0; index < recall.size(); ++index) {
+        const auto command = recall.command(index);
+
+        if (const auto range = firstCommand(state.memory, command, dialect)) {
+          closest.offer(command.substr(range->first, range->second - range->first));
+        }
+      }
+
+      if (const auto* checks = state.command_checks.find(pane_id)) {
+        for (const auto& alias : checks->aliases) {
+          closest.offer(alias.key.view());
+        }
+
+        for (const auto& learned : checks->learned) {
+          closest.offer(learned.key.view());
+        }
+      }
+    }
+
+    // `command` with its word [begin, end) replaced by `word`, as the line suggests it.
+    tbc::val_a<Name> corrected(tbc::mut_a<Memory> memory, std::string_view command, std::size_t begin, std::size_t end, std::string_view word) {
+      Name written{memory};
+
+      written.reserve(command.size() - (end - begin) + word.size());
+      written.append(command.substr(0, begin));
+      written.append(word);
+      written.append(command.substr(end));
+      return written;
+    }
+
+  }
+
+  namespace {
+
+    // The question under `request_id` for the commands that start as `correction`'s word does,
+    // which waits for its answer; it views the state.
+    tbc::val_a<ds::Option<CompleteWords>> askCorrection(tbc::mut_a<State> state, std::uint64_t request_id, tbc::val_a<Correction> correction) { // NOLINT(bugprone-exception-escape): substr is given an offset within the command, which cannot throw
+      const auto pane_id = correction.pane_id;
+      const auto begin = correction.begin;
+      auto& waiting = state.corrections;
+
+      static_cast<void>(waiting.insert(request_id, std::move(correction)));
+      const auto* asked = waiting.find(request_id);
+      if (asked == nullptr) {
+        return ds::none;
+      }
+
+      return CompleteWords{.request_id = request_id, .pane_id = pane_id, .provider = CompletionProvider::command, .prefix = asked->command.view().substr(begin, 1)};
+    }
+
+  }
+
+  tbc::val_a<ds::Option<CompleteWords>> mistyped(tbc::mut_a<State> state, PaneLine& line, std::int32_t status, shell::Dialect dialect, ds::Option<std::uint64_t> asking) {
+    const auto recent = line.line.recent();
+    if (status != not_found || !line.awaiting_end || recent.empty()) {
+      return ds::none;
+    }
+
+    // Copied: the line changes as it takes the correction.
+    const Name kept{state.memory, recent.back().view()};
+    const auto command = kept.view();
+    const auto range = firstCommand(state.memory, command, dialect);
+    if (!range) {
+      return ds::none;
+    }
+
+    const auto [begin, end] = *range;
+    const auto word = command.substr(begin, end - begin);
+    if (word.contains('/') || word.size() > longest_correction) {
+      return ds::none;
+    }
+
+    Closest closest{word};
+
+    offerKnown(closest, state, line.pane_id, dialect);
+    if (const auto best = closest.best(); !best.empty()) {
+      line.line.correct(corrected(state.memory, command, begin, end, best));
+    }
+
+    if (!asking) {
+      return ds::none;
+    }
+
+    return askCorrection(state, *asking, Correction{.pane_id = line.pane_id, .command = Name{state.memory, command}, .begin = begin, .end = end, .dialect = dialect});
+  }
+
+  void askedCorrection(State& state, std::uint64_t request_id, bool sent) {
+    if (!sent) {
+      static_cast<void>(state.corrections.remove(request_id));
+    }
+  }
+
+  ds::Option<std::uint64_t> correct(State& state, Lines& lines, const CompletionWords& message) {
+    const auto taken = state.corrections.remove(message.request_id);
+    if (!taken) {
+      return ds::none;
+    }
+
+    auto* line = lineOf(lines, taken->pane_id);
+    // Typing since, or another command, made the suggestion moot.
+    if (line == nullptr || !line->line.editor().text().empty() || line->line.recent().empty() || line->line.recent().back().view() != taken->command.view()) {
+      return 0;
+    }
+
+    const auto command = taken->command.view();
+    const auto word = command.substr(taken->begin, taken->end - taken->begin);
+    Closest closest{word};
+
+    offerKnown(closest, state, taken->pane_id, taken->dialect);
+    for (const auto& found : message.words) {
+      closest.offer(found.text);
+    }
+
+    const auto best = closest.best();
+    if (best.empty()) {
+      return 0;
+    }
+
+    const auto written = corrected(state.memory, command, taken->begin, taken->end, best);
+    if (written.view() == line->line.correction()) {
+      return 0;
+    }
+
+    line->line.correct(written.view());
+    return taken->pane_id;
+  }
+
   // ---- the history the suggestions read --------------------------------------------------------
 
   bool historyAsked(const State& state) noexcept {
@@ -1007,6 +1397,15 @@ namespace telar::gui::features::prompt {
 
   bool historyWanted(const State& state) noexcept {
     return !state.history_loaded && state.history_request == 0;
+  }
+
+  void historyStale(State& state) noexcept {
+    if (state.history_request != 0) {
+      state.history_again = true;
+      return;
+    }
+
+    state.history_loaded = false;
   }
 
   QueryHistory historyQuery(std::uint64_t request_id) noexcept {
@@ -1023,14 +1422,20 @@ namespace telar::gui::features::prompt {
       return false;
     }
 
-    auto& history = state.history;
+    auto& recall = state.recall;
 
     request = 0;
-    state.history_loaded = true;
-    history.clear();
+    state.history_loaded = !std::exchange(state.history_again, false);
+    recall.clear();
     for (const auto& entry : message.entries) {
-      if (!entry.command_truncated && !entry.command.empty()) {
-        history.emplace(state.memory, entry.command);
+      if (entry.command_truncated || entry.command.empty()) {
+        continue;
+      }
+
+      const bool failed = entry.exit_code && failure(*entry.exit_code);
+
+      if (!recall.add(entry.command, {.pane_id = entry.pane_id, .directory = entry.cwd, .workspace = entry.workspace_path}, failed)) {
+        break;
       }
     }
 
@@ -1104,6 +1509,11 @@ namespace telar::gui::features::prompt {
 
     if (back) {
       if (current == 0 || jumps.empty()) {
+        return ds::none;
+      }
+
+      // The view already on the only jump has nowhere to go back to, and keeps the list as it is.
+      if (current == jumps.size() && jumps.size() == 1 && jumps.back() == here) {
         return ds::none;
       }
 

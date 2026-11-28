@@ -3,6 +3,7 @@ telar_add_domain(gui features/notifications
     notifications.cpp
     notifications-alerts.cpp
     notifications-center.cpp
+    notifications-commands.cpp
     notifications-limit_reports.cpp
     notifications-playback.cpp
     notifications-stack.cpp

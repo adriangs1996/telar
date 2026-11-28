@@ -56,6 +56,7 @@ import telar.runtime.traffic.exchange_capture.pipeline;
 import telar.runtime.host.stream_read_buffer;
 import telar.runtime.core.delivery.client_delivery;
 import telar.runtime.terminal.shell_integration.words;
+import telar.runtime.terminal.shell_completion;
 import telar.config.core;
 import telar.base.diagnostics;
 import telar.base.memory.allocators;
@@ -258,8 +259,15 @@ export {
       // Where telar keeps its own files, among them the Neovim and the configuration it provisions.
       std::string_view data_home;
       bool ssh_integration = false;
+      // The runtime's private directory for the sockets of the connections `ssh` shares, through
+      // which a pane `ssh` reached completes on its host; empty shares none.
+      std::string_view ssh_control;
       // Panes turn on the plan tools an agent keeps off by default.
       bool agent_plans = true;
+      // Completion asks the pane's own shell for a command no spec describes, and that shell
+      // reads the user's configuration only when the user asks for it.
+      bool shell_completion = true;
+      bool shell_completion_configuration = false;
       // Where the user's completion specs live: the configuration's own directory.
       std::string_view configuration_directory;
       // The editor's configuration, $XDG_CONFIG_HOME/telar/editor: the directory its Neovim
@@ -790,6 +798,7 @@ export {
       void handle(std::uint64_t identity, const PaneInput& message);
 
       void handle(std::uint64_t identity, const PaneCommand& message);
+      void handle(std::uint64_t identity, const RunPaneCommand& message);
 
       void handle(std::uint64_t identity, const ConfigureShellPrompt& message);
 
@@ -856,6 +865,7 @@ export {
 
       void handle(std::uint64_t identity, const DeleteHistory& message);
       void handle(std::uint64_t identity, const DeleteHistoryCommand& message);
+      void handle(std::uint64_t identity, const RewriteHistory& message);
 
       void handle(std::uint64_t identity, const PruneHistory& message);
 
@@ -863,7 +873,15 @@ export {
 
       void handle(std::uint64_t identity, const HistoryStatsQuery& message);
 
+      void handle(std::uint64_t identity, const QueryHistoryCommandStats& message);
+
       void handle(std::uint64_t identity, const QueryHistoryWorkspaces& message);
+
+      void handle(std::uint64_t identity, const ChooseHistoryEntry& message);
+
+      void handle(std::uint64_t identity, const WatchHistory& message);
+
+      void deliverHistoryChanges();
 
       void handle(std::uint64_t identity, const ConfigureGraphics& message);
 
@@ -884,6 +902,10 @@ export {
       void deliverWords(const WordResult& result);
       // Fails the waiting completion request the word service let go to make room, if it did.
       static void failDropped(ClientSession& client, ds::Option<std::uint64_t> dropped);
+      // What the pane's shell completed, or no words for a line it was not asked for.
+      void deliverShellWords(ShellCompletionAsked asked, std::span<const ShellWord> found, bool truncated);
+      // A pane `ssh` reached: its files, its shell's words and what its providers offer come from its host.
+      void askRemote(std::uint64_t identity, const CompleteWords& message);
 
       // A background worker's reply to `client_id`'s request: history failures become limits, the
       // rest goes to the client, which a failed send drops.
@@ -957,6 +979,10 @@ export {
       NvimProvision editor_provision_;
       ds::String<ConcurrentMemory> editor_configuration_;
       WordService words_;
+      ShellCompletionService shell_words_;
+      // The entries of a directory and the providers' words on a host `ssh` reached, beside its
+      // shell's words, which shell_words_ asks for: Tab asks for them at once.
+      ShellCompletionService remote_entries_;
       // This runtime's PATH, read once: nothing in the runtime changes it.
       std::string_view runtime_path_ = runtimePath();
       WorktreeDetectionService<WorktreeDetectionProbe> worktree_detection_;

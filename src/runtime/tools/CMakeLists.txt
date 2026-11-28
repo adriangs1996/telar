@@ -25,4 +25,6 @@ telar_add_test(nvim-embed-probe PROBE SOURCES nvim_embed_probe.cpp LIBRARIES run
 telar_add_test(nvim-redraw-bench PROBE SOURCES nvim_redraw_bench.cpp LIBRARIES runtime-nvim runtime-tools-support)
 # What the explorer's requests cost the file service, on directories and a repository it makes.
 telar_add_test(files-bench PROBE SOURCES files_bench.cpp LIBRARIES runtime-files runtime-tools-support)
+# What typing into the history costs, on a synthetic history of many runs.
+telar_add_test(history-store-bench PROBE SOURCES history_store_bench.cpp LIBRARIES runtime-history runtime-tools-support)
 telar_add_probes(runtime-probes)

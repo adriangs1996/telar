@@ -211,6 +211,9 @@ export {
       std::string_view shell_integration;
       // Whether an integrated shell's `ssh` brings the integration to the hosts it reaches.
       bool ssh_integration = false;
+      // The runtime's private directory for the sockets of the connections that `ssh` shares;
+      // empty shares none.
+      std::string_view ssh_control;
       // Whether a pane turns on the plan tools an agent keeps off by default.
       bool agent_plans = true;
     };
@@ -226,6 +229,16 @@ export {
     struct IgnorePaneInput {
       template <typename PaneType>
       [[tbc::generic]] inline void operator()(const PaneType& /*pane*/, std::span<const Byte> /*bytes*/) const noexcept {}
+    };
+
+    // What became of a command a client ran at a pane's prompt: typed, or not, as the client does
+    // not show the pane, its program exited, or its input queue holds its limit because the
+    // program is not reading.
+    enum class CommandAdmission : std::uint8_t {
+      typed,
+      not_shown,
+      exited,
+      queue_full,
     };
 
     // Where a pane launches, and how its terminal and shell start. `bare_prompt`: the client it is
@@ -257,7 +270,7 @@ export {
             socket_path_(options.socket),
             proxy_(options.proxy),
             control_policy_(options.control_policy),
-            shell_integration_(memory, options.shell_integration, options.ssh_integration),
+            shell_integration_(memory, options.shell_integration, options.ssh_integration, options.ssh_control),
             agent_plans_(options.agent_plans) {}
 
       inline static Pane& require(PaneStore& panes, std::uint64_t identity) {
@@ -497,6 +510,7 @@ export {
         const auto terminal = asTerminal(&pane);
         auto media = !terminal ? decltype(terminal->body.media){} : terminal->body.media;
         const auto clipboard_revision = !terminal ? std::uint64_t{0} : terminal->body.terminal.effects().clipboard_revision;
+        const auto typeahead_serial = !terminal || !terminal->body.shell_zones ? std::uint64_t{0} : terminal->body.shell_zones->typeaheadSerial();
 
         auto attachment = ds::makeBox<Attachment>(memory_, memory_, client.graphics_credit, pane.id, std::move(media));
 
@@ -504,6 +518,7 @@ export {
         attachment.getMut().kind = pane.kind();
         attachment.getMut().graphics.configure(client.shared_graphics);
         attachment.getMut().clipboard_revision = clipboard_revision;
+        attachment.getMut().typeahead_serial = typeahead_serial;
 
         // The attachment as the client keeps it, once its box is in the client's list.
         auto& result = client.attachments.push(std::move(attachment)).getMut();
@@ -683,18 +698,50 @@ export {
         ClipboardService::configure(clients, requireTerminal(model.panes, request.pane_id));
       }
 
+      inline static bool controlByte(Byte byte) noexcept {
+        constexpr Byte first_printable = 0x20;
+        constexpr Byte delete_byte = 0x7f;
+
+        return byte < first_printable || byte == delete_byte;
+      }
+
       inline static std::size_t typedSize(bool paste, std::span<const Byte> text, std::span<const Byte> enter) noexcept {
         return BracketedPaste::size(text.size(), paste) + enter.size();
       }
 
-      // A line typed at a pane: the prefix and the text, as one paste when `paste`, then `enter`. The
-      // prefix ends in a space, so no terminator spans it and the text.
+      // A line typed at a pane: `clear`, keys the line editor reads before the line, then the prefix
+      // and the text, as one paste when `paste`, then `enter`. The prefix ends in a space, so no
+      // terminator spans it and the text.
       struct TypedLine {
+        std::span<const Byte> clear;
         bool paste = false;
+        // Without a paste, each control byte of the text follows ^V, quoted-insert in zsh's and
+        // readline's line editors, which take the byte after it as part of the line.
+        bool quote = false;
         std::span<const Byte> prefix;
         std::span<const Byte> text;
         std::span<const Byte> enter;
       };
+
+      // `text` with ^V before each of its control bytes, as `forward` writes it.
+      template <typename Forward>
+      inline static void typeQuoted(std::span<const Byte> text, const Forward& forward) {
+        constexpr ds::Array<Byte, 1> quoted_insert{0x16};
+        std::size_t start = 0;
+
+        for (std::size_t index = 0; index < text.size(); ++index) {
+          if (controlByte(text[index])) {
+            if (index != start) {
+              forward(text.subspan(start, index - start));
+            }
+
+            forward(quoted_insert);
+            start = index;
+          }
+        }
+
+        forward(text.subspan(start));
+      }
 
       template <typename Observer>
       inline static void type(PaneRef<TerminalBody> pane, const TypedLine& line, const Observer& observe) {
@@ -703,7 +750,14 @@ export {
           observe(pane.core, bytes);
         };
 
-        if (!line.paste) {
+        if (!line.clear.empty()) {
+          forward(line.clear);
+        }
+
+        if (!line.paste && line.quote) {
+          forward(line.prefix);
+          typeQuoted(line.text, forward);
+        } else if (!line.paste) {
           forward(line.prefix);
           forward(line.text);
         } else {
@@ -855,31 +909,76 @@ export {
         client.clipboard.replace(pane.core.id, reader.bytes());
       }
 
-      // A command a client runs at the prompt of a pane it shows. Its text is recorded for the
-      // command's history, then typed as a prompt sent with sendText is.
-      template <typename Observer = IgnorePaneInput>
-      inline void command(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, const PaneCommand& request, const Observer& observe = {}) {
+      // Request `request_id` asked to type into a pane whose input queue holds its limit: the
+      // program in it is not reading, which is its own state, not the runtime's capacity.
+      inline static void refuseFullQueue(ClientSession& client, std::uint64_t request_id) {
+        constexpr std::size_t message_bytes = 160;
+        ds::Array<char, message_bytes> message{};
+        const auto written = std::format_to_n(message.dataMut(), static_cast<std::ptrdiff_t>(message.size()), "the pane's input queue holds its limit of {} bytes; the program in it is not reading input", TerminalBody::input_limit);
+        const auto length = std::min(static_cast<std::size_t>(written.size), message.size());
+
+        client.connection.send(RequestFailed{.request_id = request_id, .code = FailureCode::resource_limit, .message = {message.data(), length}});
+      }
+
+      // A command a client runs at the prompt of a pane it shows, a PaneCommand or a
+      // RunPaneCommand. Its text is recorded for the command's history, then typed as a prompt
+      // sent with sendText is. What became of it, for a RunPaneCommand's answer.
+      template <typename Command, typename Observer = IgnorePaneInput>
+      inline CommandAdmission command(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, const Command& request, const Observer& observe = {}) {
         if (const auto* client = clients.find(client_id); client == nullptr || client->attachment(request.pane_id) == nullptr) {
-          return;
+          return CommandAdmission::not_shown;
         }
 
         auto pane = requireTerminal(model.panes, request.pane_id);
         if (pane.core.output_closed) {
-          return;
+          return CommandAdmission::exited;
         }
 
         const bool paste = pane.body.terminal.mode(GHOSTTY_MODE_BRACKETED_PASTE);
         ds::Array<Byte, encoded_key_bytes> encoded_enter{};
         const auto enter = pane.body.terminal.encodeKey(GHOSTTY_KEY_ENTER, 0, encoded_enter.viewMut());
-        if (admitInput(pane, typedSize(paste, request.text, enter))) {
+        // Keys that reached the shell's line editor while the client's was not up would run before
+        // the command: its integration reports them and clears the line first. Not while a command
+        // runs, which would read the key.
+        const auto& zones = pane.body.shell_zones;
+        const auto clear = zones && !zones->running() ? byteView(typeahead_flush_key) : std::span<const Byte>{};
+        // Without bracketed paste (bash 3.2, readline or zsh with it off) a newline in the text
+        // is Enter: the shell would run each line as a command of its own, with a block each,
+        // while the history records the text as one. Quoted, the line editor holds the whole text
+        // as one line, as a paste gives it. fish always pastes, and binds ^V to its clipboard.
+        const auto shell = pane.body.shell_state.shell;
+        const auto controls = static_cast<std::size_t>(std::ranges::count_if(request.text, controlByte));
+        const bool quote = !paste && controls != 0 && (shell == IntegratedShell::zsh || shell == IntegratedShell::bash);
+        const bool admitted = admitInput(pane, clear.size() + typedSize(paste, request.text, enter) + (quote ? controls : 0));
+
+        if (admitted) {
           pane.body.submitCommand(request.text);
-          type(pane, {.paste = paste, .text = request.text, .enter = enter}, observe);
+          type(pane, {.clear = clear, .paste = paste, .quote = quote, .text = request.text, .enter = enter}, observe);
           pane.core.last_input = std::chrono::steady_clock::now();
           flushInput(pane);
         }
 
         recordInputOrigin(model, clients, {.client = client_id, .pane = request.pane_id});
         ClipboardService::configure(clients, requireTerminal(model.panes, request.pane_id));
+        return admitted ? CommandAdmission::typed : CommandAdmission::queue_full;
+      }
+
+      // A command the client answers for: RequestCompleted once typed, RequestFailed when it was
+      // not, so the editor keeps a command the pane refused instead of losing it.
+      template <typename Observer = IgnorePaneInput>
+      inline void runCommand(RuntimeModel& model, ClientStore& clients, std::uint64_t client_id, const RunPaneCommand& request, const Observer& observe = {}) {
+        switch (command(model, clients, client_id, request, observe)) {
+        case CommandAdmission::typed:
+          requireClient(clients, client_id).connection.send(RequestCompleted{.request_id = request.request_id});
+          return;
+        case CommandAdmission::not_shown:
+          throw RequestError{FailureCode::invalid_request, "The pane is not attached to this client"};
+        case CommandAdmission::exited:
+          throw RequestError{FailureCode::pane_exited, "Pane process has exited"};
+        case CommandAdmission::queue_full:
+          refuseFullQueue(requireClient(clients, client_id), request.request_id);
+          return;
+        }
       }
 
       template <typename Observer = IgnorePaneInput>
@@ -895,12 +994,7 @@ export {
         const auto enter = request.mode == PaneTextMode::raw ? std::span<const Byte>{} : pane.body.terminal.encodeKey(GHOSTTY_KEY_ENTER, 0, encoded_enter.viewMut());
         const auto required = prefix.size() + typedSize(paste, text, enter);
         if (!admitInput(pane, required)) {
-          constexpr std::size_t message_bytes = 160;
-          ds::Array<char, message_bytes> message{};
-          const auto written = std::format_to_n(message.dataMut(), static_cast<std::ptrdiff_t>(message.size()), "the pane's input queue holds its limit of {} bytes; the program in it is not reading input", TerminalBody::input_limit);
-          const auto length = std::min(static_cast<std::size_t>(written.size), message.size());
-
-          client.connection.send(RequestFailed{.request_id = request.request_id, .code = FailureCode::resource_limit, .message = {message.data(), length}});
+          refuseFullQueue(client, request.request_id);
           return;
         }
 

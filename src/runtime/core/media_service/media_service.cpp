@@ -32,7 +32,11 @@ namespace telar::runtime {
 #if TELAR_DIAGNOSTICS
         history_service_(history),
 #endif
+        history_service_ref_((history.separateLanes(), history)),
+        history_changes_(memory),
         history_(memory, history),
+        history_reader_(history),
+        history_reads_(memory, history_reader_),
         editor_(memory, editor),
         suggestions_(memory, suggestions),
         file_service_(memory),
@@ -42,7 +46,7 @@ namespace telar::runtime {
 
   template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
   ds::Array<int, background_worker_count> BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::descriptors() const noexcept {
-    return {history_.descriptor(), path_service_.descriptor(), editor_.descriptor(), suggestions_.descriptor(), files_.descriptor(), worktrees_.descriptor()};
+    return {history_.descriptor(), history_reads_.descriptor(), history_service_ref_.changesDescriptor(), path_service_.descriptor(), editor_.descriptor(), suggestions_.descriptor(), files_.descriptor(), worktrees_.descriptor()};
   }
 
   template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
@@ -97,6 +101,7 @@ namespace telar::runtime {
   template <typename History, typename Paths, typename Editor, typename Suggestions, typename Worktrees>
   void BackgroundPool<History, Paths, Editor, Suggestions, Worktrees>::cancel(std::uint64_t client) noexcept {
     history_.cancel(client);
+    history_reads_.cancel(client);
     path_service_.cancel(client);
     editor_.cancel(client);
     suggestions_.cancel(client);
@@ -119,11 +124,13 @@ namespace telar::runtime {
 
   BackgroundService::BackgroundService(ConcurrentMemory& memory, const char* history_path, const HistoryFilters& filters)
       : history_(std::in_place_type<HistoryFilters>, filters),
+        read_decode_(memory),
 #if TELAR_DIAGNOSTICS
         storage_(memory, history_path),
 #endif
         decode_(memory) {
     decode_.resize(decode_capacity);
+    read_decode_.resize(decode_capacity);
     try {
       history_.template emplace<HistoryStore>(memory, history_path, filters);
     } catch (const SystemError&) {
@@ -139,12 +146,12 @@ namespace telar::runtime {
       history_.template emplace<HistoryFilters>(filters);
     }
 
-    TELAR_DIAGNOSTIC(idle());
+    TELAR_DIAGNOSTIC(storage_.sample(diagnostics::FileStorage<ConcurrentMemory>::Clock::now()));
   }
 
   void BackgroundService::process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context) {
     TELAR_TRACE("background_service.process");
-    TELAR_DIAGNOSTIC(idle());
+    TELAR_DIAGNOSTIC(storage_.sample(diagnostics::FileStorage<ConcurrentMemory>::Clock::now()));
     const bool known = ClientRequests::dispatch<RequestLane::service>(static_cast<ClientTag>(payload.front()), [&]<typename Message> {
       DecodeStorage storage{decode_.viewMut()};
 
@@ -156,7 +163,7 @@ namespace telar::runtime {
   }
 
   void BackgroundService::processInternal(const InternalRequest& request) {
-    TELAR_DIAGNOSTIC(idle());
+    TELAR_DIAGNOSTIC(storage_.sample(diagnostics::FileStorage<ConcurrentMemory>::Clock::now()));
     TELAR_DIAGNOSTIC(diagnostics::OperationTimer timing{&counters_.writes});
     if (auto* store = std::get_if<HistoryStore>(&history_)) {
       try {
@@ -181,14 +188,99 @@ namespace telar::runtime {
       std::abort();
     }
 
-    return event.kind != HistoryEventKind::command_finished || filters->allowsPane(event.command.command, event.command.directory);
+    return event.kind != HistoryEventKind::command_finished || filters->recordsPane(event.command.command, event.command.directory);
+  }
+
+  void BackgroundService::drained() noexcept {
+    if (auto* store = std::get_if<HistoryStore>(&history_)) {
+      try {
+        store->flush();
+      } catch (...) { // NOLINT(bugprone-empty-catch): a batch that cannot commit is lost as a crash would lose it; the next one starts afresh
+      }
+    }
+
+    signalChanges();
+  }
+
+  void BackgroundService::separateLanes() noexcept {
+    lanes_ = true;
+    if (auto* store = std::get_if<HistoryStore>(&history_)) {
+      store->separateLanes();
+    }
+  }
+
+  int BackgroundService::changesDescriptor() const noexcept {
+    return changed_.descriptor();
+  }
+
+  void BackgroundService::signalChanges() noexcept {
+    changed_.notify();
+  }
+
+  void BackgroundService::takeChanges(ds::Vec<HistoryChanged, ConcurrentMemory>& out) {
+    changed_.drain();
+    if (auto* store = std::get_if<HistoryStore>(&history_)) {
+      store->takeChanges(out);
+      return;
+    }
+
+    out.clear();
+  }
+
+  void BackgroundService::read(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context) {
+    TELAR_TRACE("background_service.read");
+    const bool known = ClientRequests::dispatch<RequestLane::service>(static_cast<ClientTag>(payload.front()), [&]<typename Message> {
+      if constexpr (HistoryRead<Message>) {
+        DecodeStorage storage{read_decode_.viewMut()};
+
+        execute(Codec::decode<Message>(payload, storage), reply, context);
+      } else {
+        throw RequestError{FailureCode::invalid_request, "Not a history read"};
+      }
+    });
+    if (!known) {
+      throw RequestError{FailureCode::invalid_request, "Unknown background request"};
+    }
+  }
+
+  void BackgroundService::warm() noexcept {
+    if (auto* store = std::get_if<HistoryStore>(&history_)) {
+      try {
+        store->warm();
+      } catch (...) { // NOLINT(bugprone-empty-catch): an index that cannot load leaves the queries to SQL
+      }
+    }
+  }
+
+  void BackgroundService::idle() noexcept {
+    TELAR_DIAGNOSTIC(storage_.sample(diagnostics::FileStorage<ConcurrentMemory>::Clock::now()));
+    if (auto* store = std::get_if<HistoryStore>(&history_)) {
+      try {
+        store->maintain(wallMilliseconds());
+      } catch (...) { // NOLINT(bugprone-empty-catch): maintenance that fails is tried again on the next idle
+      }
+
+      // Without lanes the one worker also keeps the index warm.
+      if (!lanes_) {
+        warm();
+      }
+    }
+
+    signalChanges();
+  }
+
+  HistoryReadLane::HistoryReadLane(BackgroundService& service) noexcept
+      : service_(service) {}
+
+  void HistoryReadLane::process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context) {
+    service_.read(payload, reply, context);
+  }
+
+  void HistoryReadLane::idle() noexcept {
+    service_.warm();
   }
 
 #if TELAR_DIAGNOSTICS
-  void BackgroundService::idle() noexcept {
-    storage_.sample(diagnostics::FileStorage<ConcurrentMemory>::Clock::now());
-  }
-
   HistoryMetrics BackgroundService::historyMetrics() const noexcept {
     auto snapshot = counters_.snapshot(std::holds_alternative<HistoryStore>(history_));
 
@@ -204,11 +296,13 @@ namespace telar::runtime {
     if (store != nullptr) {
       try {
         if constexpr (std::same_as<Message, QueryHistory>) {
-          store->query(request, reply);
+          store->query(request, reply, context.cancelled);
         } else if constexpr (std::same_as<Message, ImportHistory>) {
           store->importEntries(request, reply);
         } else if constexpr (std::same_as<Message, DeleteHistory>) {
           store->remove(request, reply);
+        } else if constexpr (std::same_as<Message, RewriteHistory>) {
+          store->rewrite(request, reply);
         } else if constexpr (std::same_as<Message, DeleteHistoryCommand>) {
           store->removeCommand(request, reply);
         } else if constexpr (std::same_as<Message, PruneHistory>) {
@@ -217,10 +311,14 @@ namespace telar::runtime {
           store->readOutput(request, reply);
         } else if constexpr (std::same_as<Message, HistoryStatsQuery>) {
           store->stats(request, reply);
+        } else if constexpr (std::same_as<Message, QueryHistoryCommandStats>) {
+          store->commandStats(request, reply);
         } else if constexpr (std::same_as<Message, QueryHistoryWorkspaces>) {
           store->workspaces(request, reply);
         } else if constexpr (std::same_as<Message, ReportAgentCommand>) {
           store->reportAgentCommand(request, context, reply);
+        } else if constexpr (std::same_as<Message, ChooseHistoryEntry>) {
+          store->choose(request, reply);
         } else {
           static_assert(false, "BackgroundService::execute has no branch for this history request");
         }

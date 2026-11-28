@@ -4,6 +4,7 @@ module;
 module telar.runtime.core.model.client_layouts;
 
 import telar.sys.process;
+import telar.sys.posix;
 import telar.base.text.utf8;
 import telar.platform.events;
 import telar.base.ds;
@@ -194,8 +195,31 @@ namespace telar::runtime {
     return kind;
   }
 
+  namespace {
+
+    // The user this runtime runs as, and the shells it starts with it: looked up once.
+    std::string_view localUser() {
+      static const auto user = [] {
+        constexpr std::size_t record_bytes = 4096;
+        FixedText<max_block_user_bytes> name;
+        passwd record{};
+        passwd* found = nullptr;
+        ds::Array<char, record_bytes> storage{};
+
+        if (::getpwuid_r(::geteuid(), &record, storage.dataMut(), storage.size(), &found) == 0 && found != nullptr && found->pw_name != nullptr) {
+          name.assign(std::string_view{found->pw_name}.substr(0, max_block_user_bytes));
+        }
+
+        return name;
+      }();
+
+      return user.view();
+    }
+
+  }
+
   bool read(PaneRef<TerminalBody> pane, TerminalBody::ReadMode mode) {
-    const bool open = pane.body.read(mode);
+    const bool open = pane.body.read(mode, pane.core.git.repository ? pane.core.git.branch.view() : std::string_view{});
 
     pane.core.output_closed = pane.core.output_closed || !open;
     return open;
@@ -421,7 +445,7 @@ namespace telar::runtime {
     return ::writev(descriptor, vectors.data(), static_cast<int>(vectors.size()));
   }
 
-  bool TerminalBody::read(ReadMode mode) {
+  bool TerminalBody::read(ReadMode mode, std::string_view branch) {
     constexpr std::size_t batch_byte_limit = std::size_t{64} * 1024;
     constexpr unsigned batch_read_limit = 8;
     ds::Array<Byte, read_buffer_size> buffer; // NOLINT(cppcoreguidelines-pro-type-member-init): the PTY read path reads only the bytes read(2) wrote
@@ -455,7 +479,7 @@ namespace telar::runtime {
       if (count > 0) {
         const auto bytes = std::span<const Byte>{buffer}.first(static_cast<std::size_t>(count));
 
-        ingest(bytes, batch_bytes != 0);
+        ingest(bytes, batch_bytes != 0, branch);
         batch_bytes += bytes.size();
         continue;
       }
@@ -471,7 +495,7 @@ namespace telar::runtime {
     return observed(true);
   }
 
-  void TerminalBody::ingest(std::span<const Byte> bytes, [[maybe_unused]] bool folded) {
+  void TerminalBody::ingest(std::span<const Byte> bytes, [[maybe_unused]] bool folded, std::string_view branch) {
     TELAR_DIAGNOSTIC(recordRead(bytes.size(), folded));
     const auto in_foreground = needs_foreground_observation ? shellForeground() : ds::none;
 
@@ -482,39 +506,30 @@ namespace telar::runtime {
     }
 
     observer->bytes(ObservationKind::output, bytes, in_foreground);
-    ShellCompletions completions{.state = shell_state};
+    TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters == nullptr ? nullptr : &counters->ingest});
+    TerminalFeed feed{.terminal = terminal, .media = *media};
 
-    if (shell_zones) {
-      const auto before = shell_state.commands;
+    if (!shell_zones) {
+      feed(bytes);
+      return;
+    }
+
+    std::size_t fed = 0;
+    const auto before = shell_state.commands;
+
+    {
+      CommandBlockFeed<TerminalFeed> marks{blocks.getMut(), bytes, feed, fed, std::chrono::steady_clock::now(), CommandPlace{.user = localUser(), .branch = branch}};
+      ShellCompletions completions{.state = shell_state, .blocks = marks};
 
       shell_zones.getMut().feed(bytes, ObservationTime(), completions);
-      shell_revision += static_cast<std::uint64_t>(shell_state.commands != before);
     }
 
-    TELAR_DIAGNOSTIC(diagnostics::TimedScope timing{counters == nullptr ? nullptr : &counters->ingest});
-    feedMarks(bytes, completions);
+    shell_revision += static_cast<std::uint64_t>(shell_state.commands != before);
+    feed(bytes.subspan(fed));
   }
 
-  void TerminalBody::feedMarks(std::span<const Byte> bytes, const ShellCompletions& completions) {
-    std::size_t fed = 0;
-    const auto now = std::chrono::steady_clock::now();
-
-    for (const auto& mark : completions.marks()) {
-      if (mark.end > fed) {
-        terminal.feed(bytes.subspan(fed, mark.end - fed), *media);
-        fed = mark.end;
-      }
-
-      if (mark.action == 'D') {
-        blocks.getMut().finished(mark.status, now);
-      } else {
-        blocks.getMut().mark(mark.action, now);
-      }
-    }
-
-    if (fed < bytes.size()) {
-      terminal.feed(bytes.subspan(fed), *media);
-    }
+  void TerminalBody::TerminalFeed::operator()(std::span<const Byte> bytes) {
+    terminal.feed(bytes, media);
   }
 
   void TerminalBody::observeShell() noexcept {
@@ -636,19 +651,10 @@ namespace telar::runtime {
   void TerminalBody::ShellCompletions::complete(CommandCompletion completion) noexcept {
     ++state.commands;
     state.status = completion.exit_code.valueOr(0);
-    if (count != 0 && kept[count - 1].action == 'D') {
-      kept.atMut(count - 1).status = completion.exit_code;
-    }
   }
 
-  void TerminalBody::ShellCompletions::mark(CommandMark mark) noexcept {
-    if (count < kept.size()) {
-      kept.atMut(count++) = Mark{.action = mark.action, .end = mark.end, .status = ds::none};
-    }
-  }
-
-  auto TerminalBody::ShellCompletions::marks() const noexcept -> std::span<const Mark> {
-    return std::span<const Mark>{kept}.first(count);
+  void TerminalBody::ShellCompletions::mark(CommandMark mark) {
+    blocks.mark(mark);
   }
 
   void TerminalBody::timeLink(std::chrono::steady_clock::duration elapsed) noexcept {

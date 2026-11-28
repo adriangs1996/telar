@@ -5,6 +5,9 @@ import telar.lua;
 import telar.tbc;
 import telar.sys.socket;
 import telar.base.ds;
+import telar.base.history.secrets;
+import telar.base.text.pattern;
+import telar.base.text.utf8;
 
 namespace telar::runtime {
 
@@ -366,119 +369,268 @@ namespace telar::runtime {
     return manifests;
   }
 
+  void HistoryPatternList::reserve() {
+    if (count_ + expression_count_ == maximum_patterns) {
+      throw std::length_error{"History filter exceeds 64 patterns"};
+    }
+  }
+
   void HistoryPatternList::append(std::string_view pattern) {
     if (pattern.empty() || pattern.contains('\0')) {
       throw std::invalid_argument{"History filter patterns must not be empty or contain NUL"};
     }
 
-    if (count_ == patterns_.size()) {
-      throw std::length_error{"History filter exceeds 64 patterns"};
-    }
-
+    reserve();
     patterns_.atMut(count_).assign(pattern);
     ++count_;
   }
 
+  void HistoryPatternList::appendExpression(std::string_view pattern) {
+    reserve();
+    if (expression_count_ == maximum_expressions) {
+      throw std::length_error{"History filter exceeds 16 regular expressions"};
+    }
+
+    // A filter's expression is as long as its texts may be.
+    if (pattern.empty() || pattern.size() > pattern_bytes) {
+      throw std::invalid_argument{"History filter regex must hold 1 to 256 bytes"};
+    }
+
+    try {
+      expressions_.atMut(expression_count_) = Pattern{pattern, PatternOptions{.regex = true}};
+    } catch (const PatternError& error) {
+      constexpr std::size_t message_bytes = 160;
+      ds::Array<char, message_bytes> message{};
+
+      std::format_to_n(message.dataMut(), message.size() - 1, "History filter regex: {}", error.what());
+      throw std::invalid_argument{message.data()};
+    }
+
+    ++expression_count_;
+  }
+
   bool HistoryPatternList::matches(std::string_view text) const noexcept {
-    return std::ranges::any_of(std::span{patterns_}.first(count_), [text](const auto& pattern) {
+    const auto contains = [text](const auto& pattern) {
       return text.contains(pattern.view());
-    });
+    };
+
+    const auto searches = [text](const Pattern& pattern) {
+      return pattern.matches(text);
+    };
+
+    return std::ranges::any_of(std::span{patterns_}.first(count_), contains) || std::ranges::any_of(std::span{expressions_}.first(expression_count_), searches);
   }
 
   const HistoryFilters& defaultHistoryFilters() noexcept {
+// The defaults live as long as the process, as the references its callers keep do.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
     static const HistoryFilters filters{};
+#pragma clang diagnostic pop
 
     return filters;
   }
 
-  bool HistoryFilters::allowsPane(std::string_view command, std::string_view directory) const noexcept {
-    return !command.empty() && command.front() != ' ' && allowsAgent(command, directory);
-  }
-
-  bool HistoryFilters::allowsAgent(std::string_view command, std::string_view directory, bool redact) const noexcept {
-    return !command.empty() && !(redact && secrets && looksLikeSecret(command)) && !commands.matches(command) && !directories.matches(directory);
-  }
-
-  bool HistoryFilters::looksLikeSecret(std::string_view command) noexcept {
-    constexpr ds::Array tokens{
-        TokenRule{.marker = "AKIA", .minimum_length = 16},
-        TokenRule{.marker = "ghp_", .minimum_length = 20},
-        TokenRule{.marker = "gho_", .minimum_length = 20},
-        TokenRule{.marker = "github_pat_", .minimum_length = 20},
-        TokenRule{.marker = "npm_", .minimum_length = 30},
-        TokenRule{.marker = "sk_live_", .minimum_length = 12},
-        TokenRule{.marker = "rk_live_", .minimum_length = 12},
-        TokenRule{.marker = "xoxb-", .minimum_length = 10},
-        TokenRule{.marker = "xoxp-", .minimum_length = 10},
-    };
-
-    if (std::ranges::any_of(tokens, [command](const TokenRule& rule) {
-          return matchesToken(command, rule);
-        })) {
-      return true;
+  void HistoryCommandList::append(std::string_view command) {
+    if (command.empty() || command.size() > HistoryPatternList::pattern_bytes || command.contains('\0')) {
+      throw std::invalid_argument{"Trivial commands must be 1..256 bytes without NUL"};
     }
 
-    if (command.contains("hooks.slack.com/services/") || command.contains("-----BEGIN")) {
-      return true;
+    if (count_ == maximum_commands) {
+      throw std::length_error{"History trivial commands exceed 64 entries"};
     }
 
-    constexpr ds::Array<std::string_view, 5> assignments{"password=", "passwd=", "token=", "secret=", "api_key="};
+    commands_.atMut(count_).assign(command);
+    ++count_;
+  }
 
-    return std::ranges::any_of(assignments, [command](std::string_view marker) {
-      return matchesAssignment(command, marker);
+  bool HistoryCommandList::contains(std::string_view command) const noexcept {
+    constexpr std::string_view blanks = " \t\r\n";
+    const auto first = command.find_first_not_of(blanks);
+    if (first == std::string_view::npos) {
+      return false;
+    }
+
+    command.remove_suffix(command.size() - command.find_last_not_of(blanks) - 1);
+    command.remove_prefix(first);
+    return std::ranges::any_of(std::span{commands_}.first(count_), [command](const auto& entry) {
+      return entry.view() == command;
     });
   }
 
-  bool HistoryFilters::tokenByte(unsigned char byte) noexcept {
-    return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9') || byte == '_' || byte == '-';
+  void HistoryFilters::addTrivial(std::string_view command) {
+    trivial_commands.append(command);
   }
 
-  bool HistoryFilters::matchesToken(std::string_view command, const TokenRule& rule) noexcept {
-    for (std::size_t offset = 0; offset < command.size();) {
-      const auto found = command.find(rule.marker, offset);
-      if (found == std::string_view::npos) {
-        return false;
-      }
-
-      auto suffix = command;
-      std::size_t length = 0;
-
-      suffix.remove_prefix(found + rule.marker.size());
-      while (length < suffix.size() && tokenByte(static_cast<unsigned char>(suffix[length]))) {
-        ++length;
-      }
-
-      if (length >= rule.minimum_length) {
-        return true;
-      }
-
-      offset = found + 1;
+  HistoryVerdict HistoryFilters::verdict(std::string_view command, std::string_view directory, bool redact) const noexcept {
+    if (command.empty() || trivial_commands.contains(command) || commands.matches(command) || directories.matches(directory)) {
+      return HistoryVerdict::drop;
     }
 
-    return false;
+    if (!redact || !secrets) {
+      return HistoryVerdict::keep;
+    }
+
+    std::size_t token_bytes = 0;
+    bool found = false;
+
+    for (auto span = findSecret(command); span; span = findSecret(command, span->end)) {
+      found = true;
+      if (span->kind == SecretKind::token) {
+        token_bytes += span->end - span->begin;
+      }
+    }
+
+    if (!found) {
+      return HistoryVerdict::keep;
+    }
+
+    // A command that is mostly a key, as one pasted at the prompt, is the key: nothing of it is
+    // worth keeping. One that uses a key keeps the rest of what it did.
+    const auto written = static_cast<std::size_t>(std::ranges::count_if(command, [](char byte) {
+      return byte != ' ' && byte != '\t' && byte != '\n';
+    }));
+
+    return token_bytes * 2 > written ? HistoryVerdict::drop : HistoryVerdict::redact;
   }
 
-  bool HistoryFilters::matchesAssignment(std::string_view command, std::string_view marker) noexcept {
-    for (std::size_t offset = 0; offset + marker.size() < command.size(); ++offset) {
-      bool matches = true;
+  tbc::val_a<FilteredCommand> HistoryFilters::filter(tbc::val_a<std::string_view> command, std::string_view directory, tbc::val_a<std::span<char>> scratch, bool redact) const noexcept {
+    const auto decided = verdict(command, directory, redact);
+    if (decided != HistoryVerdict::redact) {
+      return {.verdict = decided, .text = decided == HistoryVerdict::keep ? command : std::string_view{}};
+    }
 
-      for (std::size_t index = 0; index < marker.size(); ++index) {
-        const auto byte = static_cast<unsigned char>(command[offset + index]);
-        const auto lower = byte >= 'A' && byte <= 'Z' ? byte + ('a' - 'A') : byte;
-        if (lower != marker[index]) {
-          matches = false;
-          break;
+    const auto redacted = redactSecrets(command, scratch);
+    if (!redacted) {
+      return {.verdict = HistoryVerdict::drop};
+    }
+
+    return {.verdict = HistoryVerdict::redact, .text = {scratch.data(), redacted->bytes}};
+  }
+
+  tbc::val_a<FilteredCommand> HistoryFilters::filterPane(tbc::val_a<std::string_view> command, std::string_view directory, tbc::val_a<std::span<char>> scratch) const noexcept {
+    if (!command.empty() && command.front() == ' ') {
+      return {.verdict = HistoryVerdict::drop};
+    }
+
+    return filter(command, directory, scratch, true);
+  }
+
+  tbc::val_a<FilteredCommand> HistoryFilters::filterAgent(tbc::val_a<std::string_view> command, std::string_view directory, tbc::val_a<std::span<char>> scratch) const noexcept {
+    return filter(command, directory, scratch, true);
+  }
+
+  tbc::val_a<std::string_view> HistoryFilters::filterOutput(tbc::val_a<std::string_view> output, tbc::val_a<std::span<char>> scratch, std::size_t limit) const noexcept {
+    if (!secrets || !findSecret(output)) {
+      return output;
+    }
+
+    // A redaction that does not fit keeps none of the output rather than a secret of it.
+    const auto redacted = redactSecrets(output, scratch);
+    if (!redacted) {
+      return {};
+    }
+
+    std::string_view text{scratch.data(), redacted->bytes};
+
+    if (text.size() > limit) {
+      text.remove_prefix(text.size() - limit);
+      while (!text.empty() && utf8::isContinuation(static_cast<std::uint8_t>(text.front()))) {
+        text.remove_prefix(1);
+      }
+    }
+
+    return text;
+  }
+
+  bool HistoryFilters::recordsPane(std::string_view command, std::string_view directory) const noexcept {
+    return !command.empty() && command.front() != ' ' && verdict(command, directory, true) != HistoryVerdict::drop;
+  }
+
+  bool HistoryFilters::recordsAgent(std::string_view command, std::string_view directory) const noexcept {
+    return verdict(command, directory, true) != HistoryVerdict::drop;
+  }
+
+  bool HistoryFilters::allowsPane(std::string_view command, std::string_view directory) const noexcept {
+    return !command.empty() && command.front() != ' ' && verdict(command, directory, true) == HistoryVerdict::keep;
+  }
+
+  bool HistoryFilters::allowsAgent(std::string_view command, std::string_view directory, bool redact) const noexcept {
+    return verdict(command, directory, redact) == HistoryVerdict::keep;
+  }
+
+  bool HistoryFilters::looksLikeSecret(std::string_view command) noexcept {
+    return findSecret(command).hasValue();
+  }
+
+}
+
+namespace telar::runtime::config {
+
+  void readHistoryFilters(const lua::Value& history, HistoryFilters& filters) {
+    if (!history.present()) {
+      return;
+    }
+
+    // A string is text the command or directory contains; `{ regex = "..." }` an expression it
+    // matches, which a fault refuses the configuration with.
+    const auto patterns = [](const lua::Value& field, HistoryPatternList& destination) {
+      if (!field.present()) {
+        return;
+      }
+
+      const auto count = field.arraySize();
+
+      for (std::size_t index = 1; index <= count; ++index) {
+        const auto entry = field.element(static_cast<lua_Integer>(index));
+        if (!entry.is(LUA_TTABLE)) {
+          destination.append(entry.string());
+          continue;
+        }
+
+        entry.onlyFields({"regex"});
+        const auto expression = entry.field("regex");
+
+        try {
+          destination.appendExpression(expression.string());
+        } catch (const std::invalid_argument& error) {
+          expression.fail(error.what());
         }
       }
+    };
 
-      const auto value = command[offset + marker.size()];
-      if (matches && value != ' ' && value != '"' && value != '\'') {
-        return true;
+    filters.secrets = history.field("secrets_filter").boolean(filters.secrets);
+    patterns(history.field("command_filters"), filters.commands);
+    patterns(history.field("cwd_filters"), filters.directories);
+    const auto trivial = history.field("trivial_commands");
+    if (trivial.present()) {
+      const auto count = trivial.arraySize();
+
+      for (std::size_t index = 1; index <= count; ++index) {
+        filters.addTrivial(trivial.element(static_cast<lua_Integer>(index)).string());
       }
     }
 
-    return false;
+    filters.store_failed = history.field("store_failed").boolean(filters.store_failed);
+    if (const auto retention = history.field("retention"); retention.present()) {
+      constexpr std::uint64_t mebibyte = std::uint64_t{1} << 20U;
+      constexpr std::uint64_t maximum_rows = std::uint64_t{1} << 40U;
+      constexpr std::uint64_t maximum_days = std::uint64_t{100} * 365;
+      constexpr std::uint64_t maximum_output_mib = std::uint64_t{1} << 20U;
+      constexpr std::uint64_t maximum_keep_runs = 1'000'000;
+      auto& kept = filters.retention;
+
+      retention.onlyFields({"max_rows", "max_age_days", "max_output_mib", "keep_runs"});
+      kept.max_rows = retention.field("max_rows").boundedInteger(kept.max_rows, {.minimum = 0, .maximum = maximum_rows});
+      kept.max_age_days = static_cast<std::uint32_t>(retention.field("max_age_days").boundedInteger(kept.max_age_days, {.minimum = 0, .maximum = maximum_days}));
+      kept.max_output_bytes = retention.field("max_output_mib").boundedInteger(kept.max_output_bytes / mebibyte, {.minimum = 0, .maximum = maximum_output_mib}) * mebibyte;
+      kept.keep_runs = static_cast<std::uint32_t>(retention.field("keep_runs").boundedInteger(kept.keep_runs, {.minimum = 0, .maximum = maximum_keep_runs}));
+    }
   }
+
+}
+
+namespace telar::runtime {
 
   bool ProxyCaptureLimits::valid() const noexcept {
     return part_bytes != 0 && exchange_bytes >= 2 && total_bytes != 0 && part_bytes <= exchange_bytes && exchange_bytes <= total_bytes && exchange_bytes <= maximum_exchange_bytes && total_bytes <= maximum_total_bytes && join_timeout.count() > 0 && join_timeout <= maximum_join_timeout;
@@ -853,6 +1005,8 @@ namespace telar::runtime::config {
     copy.shell_integration = shell_integration;
     copy.ssh_integration = ssh_integration;
     copy.agent_plans = agent_plans;
+    copy.shell_completion = shell_completion;
+    copy.shell_completion_rc = shell_completion_rc;
     return copy;
   }
 

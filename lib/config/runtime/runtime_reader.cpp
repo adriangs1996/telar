@@ -261,10 +261,12 @@ namespace telar::runtime::config {
       return;
     }
 
-    runtime.onlyFields({"history", "session", "engine", "agent_descriptions", "graphics", "proxy", "agents", "control_queries", "shell_integration", "ssh_integration", "agent_plans"});
+    runtime.onlyFields({"history", "session", "engine", "agent_descriptions", "graphics", "proxy", "agents", "control_queries", "shell_integration", "ssh_integration", "agent_plans", "shell_completion", "shell_completion_rc"});
     values_.shell_integration = runtime.field("shell_integration").boolean(values_.shell_integration);
     values_.ssh_integration = runtime.field("ssh_integration").boolean(values_.ssh_integration);
     values_.agent_plans = runtime.field("agent_plans").boolean(values_.agent_plans);
+    values_.shell_completion = runtime.field("shell_completion").boolean(values_.shell_completion);
+    values_.shell_completion_rc = runtime.field("shell_completion_rc").boolean(values_.shell_completion_rc);
     history(runtime.field("history"));
     session(runtime.field("session"));
     helper(runtime.field("engine"), values_.engine, true);
@@ -303,35 +305,13 @@ namespace telar::runtime::config {
     destination.assign(text);
   }
 
-  void readHistoryFilters(const lua::Value& history, HistoryFilters& filters) {
-    if (!history.present()) {
-      return;
-    }
-
-    const auto patterns = [](const lua::Value& field, HistoryPatternList& destination) {
-      if (!field.present()) {
-        return;
-      }
-
-      const auto count = field.arraySize();
-
-      for (std::size_t index = 1; index <= count; ++index) {
-        destination.append(field.element(static_cast<lua_Integer>(index)).string());
-      }
-    };
-
-    filters.secrets = history.field("secrets_filter").boolean(filters.secrets);
-    patterns(history.field("command_filters"), filters.commands);
-    patterns(history.field("cwd_filters"), filters.directories);
-  }
-
   template <Allocator Memory>
   void RuntimeReader<Memory>::history(const lua::Value& table) {
     if (!table.present()) {
       return;
     }
 
-    table.onlyFields({"path", "secrets_filter", "command_filters", "cwd_filters", "output"});
+    table.onlyFields({"path", "secrets_filter", "command_filters", "cwd_filters", "trivial_commands", "output", "store_failed", "retention"});
     path(table.field("path"), values_.history_path);
     readHistoryFilters(table, values_.history_filters);
     const auto output = table.field("output");

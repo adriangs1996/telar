@@ -91,6 +91,24 @@ export {
         throw std::runtime_error{"Expected request was not sent"};
       }
 
+      // The last `Message` sent that `wanted` accepts.
+      template <typename Message, typename Predicate>
+      Message lastWhere(Predicate wanted) const {
+        for (const auto& bytes : sent | std::views::reverse) {
+          if (bytes.front() == static_cast<Byte>(MessageSchema<Message>::tag)) {
+            storage.fill(0);
+            DecodeStorage decoded{storage.viewMut()};
+            auto message = Codec::decode<Message>(bytes, decoded);
+
+            if (wanted(message)) {
+              return message;
+            }
+          }
+        }
+
+        throw std::runtime_error{"Expected request was not sent"};
+      }
+
       std::size_t count(ClientTag tag) const {
         return static_cast<std::size_t>(std::count_if(sent.begin(), sent.end(), [&](const auto& bytes) {
           return bytes.front() == static_cast<Byte>(tag);
@@ -120,6 +138,8 @@ export {
         for (const auto& bytes : std::span{sent}.subspan(first_message)) {
           if (bytes.front() == static_cast<Byte>(ClientTag::pane_command)) {
             commands.emplace_back(textView(Codec::decode<PaneCommand>(bytes).text));
+          } else if (bytes.front() == static_cast<Byte>(ClientTag::run_pane_command)) {
+            commands.emplace_back(textView(Codec::decode<RunPaneCommand>(bytes).text));
           }
         }
 

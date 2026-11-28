@@ -12,6 +12,8 @@ Item {
     property real density: 1
     property bool inspecting: false
     property bool replacing: false
+    // The typed filters, each {label, applied}, shown before the query.
+    property var chips: []
     readonly property real rowsOpacity: loading.rowsOpacity
     property alias fieldHost: fieldArea
 
@@ -25,6 +27,7 @@ Item {
     readonly property real closeHoverRadius: 7 * ratio
 
     signal cancelled()
+    signal chipRemoved(int index)
 
     Rectangle {
         width: parent.width
@@ -99,10 +102,67 @@ Item {
         onClicked: root.cancelled()
     }
 
+    // A filter the runtime does not apply yet shows struck through: it is kept, and filters nothing.
+    Row {
+        id: chipRow
+        objectName: "historyChips"
+        x: root.leadingInset + root.iconWidth + root.fieldGap
+        height: parent.height
+        spacing: 4 * root.ratio
+
+        Repeater {
+            model: root.chips
+            delegate: Item {
+                id: chip
+                objectName: "historyChip"
+                required property int index
+                required property var modelData
+                readonly property string label: modelData.label
+                width: chipText.implicitWidth + 12 * root.ratio
+                height: chipRow.height
+
+                NativeRoundedRectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width
+                    height: Math.min(parent.height, 22 * root.ratio)
+                    radius: 4 * root.ratio
+                    color: chip.modelData.applied ? Qt.alpha(root.colors.accent, 0.18) : root.colors.surface0
+                }
+
+                ChromeText {
+                    id: chipText
+                    anchors.centerIn: parent
+                    text: chip.modelData.label
+                    color: chip.modelData.applied ? root.colors.text : root.colors.overlay1
+                    pixelSize: root.typography.small
+                    elide: Text.ElideNone
+                }
+
+                Rectangle {
+                    anchors.verticalCenter: chipText.verticalCenter
+                    x: chipText.x
+                    width: chipText.width
+                    height: Math.max(1, root.ratio)
+                    color: root.colors.overlay1
+                    visible: !chip.modelData.applied
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.chipRemoved(chip.index)
+                }
+
+                Accessible.role: Accessible.Button
+                Accessible.name: (chip.modelData.applied ? "Remove filter " : "Remove filter, not applied by this runtime, ") + chip.modelData.label
+            }
+        }
+    }
+
     Item {
         id: fieldArea
         objectName: "historySearchHost"
-        x: root.leadingInset + root.iconWidth + root.fieldGap
+        x: root.leadingInset + root.iconWidth + root.fieldGap + (root.chips.length > 0 ? chipRow.width + root.fieldGap : 0)
         width: Math.max(0, close.x - root.fieldGap - x)
         height: parent.height
     }

@@ -43,6 +43,8 @@ namespace telar::gui::qt {
         return QStringLiteral("failed");
       case CommandBlockState::session:
         return QStringLiteral("session");
+      case CommandBlockState::background:
+        return QStringLiteral("background");
       case CommandBlockState::interrupted:
         break;
       }
@@ -849,6 +851,8 @@ namespace telar::gui::qt {
           {QStringLiteral("height"), static_cast<qreal>(end > first ? end - first : 0) / static_cast<qreal>(shown)},
           {QStringLiteral("selected"), selected == index},
           {QStringLiteral("folded"), session.folded({.pane_id = pane_id_, .index = index})},
+          {QStringLiteral("marks"), markLetters(*current, index)},
+          {QStringLiteral("tip"), blockPlace(blocks[index]).value(QStringLiteral("tip"))},
       });
     }
 
@@ -882,6 +886,12 @@ namespace telar::gui::qt {
     const auto index = *found;
     const auto& block = blocks[index];
     const auto [output_first, output_end] = GuiSession::blockRows(*current, index);
+
+    // Output no command printed is no command's to pin.
+    if (block.state == CommandBlockState::background) {
+      return {};
+    }
+
     if (index + 1 == blocks.size() && row >= output_end) {
       return {};
     }
@@ -899,7 +909,7 @@ namespace telar::gui::qt {
 
     const auto selected = controller_->prompt().selectedBlock(pane_id_);
 
-    return QVariantMap{
+    QVariantMap pinned{
         {QStringLiteral("index"), static_cast<int>(index)},
         {QStringLiteral("key"), static_cast<qulonglong>(GuiSession::blockKey(*current, index))},
         {QStringLiteral("command"), QString::fromUtf8(block.command.data(), static_cast<qsizetype>(block.command.size()))},
@@ -914,7 +924,11 @@ namespace telar::gui::qt {
         {QStringLiteral("push"), push},
         {QStringLiteral("remote"), block.nest == CommandBlockNest::inside},
         {QStringLiteral("host"), index >= liveSession(*current) ? QString::fromUtf8(current->shell.host.data(), static_cast<qsizetype>(current->shell.host.size())) : QString{}},
+        {QStringLiteral("marks"), markLetters(*current, index)},
     };
+
+    pinned.insert(blockPlace(block));
+    return pinned;
   }
 
   // What arrived since the view left the live end: rows of output, and how the commands that
@@ -980,9 +994,61 @@ namespace telar::gui::qt {
       }
     }
 
+    markFilterMatches();
     if (rail != rail_matches_) {
       rail_matches_ = std::move(rail);
       emit matchesChanged();
+    }
+  }
+
+  void TerminalItem::markFilterMatches() {
+    const auto* current = pane();
+    if (controller_ == nullptr || current == nullptr) {
+      return;
+    }
+
+    const auto block = application::terminal::filter::block(controller_->session(), pane_id_);
+    if (!block) {
+      return;
+    }
+
+    const auto [first, end] = GuiSession::blockRows(*current, *block);
+    const auto& screen = current->screen;
+    constexpr std::size_t row_marks = 32;
+    ds::Array<application::terminal::filter::Mark, row_marks> marks{};
+    auto& session = controller_->sessionMut();
+    const auto mark = [&](std::size_t drawn, std::span<const CellValue> cells) {
+      const auto count = application::terminal::filter::highlight(session, pane_id_, cells, marks.viewMut());
+
+      for (const auto& found : marks.view().first(count)) {
+        match_marks_.push({.row = drawn, .column = found.column, .length = found.length});
+      }
+    };
+
+    // The rows a mapped view draws come from the screen or the rows kept apart from it.
+    if (!view_rows_.empty()) {
+      for (std::size_t drawn = 0; drawn < view_rows_.size(); ++drawn) {
+        const auto& view = view_rows_[drawn];
+        if (!view.exists || view.row < first || view.row >= end) {
+          continue;
+        }
+
+        if (view.screen_row >= 0 && std::cmp_less(view.screen_row, screen.rows())) {
+          mark(drawn, screen.row(static_cast<std::size_t>(view.screen_row)));
+        } else if (const auto kept = current->rows.find(current->scrollback_trimmed + view.row)) {
+          mark(drawn, kept->cells);
+        }
+      }
+
+      return;
+    }
+
+    const auto offset = static_cast<std::uint64_t>(screen.cellsOffset());
+
+    for (std::size_t row = 0; row < screen.rows(); ++row) {
+      if (offset + row >= first && offset + row < end) {
+        mark(row, screen.row(row));
+      }
     }
   }
 

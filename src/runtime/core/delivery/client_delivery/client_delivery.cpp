@@ -78,17 +78,20 @@ namespace telar::runtime {
       }
 
       const auto* blocks = commandBlocks(pane);
-      const auto command = blocks == nullptr || !blocks->latest() ? std::string_view{} : utf8Prefix(blocks->latest()->command.view(), max_pane_command_bytes);
-      if (!command.empty() && displayable(command)) {
-        const auto& latest = *blocks->latest();
+      const auto* last = blocks == nullptr || !blocks->latest() ? nullptr : &*blocks->latest();
+      const auto command = last == nullptr ? std::string_view{} : utf8Prefix(last->command.view(), max_pane_command_bytes);
+      if (last != nullptr && !command.empty() && displayable(command)) {
+        const auto& latest = *last;
         const bool running = latest.state == CommandBlockState::running || latest.state == CommandBlockState::session;
 
         facts.command_state = running ? PaneCommandState::running : PaneCommandState::finished;
         facts.command = command;
         facts.command_truncated = latest.truncated || command.size() < latest.command.view().size();
         facts.duration_ms = running ? 0 : latest.duration_ms;
-        // An interrupted command reported no status.
-        if (latest.state == CommandBlockState::succeeded || latest.state == CommandBlockState::failed) {
+        // A command a signal stopped keeps the status its shell reported, 130 or 141; one cut short
+        // otherwise, by the shell going away, reported none.
+        const bool interrupted = latest.state == CommandBlockState::interrupted && latest.status != 0;
+        if (latest.state == CommandBlockState::succeeded || latest.state == CommandBlockState::failed || interrupted) {
           facts.exit_code = latest.status;
         }
       }
@@ -413,7 +416,10 @@ namespace telar::runtime {
     case DeliveryLane::progress:
       return metadata(output.connection, attachment.progress_revision, effects.progress_revision, PaneProgress{.pane_id = pane.core.id, .state = effects.progress_state, .percent = effects.progress_percent});
     case DeliveryLane::shell:
-      return metadata(output.connection, attachment.shell_revision, pane.body.shell_revision, pane.body.shell_state);
+      // The shell reports its line before the command the report cleared it for runs: the line
+      // goes first, or a client told the shell is back at its prompt would keep the line for the
+      // prompt after.
+      return typeahead(output.connection, attachment, pane) || metadata(output.connection, attachment.shell_revision, pane.body.shell_revision, pane.body.shell_state);
     case DeliveryLane::git:
       return metadata(output.connection, attachment.git_revision, pane.core.git_revision, pane.core.git.message(pane.core.id));
     case DeliveryLane::blocks:
@@ -548,6 +554,16 @@ namespace telar::runtime {
 
     connection.send(pane.body.blocks->message(pane.core.id, storage));
     attachment.blocks_revision = pane.body.blocks->revision();
+    return true;
+  }
+
+  bool AttachmentDelivery::typeahead(Connection<ConcurrentMemory>& connection, Attachment& attachment, PaneRef<const TerminalBody> pane) {
+    if (!pane.body.shell_zones || attachment.typeahead_serial == pane.body.shell_zones->typeaheadSerial()) {
+      return false;
+    }
+
+    attachment.typeahead_serial = pane.body.shell_zones->typeaheadSerial();
+    connection.send(PaneTypeahead{.pane_id = pane.core.id, .text = pane.body.shell_zones->typeahead()});
     return true;
   }
 

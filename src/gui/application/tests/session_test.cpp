@@ -884,10 +884,11 @@ namespace {
     const ds::Array workspaces{WorkspaceListEntry{.workspace = 1, .name = "Project", .path = "/work"}};
 
     deliver(client, WorkspaceList{.revision = 1, .entries = workspaces});
-    application::history::search(client, "!   failed", {.scope = HistoryScope::workspace, .author = HistoryAuthorFilter::agent});
+    application::history::search(client, "!failed", {.scope = HistoryScope::workspace, .author = HistoryAuthorFilter::agent, .failed_only = true});
     const auto workspace_query = transport.last<QueryHistory>();
 
-    check(workspace_query.query == "failed" && workspace_query.failed_only && workspace_query.author == HistoryAuthorFilter::agent, "the failed prefix must combine with explicit author filters without entering the search text");
+    // A leading ! is the matcher's negation, as in fzf: the failed filter is a filter of its own.
+    check(workspace_query.query == "!failed" && workspace_query.failed_only && workspace_query.author == HistoryAuthorFilter::agent, "the failed filter combines with the author filter and leaves the search text as typed");
     check(workspace_query.scope == HistoryScope::workspace && std::get<std::string_view>(workspace_query.scope_value) == "/work", "workspace scope must resolve the canonical project path");
     application::history::search(client, {}, {.scope = HistoryScope::cwd});
     check(std::get<std::string_view>(transport.last<QueryHistory>().scope_value) == "/work/current", "directory scope must use the focused terminal's reported cwd");
@@ -924,6 +925,209 @@ namespace {
     deliver(client, PaneOpened{.request_id = opened.request_id, .pane_id = 2, .location = destination, .pane_generation = 1});
     check(client.focusedPane()->id == 2 && sameTab(client.activeTab()->location, destination), "a visited pane must select the authoritative workspace and tab");
     check(transport.count(ClientTag::create_pane) == creations, "history navigation must never create a replacement process");
+  }
+
+  // A delete the runtime refuses brings its row back: the page is read anew.
+  void failedDeleteBringsTheRowBack() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    application::history::search(client, {});
+    const auto query = transport.last<QueryHistory>();
+    const ds::Array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "ls"}, HistoryEntry{.id = 2, .pane_id = 1, .command = "make"}};
+
+    deliver(client, HistoryResults{.request_id = query.request_id, .snapshot_id = 1, .entries = entries});
+    application::history::remove(client, 1);
+    const auto deletion = transport.last<DeleteHistoryCommand>();
+
+    check(application::history::view(client).rows().size() == 1, "the deleted row leaves at once");
+    deliver(client, RequestFailed{.request_id = deletion.request_id, .code = FailureCode::resource_limit, .message = "Delete failed"});
+    const auto refreshed = transport.last<QueryHistory>();
+
+    check(refreshed.request_id > deletion.request_id && refreshed.offset == 0 && refreshed.snapshot_id == 0, "the page is read anew");
+    deliver(client, HistoryResults{.request_id = refreshed.request_id, .snapshot_id = 2, .entries = entries});
+    check(application::history::view(client).rows().size() == entries.size() && application::history::view(client).error() == "Delete failed", "the row is back, and the panel says why");
+  }
+
+  // A command's directory takes the focused shell there, quoted for it, or opens a pane there.
+  void historyGoesToACommandsDirectory() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    application::history::search(client, {});
+    const auto query = transport.last<QueryHistory>();
+    const ds::Array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "make", .cwd = "/work/it's here"}, HistoryEntry{.id = 2, .pane_id = 1, .command = "ls"}};
+
+    deliver(client, HistoryResults{.request_id = query.request_id, .snapshot_id = 1, .entries = entries});
+    const auto first_message = transport.sent.size();
+
+    application::history::enter(client, 1);
+    check(transport.inputSince(first_message) == "cd -- '/work/it'\\''s here'\r", "the directory reaches the shell as one quoted word, and runs");
+    application::history::open(client, 1);
+    check(transport.last<CreatePane>().launch.cwd == "/work/it's here", "a pane opens in the directory");
+
+    bool refused = false;
+
+    try {
+      application::history::enter(client, 2);
+    } catch (const EncodingError&) {
+      refused = true;
+    }
+
+    check(refused, "a command without a directory goes nowhere");
+  }
+
+  // Marked commands run as one line that stops at the first failure, or are written one a line.
+  void historyMarkedCommandsPasteTogether() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    application::history::search(client, {});
+    const auto query = transport.last<QueryHistory>();
+    const ds::Array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "make"}, HistoryEntry{.id = 2, .pane_id = 1, .command = "make test"}};
+
+    deliver(client, HistoryResults{.request_id = query.request_id, .snapshot_id = 1, .entries = entries});
+    deliver(client, PaneShell{.pane_id = 1, .shell = IntegratedShell::zsh, .phase = ShellPhase::prompt, .shell_foreground = true, .commands = 1});
+    application::history::mark(client, 2);
+    application::history::mark(client, 1);
+    auto first_message = transport.sent.size();
+
+    application::history::pasteMarked(client, true);
+    check(transport.inputSince(first_message) == "make test && make\r", "run, the marks join with && in the order they were made");
+    check(application::history::view(client).markCount() == 0, "using the marks clears them");
+
+    application::history::mark(client, 1);
+    application::history::mark(client, 2);
+    first_message = transport.sent.size();
+    bool refused = false;
+
+    // Written one a line, they need the shell's bracketed paste, which this pane has not asked for.
+    try {
+      application::history::pasteMarked(client);
+    } catch (const EncodingError&) {
+      refused = true;
+    }
+
+    check(refused && transport.inputSince(first_message).empty(), "lines a shell would run one by one are refused without bracketed paste");
+  }
+
+  // A typed directory or workspace chip narrows the search as its scope.
+  void historyChipsNarrowTheSearch() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    deliver(client, PaneCwd{.pane_id = 1, .cwd = "/work/current"});
+    const ds::Array workspaces{WorkspaceListEntry{.workspace = 1, .name = "Project", .path = "/work"}};
+
+    deliver(client, WorkspaceList{.revision = 1, .entries = workspaces});
+    application::history::HistoryFilters filters;
+
+    static_cast<void>(filters.chips.set(application::history::HistoryFilterKey::cwd, "src"));
+    application::history::search(client, {}, filters);
+    check(transport.last<QueryHistory>().scope == HistoryScope::cwd && std::get<std::string_view>(transport.last<QueryHistory>().scope_value) == "/work/current/src", "a relative directory joins the focused pane's");
+
+    filters = {};
+    static_cast<void>(filters.chips.set(application::history::HistoryFilterKey::workspace, "Project"));
+    application::history::search(client, {}, filters);
+    check(transport.last<QueryHistory>().scope == HistoryScope::workspace && std::get<std::string_view>(transport.last<QueryHistory>().scope_value) == "/work", "a workspace is found by its name");
+  }
+
+  // While the panel shows the history the runtime tells of each change, which reads the page
+  // anew; the command chosen is told to the runtime, which ranks it higher once it runs.
+  void historyFollowsTheRuntimesChanges() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport);
+    deliver(client, PaneCwd{.pane_id = 1, .cwd = "/work"});
+    application::history::HistoryFilters filters{.scope = HistoryScope::pane, .author = HistoryAuthorFilter::all, .preload = true};
+
+    static_cast<void>(filters.chips.set(application::history::HistoryFilterKey::exit, "2"));
+    application::history::search(client, "make", filters, {});
+    const auto query = transport.last<QueryHistory>();
+
+    check(transport.count(ClientTag::watch_history) == 1 && transport.last<WatchHistory>().watch, "the session asks the runtime to tell of changes");
+    check(query.preload && query.scope == HistoryScope::pane && query.exit_code == std::int32_t{2}, "the pane and before, and the exit chip, narrow the search");
+    check(query.origin_pane == 1 && query.origin_cwd == "/work", "the pane and the directory that ask weigh the ranking");
+    application::history::search(client, "make", filters, {});
+    check(transport.count(ClientTag::watch_history) == 1, "the watch is asked for once, by the session");
+    const auto shown = transport.last<QueryHistory>();
+    const ds::Array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "make"}};
+
+    deliver(client, HistoryResults{.request_id = shown.request_id, .snapshot_id = 1, .entries = entries});
+    const auto queries = transport.count(ClientTag::query_history);
+
+    check(deliver(client, HistoryChanged{.revision = 1, .change = HistoryChange::recorded, .entry_id = 2, .pane_id = 1}) == application::Change::history, "a change reads the page anew");
+    check(transport.count(ClientTag::query_history) == queries + 1 && transport.last<QueryHistory>().preload && transport.last<QueryHistory>().exit_code == std::int32_t{2}, "the page read anew asks what the search did");
+    deliver(client, HistoryResults{.request_id = transport.last<QueryHistory>().request_id, .snapshot_id = 2, .entries = entries});
+    const auto read = transport.count(ClientTag::query_history);
+
+    // A burst of changes while the page is read anew reads it once more, after it arrives.
+    deliver(client, HistoryChanged{.revision = 3, .change = HistoryChange::recorded, .entry_id = 3, .pane_id = 1});
+    deliver(client, HistoryChanged{.revision = 4, .change = HistoryChange::recorded, .entry_id = 4, .pane_id = 1});
+    deliver(client, HistoryChanged{.revision = 5, .change = HistoryChange::recorded, .entry_id = 5, .pane_id = 1});
+    check(transport.count(ClientTag::query_history) == read + 1, "changes on top of a refresh on its way wait for it");
+    deliver(client, HistoryResults{.request_id = transport.last<QueryHistory>().request_id, .snapshot_id = 3, .entries = entries});
+    check(transport.count(ClientTag::query_history) == read + 2, "and are read once, together, after it");
+    deliver(client, HistoryResults{.request_id = transport.last<QueryHistory>().request_id, .snapshot_id = 4, .entries = entries});
+    check(transport.count(ClientTag::query_history) == read + 2, "nothing more is read when nothing changed since");
+    application::history::paste(client, 1);
+    check(transport.last<ChooseHistoryEntry>().id == 1 && transport.last<ChooseHistoryEntry>().pane_id == 1, "the command chosen is told to the runtime");
+    application::history::watch(client, false);
+    check(transport.count(ClientTag::watch_history) == 1, "a closed panel leaves the session's watch, which the prompt reads");
+    check(deliver(client, HistoryChanged{.revision = 2, .change = HistoryChange::many}) == application::Change::none, "a change the panel no longer watches reads nothing");
+  }
+
+  // A runtime before cqp00015 is asked neither to watch nor of a choice.
+  void olderRuntimeIsNotWatched() {
+    SystemAllocator memory;
+    Transport transport;
+    TestSession client{memory, transport};
+
+    openFirstPane(client, transport, telar::handshake::Dialect::cqp00014);
+    application::history::search(client, {});
+    const ds::Array entries{HistoryEntry{.id = 1, .pane_id = 1, .command = "ls"}};
+
+    deliver(client, HistoryResults{.request_id = transport.last<QueryHistory>().request_id, .snapshot_id = 1, .entries = entries});
+    application::history::paste(client, 1);
+    check(transport.count(ClientTag::watch_history) == 0 && transport.count(ClientTag::choose_history_entry) == 0, "an older runtime gets no request it does not know");
+  }
+
+  // The inspector asks the runtime how every run of the inspected command went, by its entry,
+  // and shows what it answers; a runtime before cqp00015 is not asked.
+  void inspectorAsksTheRuntimeForTheRunsStatistics() {
+    for (const auto dialect : {telar::handshake::Dialect::cqp00015, telar::handshake::Dialect::cqp00014}) {
+      SystemAllocator memory;
+      Transport transport;
+      TestSession client{memory, transport};
+      const bool knows = dialect == telar::handshake::Dialect::cqp00015;
+
+      openFirstPane(client, transport, dialect);
+      application::history::search(client, {});
+      const ds::Array entries{HistoryEntry{.id = 7, .pane_id = 1, .command = "make"}};
+
+      deliver(client, HistoryResults{.request_id = transport.last<QueryHistory>().request_id, .snapshot_id = 1, .entries = entries});
+      application::history::inspect(client, true);
+      check(transport.count(ClientTag::query_history_command_stats) == (knows ? 1U : 0U), "the statistics are asked of a runtime that knows the request");
+      if (!knows) {
+        continue;
+      }
+
+      const auto asked = transport.last<QueryHistoryCommandStats>();
+
+      check(asked.entry_id == 7 && asked.days == application::history::HistoryRunStats::days, "by the inspected entry, for the last days");
+      check(deliver(client, HistoryCommandStats{.request_id = asked.request_id, .found = true, .runs = 12, .ended = 4, .succeeded = 4}) == application::Change::history, "the answer changes the inspector");
+      check(application::history::view(client).runStats().runs == 12, "which tells the runtime's count");
+    }
   }
 
   // A runtime before cqp00012 deletes the one run it is asked for.
@@ -1240,8 +1444,15 @@ namespace {
   const telar::testing::Case case_routed_workspace_list{"session.routed_workspace_list", routedWorkspaceList};
   const telar::testing::Case case_routed_host_commands{"session.routed_host_commands", routedHostCommands};
   const telar::testing::Case case_history_replay{"session.history_replay", historyReplay};
+  const telar::testing::Case case_history_follows_the_runtimes_changes{"session.history_follows_the_runtimes_changes", historyFollowsTheRuntimesChanges};
+  const telar::testing::Case case_older_runtime_is_not_watched{"session.older_runtime_is_not_watched", olderRuntimeIsNotWatched};
+  const telar::testing::Case case_inspector_asks_the_runtime_for_the_runs_statistics{"session.inspector_asks_the_runtime_for_the_runs_statistics", inspectorAsksTheRuntimeForTheRunsStatistics};
   const telar::testing::Case case_history_scopes_and_visits{"session.history_scopes_and_visits", historyScopesAndVisits};
   const telar::testing::Case case_older_runtime_deletes_one_run{"session.older_runtime_deletes_one_run", olderRuntimeDeletesOneRun};
+  const telar::testing::Case case_failed_delete_brings_the_row_back{"session.failed_delete_brings_the_row_back", failedDeleteBringsTheRowBack};
+  const telar::testing::Case case_history_goes_to_a_commands_directory{"session.history_goes_to_a_commands_directory", historyGoesToACommandsDirectory};
+  const telar::testing::Case case_history_marked_commands_paste_together{"session.history_marked_commands_paste_together", historyMarkedCommandsPasteTogether};
+  const telar::testing::Case case_history_chips_narrow_the_search{"session.history_chips_narrow_the_search", historyChipsNarrowTheSearch};
   const telar::testing::Case case_agent_navigation_uses_committed_generations_and_existing_panes{"session.agent_navigation_uses_committed_generations_and_existing_panes", agentNavigationUsesCommittedGenerationsAndExistingPanes};
   const telar::testing::Case case_uncached_history_replay{"session.uncached_history_replay", uncachedHistoryReplay};
   const telar::testing::Case case_history_query_bounds{"session.history_query_bounds", historyQueryBounds};

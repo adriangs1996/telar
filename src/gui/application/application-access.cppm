@@ -9,6 +9,7 @@ import telar.gui.features.paths;
 import telar.gui.features.prompt;
 import telar.gui.features.peek;
 import telar.gui.features.terminal.copy_mode;
+import telar.gui.features.terminal.filter;
 import telar.gui.features.terminal.links;
 import telar.base.ds;
 
@@ -61,6 +62,19 @@ namespace telar::gui::application {
     // goes on to the editor.
     [[nodiscard]] static ds::Option<features::prompt::Outcome> blockKey(Session& session, std::uint64_t pane_id, const features::prompt::KeyPress& key) {
       return session.blockKey(pane_id, key);
+    }
+
+    // The filter of a block's output, which the session composes with the blocks and the folds.
+    static bool openFilter(Session& session, BlockAt block) {
+      return session.openFilter(block);
+    }
+
+    static bool queryFilter(Session& session, const features::terminal::filter::Query& query) {
+      return session.queryFilter(query);
+    }
+
+    static void closeFilter(Session& session) {
+      session.closeFilter();
     }
 
     // ---- the tabs and panes the session holds ------------------------------------------------

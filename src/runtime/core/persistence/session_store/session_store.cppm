@@ -23,6 +23,9 @@ import telar.base.memory.containers;
 import telar.runtime.agents.screen_inference;
 import telar.runtime.core.model.slot_store;
 import telar.base.ds;
+import telar.config.runtime;
+import telar.runtime.terminal.command_capture.tracker;
+import telar.wire.content;
 
 // Interface: persistence/records.cppm
 export {
@@ -30,8 +33,8 @@ export {
 
     inline constexpr std::string_view magic = "TELARCKP";
     // 12 added the places of the explorer; 13 the windows of a pane that is one; 14 what the
-    // agent of a pane last said.
-    inline constexpr std::uint16_t current_version = 14;
+    // agent of a pane last said; 15 the command blocks of a pane's shell.
+    inline constexpr std::uint16_t current_version = 15;
     inline constexpr std::size_t maximum_bytes = std::size_t{4} * 1024 * 1024;
 
     enum class Kind : Byte {
@@ -42,6 +45,7 @@ export {
       layout,
       worktree,
       places,
+      blocks,
     };
 
     struct Counters {
@@ -106,6 +110,40 @@ export {
     struct PlacesRecord {
       std::span<const Byte> payload;
     };
+
+    // The commands a pane's shell ran, oldest first, with a command the history's filters would
+    // not keep redacted. Their rows are not kept: the scrollback is not.
+    struct BlocksRecord {
+      std::uint64_t pane = 0;
+      std::span<const CommandBlockRecord> blocks;
+    };
+
+    // A BlocksRecord as a checkpoint holds it: its blocks still encoded, which BlockReader reads.
+    struct EncodedBlocksRecord {
+      std::uint64_t pane = 0;
+      std::uint16_t count = 0;
+      std::span<const Byte> encoded;
+    };
+
+    // Reads the blocks of an EncodedBlocksRecord one at a time; each one's texts view the bytes.
+    class BlockReader {
+    public:
+      explicit BlockReader(tbc::val_a<std::span<const Byte>> bytes) noexcept;
+
+      // Throws EncodingError for a block outside a block's bounds.
+      tbc::val_a<CommandBlockRecord> next();
+
+      // The bytes the blocks read so far took.
+      [[nodiscard]] std::size_t consumed(std::span<const Byte> bytes) const noexcept;
+
+    private:
+      tbc::val_a<std::string_view> text16();
+
+      tbc::val_a<std::span<const Byte>> input_;
+    };
+
+    // What a block's command becomes when the history's filters would not keep it.
+    inline constexpr std::string_view redacted_command = "[REDACTED]";
 
     void validatePath(std::string_view path);
 
@@ -175,6 +213,9 @@ export {
     struct Options {
       std::string_view path;
       bool resume_agents = true;
+      // The filters the history keeps commands by, which the blocks a checkpoint keeps are
+      // redacted with; the default ones when none is given.
+      const HistoryFilters* history_filters = nullptr;
     };
 
   }
@@ -193,7 +234,7 @@ export {
       [[tbc::generic]] inline void read(Consumer consume) {
         for (;;) {
           const auto kind = u8::decode(input_);
-          if (kind > static_cast<Byte>(Kind::places)) {
+          if (kind > static_cast<Byte>(Kind::blocks)) {
             throw EncodingError{"Unknown checkpoint record"};
           }
 
@@ -228,6 +269,9 @@ export {
           case Kind::places:
             consume(places());
             break;
+          case Kind::blocks:
+            consume(blocks());
+            break;
           }
         }
       }
@@ -256,6 +300,9 @@ export {
       WorktreeRecord worktree();
 
       PlacesRecord places();
+
+      // The record views the checkpoint's bytes, as every record does.
+      EncodedBlocksRecord blocks();
 
       // Whether a worktree record is one to restore; one that is not is counted as skipped.
       bool accepted(const WorktreeRecord& record);
@@ -302,7 +349,7 @@ export {
         reader.read([&]<typename Record>(const Record& record) {
           if constexpr (std::same_as<Record, PaneRecord>) {
             records.atMut(count++) = record;
-          } else if constexpr (!std::same_as<Record, LayoutRecord> && !std::same_as<Record, PlacesRecord>) {
+          } else if constexpr (!std::same_as<Record, LayoutRecord> && !std::same_as<Record, PlacesRecord> && !std::same_as<Record, EncodedBlocksRecord>) {
             try {
               restore(record);
             } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a record that cannot be restored is left out, and the rest restore
@@ -345,6 +392,8 @@ export {
               layouts_.keepPlaces(Codec::decode<KeepPlaces>(record.payload, storage));
             } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): places that cannot be decoded are left out, as ones never kept
             }
+          } else if constexpr (std::same_as<Record, EncodedBlocksRecord>) {
+            restoreBlocks(record);
           }
         });
 
@@ -491,6 +540,22 @@ export {
         }
       }
 
+      // The blocks of a restored pane's shell, before any its new shell runs. A pane whose shell
+      // is not integrated now has none to show them in.
+      inline void restoreBlocks(const EncodedBlocksRecord& record) {
+        auto* found = model_.panes.find(record.pane);
+        auto* terminal = found == nullptr ? nullptr : found->template asMut<TerminalBody>();
+        if (terminal == nullptr || !terminal->blocks) {
+          return;
+        }
+
+        BlockReader reader{record.encoded};
+
+        for (std::size_t index = 0; index < record.count; ++index) {
+          terminal->blocks.getMut().restore(reader.next());
+        }
+      }
+
       // Types the command that resumes an agent, its words separated by spaces, and presses enter.
       inline static void writeResume(ByteQueue<ConcurrentMemory>& input, std::span<const std::string_view> words) {
         for (std::size_t index = 0; index < words.size(); ++index) {
@@ -613,6 +678,8 @@ export {
 
       void write(const PlacesRecord& record);
 
+      void write(const BlocksRecord& record);
+
       tbc::val_a<std::span<Byte>> buffer_;
       tbc::val_a<std::span<Byte>> remaining_;
       std::size_t dropped_ = 0;
@@ -624,6 +691,7 @@ export {
     extern template void Writer::append<WorktreeRecord>(const WorktreeRecord& record);
     extern template void Writer::append<LayoutRecord>(const LayoutRecord& record);
     extern template void Writer::append<PlacesRecord>(const PlacesRecord& record);
+    extern template void Writer::append<BlocksRecord>(const BlocksRecord& record);
 
   }
 }
@@ -645,7 +713,8 @@ export {
     class [[tbc::generic]] Snapshot {
     public:
       // The bytes view the buffer.
-      inline static tbc::val_a<std::span<const Byte>> encode(const RuntimeModel& model, const ClientLayouts& layouts, const Agents& agents, tbc::val_a<std::span<Byte>> buffer, std::size_t& dropped) {
+      // NOLINTNEXTLINE(readability-function-size): what the session holds, where it goes, and the filters its commands pass
+      inline static tbc::val_a<std::span<const Byte>> encode(const RuntimeModel& model, const ClientLayouts& layouts, const Agents& agents, tbc::val_a<std::span<Byte>> buffer, std::size_t& dropped, const HistoryFilters& filters = defaultHistoryFilters()) {
         Writer writer{buffer, Counters{.workspace = model.workspaces.nextCounter(), .tab = model.next_tab_id, .pane = model.panes.nextCounter(), .generation = model.next_pane_generation}};
 
         for (const auto* workspace : model.workspaces.items()) {
@@ -718,8 +787,34 @@ export {
           writer.append(PlacesRecord{.payload = places});
         }
 
+        // Last, so a session too large for the checkpoint leaves them out before anything else.
+        appendBlocks(writer, model, filters);
         dropped = writer.dropped();
         return writer.finish();
+      }
+
+      // Each pane's command blocks, a command today's history filters refuse stored redacted.
+      inline static void appendBlocks(Writer& writer, const RuntimeModel& model, const HistoryFilters& filters) {
+        ds::Array<CommandBlockRecord, PaneBlocks::capacity> blocks; // NOLINT(cppcoreguidelines-pro-type-member-init): records writes each block it counts before the record reads it
+
+        for (const auto* pane : model.panes.items()) {
+          const auto* terminal = pane == nullptr || pane->output_closed || pane->exit_status || pane->close_requested ? nullptr : pane->template as<TerminalBody>();
+          if (terminal == nullptr || !terminal->blocks) {
+            continue;
+          }
+
+          const auto count = terminal->blocks->records(blocks).size();
+
+          for (auto& block : blocks.viewMut().first(count)) {
+            if (!filters.allowsPane(block.command, block.directory)) {
+              block.command = redacted_command;
+            }
+          }
+
+          if (count != 0) {
+            writer.append(BlocksRecord{.pane = pane->id, .blocks = std::span<const CommandBlockRecord>{blocks}.first(count)});
+          }
+        }
       }
 
       inline bool changed(const RuntimeModel& model, const ClientLayouts& layouts, const Agents& agents) noexcept {
@@ -731,7 +826,9 @@ export {
 
         for (std::size_t index = 0; index < panes.size(); ++index) {
           const auto* pane = panes[index];
-          const PaneStamp stamp = pane == nullptr ? PaneStamp{} : PaneStamp{pane->id, pane->cwd_revision, pane->extent.cols, pane->extent.rows, pane->output_closed || pane->exit_status.hasValue() || pane->close_requested};
+          const auto* terminal = pane == nullptr ? nullptr : pane->template as<TerminalBody>();
+          const auto commands = terminal == nullptr || !terminal->blocks ? std::uint64_t{0} : terminal->blocks->commandRevision();
+          const PaneStamp stamp = pane == nullptr ? PaneStamp{} : PaneStamp{pane->id, pane->cwd_revision, pane->extent.cols, pane->extent.rows, pane->output_closed || pane->exit_status.hasValue() || pane->close_requested, commands};
 
           changed |= stamp != stamps_[index];
           stamps_.atMut(index) = stamp;
@@ -747,6 +844,8 @@ export {
         std::uint16_t columns = 0;
         std::uint16_t rows = 0;
         bool closed = false;
+        // The commands its shell started and ended, which its blocks record.
+        std::uint64_t commands = 0;
 
         bool operator==(const PaneStamp&) const = default;
       };
@@ -806,6 +905,11 @@ export {
         } catch (const std::exception&) { // NOLINT(bugprone-empty-catch): a session that cannot be read starts empty, and the next checkpoint replaces it
         }
 
+        // A copy: the filters are the configuration's data, read for every checkpoint.
+        if (options.history_filters != nullptr) {
+          filters_ = *options.history_filters;
+        }
+
         buffer_.resize(maximum_bytes);
         worker_.emplace(std::in_place, std::move(file));
         dirty_ = true;
@@ -833,7 +937,7 @@ export {
 
         try {
           TELAR_TRACE("checkpoint.encode");
-          const auto bytes = Snapshot<Agents>::encode(model, layouts, agents, buffer_.viewMut(), dropped_records_);
+          const auto bytes = Snapshot<Agents>::encode(model, layouts, agents, buffer_.viewMut(), dropped_records_, filters_);
 
           pending_ = worker_.getMut().submit(bytes);
           dirty_ = !pending_;
@@ -882,7 +986,7 @@ export {
       }
 
       inline void writeNow(const RuntimeModel& model, const ClientLayouts& layouts, const Agents& agents) {
-        const auto bytes = Snapshot<Agents>::encode(model, layouts, agents, buffer_.viewMut(), dropped_records_);
+        const auto bytes = Snapshot<Agents>::encode(model, layouts, agents, buffer_.viewMut(), dropped_records_, filters_);
         if (worker_.getMut().submit(bytes)) {
           waitForWrite();
         }
@@ -908,6 +1012,7 @@ export {
       std::uint64_t write_failures_ = 0;
       std::uint64_t encoding_failures_ = 0;
       std::size_t dropped_records_ = 0;
+      HistoryFilters filters_;
     };
 
   }

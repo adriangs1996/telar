@@ -55,7 +55,7 @@ Runtime and diagnostics
   process         List, watch and inspect every process of the machine; signal it, change its priority or review it
   monitor         How the machine is doing: its processors, memory, disks and network
   diagnostics     Read the runtime's logs beside its socket, and the limits it reached
-  history         Search, show, import, prune and summarize the command history the runtime records
+  history         Search, show, import, export, prune and summarize the command history the runtime records
   proxy           Install or remove the proxy's short-lived system CA, and watch the proxy's status
   api             Print the wire contract this binary speaks, for compatibility checks
 

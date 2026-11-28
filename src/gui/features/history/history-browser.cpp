@@ -16,7 +16,9 @@ namespace telar::gui::features::history {
   HistoryRow<Memory>::HistoryRow(Memory& memory)
       : command(memory),
         cwd(memory),
-        provider(memory) {}
+        provider(memory),
+        host(memory),
+        excerpt(memory) {}
 
   template <Allocator Memory>
   HistoryPageStorage<Memory>::HistoryPageStorage(tbc::mut_a<Memory> memory, std::span<const HistoryEntry> entries)
@@ -87,6 +89,12 @@ namespace telar::gui::features::history {
     row.command.assign(runtime::utf8Prefix(entry.command, command_preview_bytes));
     row.cwd.assign(entry.cwd);
     row.provider.assign(entry.provider);
+    row.host.assign(entry.host);
+    row.excerpt.assign(runtime::utf8Prefix(entry.excerpt, max_history_excerpt_bytes));
+    row.ranges.assign(entry.ranges);
+    row.excerpt_ranges.assign(entry.excerpt_ranges);
+    row.run_count = entry.run_count;
+    row.neighbour = entry.neighbour;
     row.started_at_ms = entry.started_at_ms;
     row.duration_ns = entry.duration_ns;
     row.exit_code = entry.exit_code;
@@ -207,24 +215,6 @@ namespace telar::gui::features::history {
     return State::ground;
   }
 
-  HistorySearch HistorySearch::parse(std::string_view text, bool failed_only) noexcept {
-    // \! searches for a ! of its own.
-    if (text.starts_with("\\!")) {
-      text.remove_prefix(1);
-      return {.query = text, .failed_only = failed_only};
-    }
-
-    if (text.starts_with('!')) {
-      failed_only = true;
-      text.remove_prefix(1);
-      while (text.starts_with(' ')) {
-        text.remove_prefix(1);
-      }
-    }
-
-    return {.query = text, .failed_only = failed_only};
-  }
-
   template <Allocator Memory>
   HistoryBrowser<Memory>::HistoryBrowser(Memory& memory)
       : memory_(memory),
@@ -232,7 +222,14 @@ namespace telar::gui::features::history {
         selected_command_(memory),
         query_(memory),
         scope_path_(memory),
-        output_(memory) {}
+        host_(memory),
+        branch_(memory),
+        shell_(memory),
+        origin_cwd_(memory),
+        output_(memory),
+        context_text_(memory),
+        hidden_command_(memory),
+        marked_text_(memory) {}
 
   template <Allocator Memory>
   QueryHistory HistoryBrowser<Memory>::begin(QueryHistory query) {
@@ -245,15 +242,35 @@ namespace telar::gui::features::history {
   }
 
   template <Allocator Memory>
-  QueryHistory HistoryBrowser<Memory>::refresh(std::uint64_t request_id) {
-    // The same page from a new insertion boundary, the selection kept where it was; a later page
-    // its deletes emptied gives way to the one before it, its last row selected.
-    const bool emptied = page_.rows().empty() && state_.page_offset != 0;
-    const auto offset = emptied ? state_.page_offset - std::min<std::uint32_t>(state_.page_offset, page_entries) : state_.page_offset;
-    auto request = requestPage({.request_id = request_id, .offset = offset});
+  ds::Option<QueryHistory> HistoryBrowser<Memory>::refresh(std::uint64_t request_id) {
+    // A search or a page on its way reads the history as it is now.
+    if (state_.load == HistoryLoad::search || state_.load == HistoryLoad::page) {
+      return {};
+    }
 
-    kept_selection_ = emptied ? std::numeric_limits<std::size_t>::max() : state_.selection;
-    return request;
+    // One on its way may have read the history before the change: one more follows it, however
+    // many changes come meanwhile.
+    if (state_.load == HistoryLoad::refresh && page_request_ != 0) {
+      refresh_again_ = true;
+      return {};
+    }
+
+    // The same page from a new insertion boundary; a later page its deletes emptied gives way to
+    // the one before it.
+    const bool emptied = page_.rows().empty() && state_.page_offset != 0;
+    const auto start = emptied ? newerStart() : page_start_;
+
+    if (state_.phase != HistoryPhase::ready) {
+      return requestPage({.request_id = request_id, .start = start});
+    }
+
+    // The rows stay usable while it loads: nothing they show changes until its page arrives.
+    track(request_id);
+    page_request_ = request_id;
+    pending_start_ = start;
+    state_.load = HistoryLoad::refresh;
+
+    return request({.request_id = request_id, .start = start});
   }
 
   template <Allocator Memory>
@@ -271,11 +288,69 @@ namespace telar::gui::features::history {
       return {};
     }
 
-    const auto older = std::min<std::uint64_t>(static_cast<std::uint64_t>(state_.page_offset) + page_.rows().size(), std::numeric_limits<std::uint32_t>::max());
-    const auto newer = state_.page_offset - std::min<std::uint32_t>(state_.page_offset, page_entries);
-    const auto offset = direction == HistoryPage::older ? static_cast<std::uint32_t>(older) : newer;
+    // A page the search entered before this one is where going back returns; one past what it
+    // remembers, or that a refresh left, a page of matches back.
+    while (newer_count_ != 0 && newer_starts_[newer_count_ - 1].offset >= state_.page_offset) {
+      --newer_count_;
+    }
 
-    return requestPage({.request_id = request_id, .offset = offset, .snapshot_id = state_.snapshot_id});
+    PageStart start = newerStart();
+
+    if (direction == HistoryPage::older) {
+      const auto& last = page_.rows().back();
+
+      start = {.offset = static_cast<std::uint32_t>(std::min<std::uint64_t>(static_cast<std::uint64_t>(state_.page_offset) + matchesShown(), std::numeric_limits<std::uint32_t>::max()))};
+      if (listsByTime()) {
+        start.after_started_ms = last.started_at_ms;
+        start.after_id = last.id;
+      }
+    }
+
+    auto query = requestPage({.request_id = request_id, .start = start, .snapshot_id = state_.snapshot_id, .load = HistoryLoad::page});
+
+    if (direction == HistoryPage::older) {
+      // The oldest is forgotten first.
+      if (newer_count_ == remembered_pages) {
+        std::ranges::copy(newer_starts_.view().subspan(1), newer_starts_.viewMut().begin());
+        --newer_count_;
+      }
+
+      newer_starts_.atMut(newer_count_++) = page_start_;
+    }
+
+    return query;
+  }
+
+  template <Allocator Memory>
+  std::uint32_t HistoryBrowser<Memory>::matchesShown() const noexcept {
+    return static_cast<std::uint32_t>(std::ranges::count(page_.rows(), false, &HistoryRow<Memory>::neighbour));
+  }
+
+  template <Allocator Memory>
+  bool HistoryBrowser<Memory>::listsByTime() const noexcept {
+    if (criteria_.output) {
+      return true;
+    }
+
+    switch (criteria_.sort) {
+    case HistorySort::rank:
+      return false;
+    case HistorySort::time:
+      return true;
+    case HistorySort::automatic:
+      break;
+    }
+
+    return criteria_.match != HistoryMatch::fuzzy || query_.empty();
+  }
+
+  template <Allocator Memory>
+  auto HistoryBrowser<Memory>::newerStart() const noexcept -> PageStart {
+    if (newer_count_ != 0) {
+      return newer_starts_[newer_count_ - 1];
+    }
+
+    return {.offset = state_.page_offset - std::min<std::uint32_t>(state_.page_offset, page_entries)};
   }
 
   template <Allocator Memory>
@@ -285,30 +360,53 @@ namespace telar::gui::features::history {
       return applyCommand(message.entries);
     }
 
-    if (message.request_id == 0 || message.request_id != page_request_ || state_.phase != HistoryPhase::loading) {
+    if (message.request_id != 0 && message.request_id == context_request_) {
+      return applyContext(message.entries);
+    }
+
+    if (message.request_id == 0 || message.request_id != page_request_ || state_.load == HistoryLoad::none) {
       return false;
     }
 
     auto incoming = copyPage(message.entries);
 
-    // A page read before a delete the runtime has yet to confirm still holds its row.
+    // A page read before a delete the runtime has yet to confirm, or one that waits for its undo
+    // to pass, still holds its row.
     for (std::size_t index = incoming.rows().size(); index-- > 0;) {
-      if (std::ranges::contains(deleted_ids_, incoming.rows()[index].id)) {
+      if (incoming.rows()[index].id == hidden_id_ || std::ranges::contains(deleted_ids_, incoming.rows()[index].id)) {
         incoming.remove(index);
       }
     }
 
-    const bool newer = pending_offset_ < state_.page_offset;
-    const auto kept = std::exchange(kept_selection_, ds::none);
+    const auto load = std::exchange(state_.load, HistoryLoad::none);
+
+    refresh_due_ = std::exchange(refresh_again_, false) && load == HistoryLoad::refresh;
+    const bool newer = load == HistoryLoad::page && pending_start_.offset < state_.page_offset;
+    ds::Option<KeptSelection> kept;
+
+    // A refresh keeps the command selected when it arrives, which may not be the one selected
+    // when it was asked for.
+    if (load == HistoryLoad::refresh) {
+      const bool emptied = page_.rows().empty() && pending_start_.offset < state_.page_offset;
+      KeptSelection selected{.index = emptied ? std::numeric_limits<std::size_t>::max() : state_.selection};
+
+      if (state_.selection < page_.rows().size()) {
+        selected.id = page_.rows()[state_.selection].id;
+        selected.status = page_.rows()[state_.selection].status;
+      }
+
+      kept = selected;
+    }
 
     page_.exchangeWith(incoming);
     state_.phase = HistoryPhase::ready;
     state_.snapshot_id = message.snapshot_id;
     state_.has_more = message.has_more;
     state_.has_page = true;
-    state_.page_offset = pending_offset_;
-    if (kept && !page_.rows().empty()) {
-      state_.selection = std::min(*kept, page_.rows().size() - 1);
+    page_start_ = pending_start_;
+    state_.page_offset = page_start_.offset;
+    if (kept) {
+      restoreSelection(*kept);
     } else {
       state_.selection = newer && !page_.rows().empty() ? page_.rows().size() - 1 : 0;
     }
@@ -325,12 +423,10 @@ namespace telar::gui::features::history {
     return page_.rows()[entryIndex(id)];
   }
 
+  // A row shown is usable while the next page loads: copying or deleting what the panel shows
+  // never waits for a page that may not hold it.
   template <Allocator Memory>
   std::size_t HistoryBrowser<Memory>::entryIndex(std::uint64_t id) const {
-    if (state_.phase != HistoryPhase::ready) {
-      throw EncodingError{"History results are not ready"};
-    }
-
     const auto found = std::ranges::find(page_.rows(), id, &HistoryRow<Memory>::id);
     if (found == page_.rows().end()) {
       throw EncodingError{"The selected command is no longer available"};
@@ -469,6 +565,163 @@ namespace telar::gui::features::history {
   }
 
   template <Allocator Memory>
+  ds::Option<QueryHistory> HistoryBrowser<Memory>::sameCommand(std::uint64_t request_id) const {
+    if (!state_.inspecting || state_.phase != HistoryPhase::ready || page_.rows().empty()) {
+      return {};
+    }
+
+    const auto& row = page_.rows()[state_.selection];
+    const auto command = row.command_complete ? page_.command(state_.selection) : std::string_view{};
+    if (command.empty() || command.size() > QueryHistory::maximum_query_bytes) {
+      return {};
+    }
+
+    return QueryHistory{
+        .request_id = request_id,
+        .query = command,
+        .author = HistoryAuthorFilter::all,
+        .match = HistoryMatch::prefix,
+        .distinct = false,
+        .limit = page_entries,
+        .sort = HistorySort::time,
+    };
+  }
+
+  template <Allocator Memory>
+  ds::Option<QueryHistoryCommandStats> HistoryBrowser<Memory>::readRuns(std::uint64_t request_id, std::int64_t until_ms) {
+    const auto id = page_.rows().empty() ? 0 : page_.rows()[state_.selection].id;
+    // Read once a command, and again after a failure. By the entry, the runtime reads the
+    // command's whole text, however long, whatever the row holds of it.
+    if (!state_.inspecting || state_.phase != HistoryPhase::ready || id == 0 || (runs_id_ == id && state_.runs_phase != HistoryPhase::failed)) {
+      return {};
+    }
+
+    track(request_id);
+    runs_request_ = request_id;
+    runs_id_ = id;
+    run_stats_ = {};
+    state_.runs_phase = HistoryPhase::loading;
+    contentChanged();
+
+    return QueryHistoryCommandStats{.request_id = request_id, .entry_id = id, .days = HistoryRunStats::days, .until_ms = until_ms};
+  }
+
+  template <Allocator Memory>
+  bool HistoryBrowser<Memory>::apply(const HistoryCommandStats& message) {
+    retire(message.request_id);
+    if (message.request_id == 0 || message.request_id != runs_request_) {
+      return false;
+    }
+
+    runs_request_ = 0;
+    HistoryRunStats stats{.runs = message.runs, .measured = message.measured, .mean_duration_ms = message.mean_duration_ms, .ended = message.ended, .succeeded = message.succeeded, .last_started_ms = message.last_started_ms, .last_exit = message.last_exit};
+    // The days end today, the oldest first: fewer than asked fill the newest.
+    const auto days = message.per_day.last(std::min(message.per_day.size(), stats.per_day.size()));
+
+    std::ranges::copy(days, stats.per_day.viewMut().subspan(stats.per_day.size() - days.size()).begin());
+    run_stats_ = stats;
+    state_.runs_phase = HistoryPhase::ready;
+    contentChanged();
+
+    return true;
+  }
+
+  template <Allocator Memory>
+  ds::Option<QueryHistory> HistoryBrowser<Memory>::readContext(std::uint64_t request_id) {
+    const auto id = page_.rows().empty() ? 0 : page_.rows()[state_.selection].id;
+    const auto pane_id = page_.rows().empty() ? 0 : page_.rows()[state_.selection].pane_id;
+    if (pane_id == 0 || (context_id_ == id && state_.context_phase != HistoryPhase::failed)) {
+      return {};
+    }
+
+    const auto same = sameCommand(request_id);
+    if (!same) {
+      return {};
+    }
+
+    // The runs of the command in its pane, each with the runs around it; the one inspected is
+    // among them unless the pane ran the command more often since than a page holds.
+    auto query = *same;
+
+    query.scope = HistoryScope::pane;
+    query.scope_value = pane_id;
+    query.neighbours = HistoryLimits::context_entries;
+    track(request_id);
+    context_request_ = request_id;
+    context_id_ = id;
+    context_count_ = 0;
+    context_text_.clear();
+    state_.context_phase = HistoryPhase::loading;
+    contentChanged();
+
+    return query;
+  }
+
+  template <Allocator Memory>
+  bool HistoryBrowser<Memory>::applyContext(std::span<const HistoryEntry> entries) {
+    context_request_ = 0;
+    context_count_ = 0;
+    context_text_.clear();
+    const auto found = std::ranges::find(entries, context_id_, &HistoryEntry::id);
+
+    try {
+      if (found != entries.end()) {
+        keepContext(entries, static_cast<std::size_t>(found - entries.begin()));
+      }
+    } catch (...) {
+      context_count_ = 0;
+      state_.context_phase = HistoryPhase::failed;
+      contentChanged();
+      throw;
+    }
+
+    state_.context_phase = HistoryPhase::ready;
+    contentChanged();
+
+    return true;
+  }
+
+  template <Allocator Memory>
+  void HistoryBrowser<Memory>::keepContext(std::span<const HistoryEntry> entries, std::size_t inspected) {
+    // A listing by time runs newest first, the runs around each match beside it: those before
+    // the one inspected ran after it.
+    const auto first = inspected - std::min(inspected, HistoryLimits::context_entries);
+    const auto last = std::min(entries.size(), inspected + 1 + HistoryLimits::context_entries);
+
+    for (auto index = first; index < last; ++index) {
+      if (index == inspected) {
+        continue;
+      }
+
+      const auto command = runtime::utf8Prefix(entries[index].command, HistoryLimits::command_preview_bytes);
+
+      context_.atMut(context_count_++) = {.offset = context_text_.size(), .length = command.size(), .newer = index < inspected};
+      context_text_.append(command);
+    }
+  }
+
+  template <Allocator Memory>
+  const HistoryRunStats& HistoryBrowser<Memory>::runStats() const noexcept {
+    return run_stats_;
+  }
+
+  template <Allocator Memory>
+  std::size_t HistoryBrowser<Memory>::contextCount() const noexcept {
+    return context_count_;
+  }
+
+  template <Allocator Memory>
+  HistoryContextEntry HistoryBrowser<Memory>::contextAt(std::size_t index) const {
+    if (index >= context_count_) {
+      return {};
+    }
+
+    const auto& line = context_[index];
+
+    return {.command = std::string_view{context_text_}.substr(line.offset, line.length), .newer = line.newer};
+  }
+
+  template <Allocator Memory>
   bool HistoryBrowser<Memory>::apply(const HistoryOutput& message) {
     retire(message.request_id);
     if (message.request_id == 0 || message.request_id != output_request_ || message.id != state_.output_id) {
@@ -509,15 +762,142 @@ namespace telar::gui::features::history {
     delete_requests_.atMut(slot) = request_id;
     deleted_ids_.atMut(slot) = id;
 
-    // The row leaves at once, and the selection moves to the one that takes its place.
+    // The row leaves at once.
+    removeRow(index);
+
+    return {.request_id = request_id, .id = id};
+  }
+
+  template <Allocator Memory>
+  void HistoryBrowser<Memory>::removeRow(std::size_t index) {
     page_.remove(index);
     state_.selection = std::min(state_.selection, page_.rows().empty() ? 0 : page_.rows().size() - 1);
     clearCommand();
     clearOutput();
     ++rows_version_;
     contentChanged();
+  }
 
-    return {.request_id = request_id, .id = id};
+  template <Allocator Memory>
+  // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): the command and the request that may delete the one before it, as erase names them
+  ds::Option<DeleteHistory> HistoryBrowser<Memory>::hide(std::uint64_t id, std::uint64_t request_id) {
+    const auto index = entryIndex(id);
+    // The delete that waited before can no longer be taken back.
+    const auto previous = commitHidden(request_id);
+
+    hidden_command_.assign(page_.rows()[index].command);
+    hidden_id_ = id;
+    removeRow(index);
+
+    return previous;
+  }
+
+  template <Allocator Memory>
+  ds::Option<DeleteHistory> HistoryBrowser<Memory>::commitHidden(std::uint64_t request_id) {
+    if (hidden_id_ == 0) {
+      return {};
+    }
+
+    const auto slot = static_cast<std::size_t>(std::ranges::find(delete_requests_, std::uint64_t{0}) - delete_requests_.begin());
+
+    track(request_id);
+    // track bounds the requests in flight by the same count as the slots.
+    delete_requests_.atMut(slot) = request_id;
+    deleted_ids_.atMut(slot) = std::exchange(hidden_id_, 0);
+    hidden_command_.clear();
+    contentChanged();
+
+    return DeleteHistory{.request_id = request_id, .id = deleted_ids_[slot]};
+  }
+
+  template <Allocator Memory>
+  bool HistoryBrowser<Memory>::unhide() noexcept {
+    if (hidden_id_ == 0) {
+      return false;
+    }
+
+    hidden_id_ = 0;
+    hidden_command_.clear();
+    contentChanged();
+
+    return true;
+  }
+
+  template <Allocator Memory>
+  std::uint64_t HistoryBrowser<Memory>::hidden() const noexcept {
+    return hidden_id_;
+  }
+
+  template <Allocator Memory>
+  std::string_view HistoryBrowser<Memory>::hiddenCommand() const noexcept {
+    return hidden_command_;
+  }
+
+  template <Allocator Memory>
+  bool HistoryBrowser<Memory>::toggleMark(std::uint64_t id) {
+    const auto marks = std::span{marks_}.first(mark_count_);
+    const auto found = std::ranges::find(marks, id, &Mark::id);
+
+    if (found != marks.end()) {
+      // The text after the mark's moves back over it.
+      const auto removed = *found;
+      const auto index = static_cast<std::size_t>(found - marks.begin());
+
+      marked_text_.remove(removed.offset, removed.length);
+      for (auto next = index + 1; next < mark_count_; ++next) {
+        auto moved = marks_[next];
+
+        moved.offset -= removed.length;
+        marks_.atMut(next - 1) = moved;
+      }
+
+      --mark_count_;
+      contentChanged();
+
+      return false;
+    }
+
+    const auto command = this->command(id);
+    if (mark_count_ == marks_.size() || command.size() > HistoryLimits::maximum_marked_bytes - marked_text_.size()) {
+      throw EncodingError{"Too many commands marked to use together"};
+    }
+
+    marks_.atMut(mark_count_++) = {.id = id, .offset = marked_text_.size(), .length = command.size()};
+    marked_text_.append(command);
+    contentChanged();
+
+    return true;
+  }
+
+  template <Allocator Memory>
+  void HistoryBrowser<Memory>::clearMarks() noexcept {
+    if (mark_count_ == 0) {
+      return;
+    }
+
+    mark_count_ = 0;
+    marked_text_.clear();
+    contentChanged();
+  }
+
+  template <Allocator Memory>
+  std::size_t HistoryBrowser<Memory>::markCount() const noexcept {
+    return mark_count_;
+  }
+
+  template <Allocator Memory>
+  std::uint64_t HistoryBrowser<Memory>::markedId(std::size_t index) const noexcept {
+    return index < mark_count_ ? marks_[index].id : 0;
+  }
+
+  template <Allocator Memory>
+  std::string_view HistoryBrowser<Memory>::markedCommand(std::size_t index) const {
+    return index < mark_count_ ? std::string_view{marked_text_}.substr(marks_[index].offset, marks_[index].length) : std::string_view{};
+  }
+
+  template <Allocator Memory>
+  bool HistoryBrowser<Memory>::marked(std::uint64_t id) const noexcept {
+    return std::ranges::contains(std::span{marks_}.first(mark_count_), id, &Mark::id);
   }
 
   template <Allocator Memory>
@@ -553,37 +933,82 @@ namespace telar::gui::features::history {
   }
 
   template <Allocator Memory>
-  bool HistoryBrowser<Memory>::fail(std::uint64_t request_id, std::string_view message) {
+  HistoryFailure HistoryBrowser<Memory>::fail(std::uint64_t request_id, std::string_view message) {
     retire(request_id);
+    auto failure = HistoryFailure::none;
+
     if (request_id != 0 && request_id == page_request_) {
-      state_.phase = HistoryPhase::failed;
+      // A search's rows answered the query before it: they leave, or they would show under the
+      // new query, its matches highlighted in them. A page or a refresh leaves the rows usable.
+      if (std::exchange(state_.load, HistoryLoad::none) == HistoryLoad::search) {
+        clearRows();
+        state_.phase = HistoryPhase::failed;
+      } else {
+        state_.phase = HistoryPhase::ready;
+      }
+
       page_request_ = 0;
+      failure = HistoryFailure::page;
     } else if (request_id != 0 && request_id == output_request_) {
       state_.output_phase = HistoryPhase::failed;
       output_request_ = 0;
+      failure = HistoryFailure::detail;
     } else if (request_id != 0 && request_id == command_request_) {
       state_.command_phase = HistoryPhase::failed;
       command_request_ = 0;
-    } else if (request_id == 0 || !forgetDelete(request_id)) {
-      return false;
+      failure = HistoryFailure::detail;
+    } else if (request_id != 0 && request_id == runs_request_) {
+      state_.runs_phase = HistoryPhase::failed;
+      runs_request_ = 0;
+      failure = HistoryFailure::detail;
+    } else if (request_id != 0 && request_id == context_request_) {
+      state_.context_phase = HistoryPhase::failed;
+      context_request_ = 0;
+      failure = HistoryFailure::detail;
+    } else if (request_id != 0 && forgetDelete(request_id)) {
+      failure = HistoryFailure::erase;
+    } else {
+      return HistoryFailure::none;
     }
 
     error_.assign(runtime::utf8Prefix(message, maximum_error_bytes));
     contentChanged();
 
-    return true;
+    return failure;
   }
 
   template <Allocator Memory>
   void HistoryBrowser<Memory>::suspend() noexcept {
     requests_.fill(0);
     page_request_ = 0;
+    state_.load = HistoryLoad::none;
     delete_requests_.fill(0);
     deleted_ids_.fill(0);
+    hidden_id_ = 0;
+    hidden_command_.clear();
+    // The panel follows a runtime connected again from its next search.
+    watching_ = false;
+    refresh_again_ = false;
+    refresh_due_ = false;
     state_.phase = HistoryPhase::idle;
     clearCommand();
     clearOutput();
     contentChanged();
+  }
+
+  template <Allocator Memory>
+  bool HistoryBrowser<Memory>::watch(bool watching) noexcept {
+    return std::exchange(watching_, watching) != watching;
+  }
+
+  template <Allocator Memory>
+  bool HistoryBrowser<Memory>::watching() const noexcept {
+    return watching_;
+  }
+
+  template <Allocator Memory>
+  bool HistoryBrowser<Memory>::takeRefreshDue() noexcept {
+    return std::exchange(refresh_due_, false);
   }
 
   template <Allocator Memory>
@@ -651,6 +1076,16 @@ namespace telar::gui::features::history {
   }
 
   template <Allocator Memory>
+  bool HistoryBrowser<Memory>::preloads() const noexcept {
+    return criteria_.preload;
+  }
+
+  template <Allocator Memory>
+  bool HistoryBrowser<Memory>::searchesOutput() const noexcept {
+    return criteria_.output;
+  }
+
+  template <Allocator Memory>
   bool HistoryBrowser<Memory>::deleting() const noexcept {
     return std::ranges::any_of(delete_requests_, [](std::uint64_t request) {
       return request != 0;
@@ -673,6 +1108,10 @@ namespace telar::gui::features::history {
     static_cast<void>(Codec::encodedSize(query));
     ds::String<Memory> next_query{memory_, query.query};
     ds::String<Memory> next_scope{memory_};
+    ds::String<Memory> next_host{memory_, query.host};
+    ds::String<Memory> next_branch{memory_, query.branch};
+    ds::String<Memory> next_shell{memory_, query.shell};
+    ds::String<Memory> next_origin{memory_, query.origin_cwd};
 
     if (const auto* path = std::get_if<std::string_view>(&query.scope_value)) {
       next_scope.assign(*path);
@@ -680,6 +1119,10 @@ namespace telar::gui::features::history {
 
     query_ = std::move(next_query);
     scope_path_ = std::move(next_scope);
+    host_ = std::move(next_host);
+    branch_ = std::move(next_branch);
+    shell_ = std::move(next_shell);
+    origin_cwd_ = std::move(next_origin);
     const auto* const scope_id = std::get_if<std::uint64_t>(&query.scope_value);
 
     criteria_ = {
@@ -690,8 +1133,18 @@ namespace telar::gui::features::history {
         .author = query.author,
         .match = query.match,
         .distinct = query.distinct,
+        .sort = query.sort,
+        .since_ms = query.since_ms,
+        .until_ms = query.until_ms,
+        .exit_code = query.exit_code,
+        .min_duration_ms = query.min_duration_ms,
+        .origin_pane = query.origin_pane,
+        .neighbours = query.neighbours,
+        .preload = query.preload,
+        .output = query.output,
     };
 
+    newer_count_ = 0;
     delete_requests_.fill(0);
     deleted_ids_.fill(0);
 
@@ -718,9 +1171,24 @@ namespace telar::gui::features::history {
         .match = criteria_.match,
         .distinct = criteria_.distinct,
         .limit = page_entries,
-        .offset = page.offset,
+        .offset = page.start.offset,
         .snapshot_id = page.snapshot_id,
         .entry_id = 0,
+        .sort = criteria_.sort,
+        .since_ms = criteria_.since_ms,
+        .until_ms = criteria_.until_ms,
+        .exit_code = criteria_.exit_code,
+        .min_duration_ms = criteria_.min_duration_ms,
+        .host = host_,
+        .branch = branch_,
+        .shell = shell_,
+        .preload = criteria_.preload,
+        .output = criteria_.output,
+        .neighbours = criteria_.neighbours,
+        .origin_pane = criteria_.origin_pane,
+        .origin_cwd = origin_cwd_,
+        .after_started_ms = page.start.after_started_ms,
+        .after_id = page.start.after_id,
     };
   }
 
@@ -765,26 +1233,59 @@ namespace telar::gui::features::history {
 
   template <Allocator Memory>
   void HistoryBrowser<Memory>::rejectQuery(std::string_view message) {
+    clearRows();
     state_.phase = HistoryPhase::failed;
+    state_.load = HistoryLoad::none;
     page_request_ = 0;
     error_.assign(runtime::utf8Prefix(message, maximum_error_bytes));
     contentChanged();
   }
 
   template <Allocator Memory>
-  QueryHistory HistoryBrowser<Memory>::requestPage(PageRequest page) {
-    try {
-      track(page.request_id);
-    } catch (...) {
-      state_.phase = HistoryPhase::failed;
-      contentChanged();
-      throw;
+  void HistoryBrowser<Memory>::clearRows() {
+    HistoryPageStorage<Memory> empty{memory_};
+
+    page_.exchangeWith(empty);
+    state_.selection = 0;
+    state_.has_more = false;
+    clearCommand();
+    clearOutput();
+    ++rows_version_;
+  }
+
+  template <Allocator Memory>
+  void HistoryBrowser<Memory>::restoreSelection(KeptSelection kept) {
+    const auto& rows = page_.rows();
+    if (rows.empty()) {
+      state_.selection = 0;
+      clearCommand();
+      clearOutput();
+
+      return;
     }
 
-    kept_selection_.reset();
+    const auto found = kept.id == 0 ? rows.end() : std::ranges::find(rows, kept.id, &HistoryRow<Memory>::id);
+
+    state_.selection = found != rows.end() ? static_cast<std::size_t>(found - rows.begin()) : std::min(kept.index, rows.size() - 1);
+    // The details of the command still selected stay, so the inspector does not flicker; a
+    // command that ended since has more output to read.
+    const auto& selected = rows[state_.selection];
+    if (selected.id != kept.id) {
+      clearCommand();
+      clearOutput();
+    } else if (selected.status != kept.status) {
+      clearOutput();
+    }
+  }
+
+  template <Allocator Memory>
+  QueryHistory HistoryBrowser<Memory>::requestPage(PageRequest page) {
+    // A page that does not fit leaves the rows as they are; a search's caller fails them.
+    track(page.request_id);
     page_request_ = page.request_id;
-    pending_offset_ = page.offset;
+    pending_start_ = page.start;
     state_.phase = HistoryPhase::loading;
+    state_.load = page.load;
     error_.assign({});
     clearCommand();
     clearOutput();
@@ -833,6 +1334,16 @@ namespace telar::gui::features::history {
     state_.output_phase = HistoryPhase::idle;
     state_.output_truncated = false;
     output_.clear();
+    // The runs and the context are the inspector's too.
+    runs_request_ = 0;
+    context_request_ = 0;
+    runs_id_ = 0;
+    context_id_ = 0;
+    state_.runs_phase = HistoryPhase::idle;
+    state_.context_phase = HistoryPhase::idle;
+    run_stats_ = {};
+    context_count_ = 0;
+    context_text_.clear();
   }
 
   // What production passes (ApplicationAllocator) and what the session tests pass.
