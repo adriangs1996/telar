@@ -427,11 +427,16 @@ namespace telar::runtime::checkpoint {
     } catch (const CapacityReached&) {
       remaining_ = previous;
       dropped_ = 1;
+    } catch (const EncodingError&) {
+      // A record that cannot be written, such as a path holding a NUL, is left out alone: the
+      // reader skips what refers to it, and the checkpoint keeps the rest.
+      remaining_ = previous;
+      ++invalid_;
     }
   }
 
   std::size_t Writer::dropped() const noexcept {
-    return dropped_;
+    return dropped_ + invalid_;
   }
 
   tbc::val_a<std::span<const Byte>> Writer::finish() {

@@ -647,7 +647,7 @@ export {
 
       tbc::val_a<std::span<const Byte>> finish();
 
-      // The records left out for want of room.
+      // The records left out for want of room, or because they could not be written.
       [[nodiscard]] std::size_t dropped() const noexcept;
 
     private:
@@ -682,7 +682,9 @@ export {
 
       tbc::val_a<std::span<Byte>> buffer_;
       tbc::val_a<std::span<Byte>> remaining_;
+      // Past the first record that did not fit, every record is left out.
       std::size_t dropped_ = 0;
+      std::size_t invalid_ = 0;
     };
 
     extern template void Writer::append<WorkspaceRecord>(const WorkspaceRecord& record);

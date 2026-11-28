@@ -808,6 +808,26 @@ namespace {
     check(zones.directory() == "/next");
   }
 
+  // A directory report that decodes to a NUL names no path: the directory stays the last one, so
+  // that the session store can still write it.
+  void testDirectoryReportWithNul() {
+    SystemAllocator zone_system;
+    MemoryAdapter<SystemAllocator> zone_adapter{zone_system};
+    ConcurrentMemory& zone_memory = zone_adapter;
+
+    struct Completions {
+      void complete(CommandCompletion) {}
+    };
+
+    CommandZones zones{zone_memory, "/initial", ShellToken::generate()};
+    Completions sink;
+
+    zones.feed(byteSpan("\x1b]7;file://host/tmp%00evil\x07"), {}, sink);
+    check(zones.directory() == "/initial");
+    zones.feed(byteSpan("\x1b]7;file://host/tmp\x07"), {}, sink);
+    check(zones.directory() == "/tmp");
+  }
+
   // The line a shell's editor held, as its integration reports it: %-encoded and signed by the
   // pane's shell, or by the remote shell ssh reached. What is kept is text to show, at most the
   // capacity, cut on a character; a report no shell signed, or that is not UTF-8, changes nothing.
@@ -928,6 +948,7 @@ namespace {
   const telar::testing::Case case_command_taken_back{"command_capture.command_taken_back_is_not_recorded", testCommandTakenBackIsNotRecorded};
   const telar::testing::Case case_signal_status_interrupts{"command_capture.signal_status_interrupts", testSignalStatusInterrupts};
   const telar::testing::Case case_overlong_osc_ignored{"command_capture.overlong_osc_ignored", testOverlongOscIgnored};
+  const telar::testing::Case case_directory_report_with_nul{"command_capture.directory_report_with_nul", testDirectoryReportWithNul};
   const telar::testing::Case case_prompt_while_running_interrupts{"command_capture.prompt_while_running_interrupts", testPromptWhileRunningInterrupts};
 
 }
