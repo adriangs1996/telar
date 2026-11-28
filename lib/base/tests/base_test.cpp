@@ -298,7 +298,29 @@ namespace {
       check(paste("\x1b[200~x\x1b", true) == "\x1b[200~\x1b[200~x\x1b\x1b[201~");
     }
 
+    // A queue a burst grew past what a drained queue keeps gives its buffer back once drained,
+    // and one that stayed small keeps its buffer for the next append.
+    void testByteQueueGivesBackABurst() {
+      using Queue = telar::runtime::ByteQueue<telar::BudgetAllocator<telar::SystemAllocator>>;
+      telar::SystemAllocator system;
+      telar::BudgetAllocator budget{system, std::size_t{4} * 1024 * 1024};
+      Queue queue{budget, std::size_t{1024} * 1024};
+      const std::vector<std::uint8_t> burst(Queue::retained_capacity + 1, 7);
+      const telar::ds::Array<std::uint8_t, 1> byte{9};
+
+      queue.append(burst);
+      queue.consume(1);
+      check(budget.liveBytes() > Queue::retained_capacity, "a queue keeps its buffer while it holds bytes");
+      queue.consume(queue.size());
+      check(queue.empty() && budget.liveBytes() == 0, "a drained queue gives back a buffer past what it keeps");
+      queue.append(byte);
+      check(queue.size() == 1 && queue.readable()[0] == 9);
+      queue.consume(1);
+      check(budget.liveBytes() != 0, "a small buffer stays for the next append");
+    }
+
     const telar::testing::Case memory{"base.memory", testMemory};
+    const telar::testing::Case byte_queue_gives_back_a_burst{"base.byte_queue_gives_back_a_burst", testByteQueueGivesBackABurst};
     const telar::testing::Case memory_interface{"base.memory_interface", testMemoryInterface};
     const telar::testing::Case bracketed_paste{"base.bracketed_paste", testBracketedPaste};
     const telar::testing::Case error_text{"base.error_text", testErrorText};

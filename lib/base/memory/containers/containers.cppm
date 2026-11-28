@@ -187,6 +187,7 @@ export {
         consumed_ += count;
         if (consumed_ == written_) {
           clear();
+          release();
         }
       }
 
@@ -252,7 +253,21 @@ export {
         return size() == 0;
       }
 
+      // The most a drained queue keeps: one a burst grew past it gives its buffer back, and the
+      // next append reserves again.
+      static constexpr std::size_t retained_capacity = std::size_t{256} * 1024;
+
     private:
+      inline void release() noexcept {
+        if (capacity_ <= retained_capacity) {
+          return;
+        }
+
+        memory_.deallocate(bytes_, capacity_, alignof(std::uint8_t));
+        bytes_ = nullptr;
+        capacity_ = 0;
+      }
+
       inline void compact() noexcept {
         if (consumed_ != 0) {
           const auto remaining = size();
