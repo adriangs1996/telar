@@ -6,6 +6,7 @@ export module telar.gui.features.notifications;
 
 export import :alerts;
 export import :center;
+export import :commands;
 export import :limits;
 export import :sound;
 export import :stack;

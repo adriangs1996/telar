@@ -8,6 +8,7 @@ import telar.gui.application;
 import telar.gui.foundation.model;
 import telar.gui.foundation.core;
 import telar.gui.foundation.text;
+import telar.gui.foundation.forms;
 import telar.gui.foundation.agents;
 import telar.config.gui;
 import telar.config.core;
@@ -189,6 +190,37 @@ export namespace telar::gui::qt {
     return record;
   }
 
+  // The bytes [start, end) a query matched, as the runtime marked them, flat: start, end, start…
+  [[tbc::hot_path]] inline QVariantList historyRanges(const application::history::HistoryMarks& marks) {
+    QVariantList flat;
+
+    flat.reserve(2 * static_cast<qsizetype>(marks.view().size()));
+    for (const auto range : marks.view()) {
+      flat.append(static_cast<qulonglong>(range.start));
+      flat.append(static_cast<qulonglong>(range.end));
+    }
+
+    return flat;
+  }
+
+  // The bytes `flat` marks of a text of `bytes` bytes, as historyRanges writes them. A range past
+  // the text is cut at its end, as a row shows a prefix of a long command.
+  [[tbc::hot_path]] inline HistoryMatchRanges historyMatches(const QVariantList& flat, std::size_t bytes) {
+    HistoryMatchRanges matches;
+
+    for (qsizetype index = 0; index + 1 < flat.size(); index += 2) {
+      const auto start = flat[index].toULongLong();
+      const auto end = std::min<qulonglong>(flat[index + 1].toULongLong(), bytes);
+
+      // The runtime bounds a range to 64 KiB of command.
+      if (start < end) {
+        matches.append({.offset = static_cast<std::uint32_t>(start), .length = static_cast<std::uint32_t>(end - start)});
+      }
+    }
+
+    return matches;
+  }
+
   template <Allocator Memory>
   [[tbc::generic]] QVariantMap historyRecord(const application::history::HistoryRow<Memory>& entry, CalendarSample sampled) {
     QVariantMap record;
@@ -221,11 +253,18 @@ export namespace telar::gui::qt {
     record.insert(u"statusGlyph"_s, toQString(status.glyph));
     record.insert(u"statusColor"_s, toQString(palette_names[static_cast<std::size_t>(status.color)]));
     record.insert(u"duration"_s, toQString(application::history::HistoryLabels::duration(entry.duration_ns).view()));
+    // An imported command, or one whose end the shell did not tell, has no duration to show.
+    record.insert(u"measured"_s, entry.duration_ns > 0);
     record.insert(u"age"_s, toQString(application::history::HistoryLabels::ageAt(entry.started_at_ms, sampled).view()));
     record.insert(u"clock"_s, entry.started_at_ms >= 0 ? toQString(application::history::HistoryLabels::clock(entry.started_at_ms, sampled.utc_offset_min).view()) : QString{});
     record.insert(u"date"_s, entry.started_at_ms >= 0 ? toQString(application::history::HistoryLabels::dateLabel(entry.started_at_ms, sampled).view()) : QString{});
     record.insert(u"day"_s, static_cast<qlonglong>(day));
     record.insert(u"dayLabel"_s, toQString(application::history::HistoryLabels::dayLabel(day, today).view()).toUpper());
+    record.insert(u"ranges"_s, historyRanges(entry.ranges));
+    record.insert(u"excerpt"_s, toQString(entry.excerpt));
+    record.insert(u"excerptRanges"_s, historyRanges(entry.excerpt_ranges));
+    record.insert(u"neighbour"_s, entry.neighbour);
+    record.insert(u"host"_s, toQString(entry.host));
 
     return record;
   }

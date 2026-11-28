@@ -382,8 +382,16 @@ def limits(f, name):
     return report
 
 
-def history_rows(f):
-    """Rows the runtime recorded, as `history list` shows and filters them."""
+def text_id(connection, text):
+    """The id of a command's text in the history, stored as the runtime stores it (its hash aside,
+    which only finds a text again when the runtime writes it)."""
+    connection.execute("INSERT INTO command_text (hash, text) VALUES (0, ?)", (text,))
+    return connection.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+
+def seed_history_rows(f):
+    """Rows as the runtime records them, written while no runtime runs: the history's index loads
+    them when the next one starts."""
     database = Path(f.env["XDG_DATA_HOME"]) / "telar/history.db"
     session = bytes(range(16))
     rows = [
@@ -398,16 +406,20 @@ def history_rows(f):
                            (session, 900, 0, 1, 1, "/p", "/bin/sh", 1735689600000))
         for sequence, (command, workspace, code, status, author, provider) in enumerate(rows, 1):
             # A directory that does not exist is its own key, as the store keys it.
-            connection.execute("INSERT INTO command (session_id,pane_id,location_kind,location_id,tab_id,sequence,command,cwd,workspace_path,cwd_key,workspace_key,started_at_ms,duration_ns,exit_code,status,author,provider) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                               (session, 900, 0, 1, 1, sequence, command, workspace, workspace, workspace, workspace, 1735689600000 + sequence, 0, code, status, author, provider))
+            connection.execute("INSERT INTO command (session_id,pane_id,location_kind,location_id,tab_id,sequence,text_id,cwd,workspace_path,cwd_key,workspace_key,started_at_ms,duration_ns,exit_code,status,author,provider) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                               (session, 900, 0, 1, 1, sequence, text_id(connection, command), workspace, workspace, workspace, workspace, 1735689600000 + sequence, 0, code, status, author, provider))
 
+
+def history_rows(f):
+    """Rows the runtime recorded, as `history list` shows and filters them."""
     def listed(name, *args):
         lines = f.invoke(name, "history", "list", *args, socket=True).stdout.splitlines()
         return {line.rsplit(b"  ", 1)[-1].split(b" ")[-1]: line for line in lines}
 
-    # STATUS is the exit code, RUN or INT.
+    # STATUS is the exit code, RUN or INT. A run no runtime saw finish is interrupted when the
+    # history opens, as a runtime that stopped while it ran left it.
     columns = {command: line.split(b"  ")[2] for command, line in listed("history/columns").items()}
-    assert columns == {b"exited": b"3", b"running": b"RUN", b"interrupted": b"INT", b"by-agent": b"0"}, columns
+    assert columns == {b"exited": b"3", b"running": b"INT", b"interrupted": b"INT", b"by-agent": b"0"}, columns
     agent = listed("history/author-agent", "--author", "agent")
     assert list(agent) == [b"by-agent"] and b"[claude]" in agent[b"by-agent"], agent
     assert sorted(listed("history/author-human", "--author", "human")) == [b"exited", b"interrupted", b"running"]
@@ -482,7 +494,7 @@ def history(f):
     total = f.invoke("history/total", "history", "stats", socket=True).stdout
     assert b"commands: %d\n" % len(kept) in total
     result = f.invoke("history/dry-run", "history", "prune", "--dry-run", socket=True)
-    assert result.stdout == b"would remove %d entries (counting at most the newest 1000)\n" % len(kept)
+    assert result.stdout == b"would remove %d entries\n" % len(kept)
     f.invoke("history/before-preview", "history", "prune", "--dry-run", "--before", "2026-01-01", socket=True)
     for name, answer in (("history/abort", b"no\n"), ("history/abort-eof", b"")):
         assert f.invoke(name, "history", "prune", socket=True, data=answer).stdout.endswith(b"aborted\n")
@@ -494,7 +506,6 @@ def history(f):
     assert entries("history/matched") == {key: line for key, line in kept.items() if key not in duplicates}
     f.invoke("history/prune", "history", "prune", "--yes", socket=True)
     assert f.invoke("history/empty", "history", "list", socket=True).stdout == b""
-    history_rows(f)
     history_imports(f)
     large = f.root / "large_history"
     large.write_bytes(b"a" * 65535 + b"\n" + b"b" * 65536 + b"\nprintf kept\n")
@@ -767,6 +778,9 @@ def run_suite(binary, root, with_runtime=True, prepare_probe=None):
             project_recipe_gate(f)
             repositories(f, prepare_probe)
             dispatch(f)
+        seed_history_rows(f)
+        with f.runtime():
+            history_rows(f)
     return f
 
 

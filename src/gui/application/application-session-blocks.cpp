@@ -4,6 +4,7 @@ import std;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.features.prompt;
+import telar.gui.features.notifications;
 import telar.gui.features.terminal.graphics;
 import telar.config.client;
 import telar.config.runtime;
@@ -26,6 +27,19 @@ namespace telar::gui::application {
     const auto* pane = findPane(pane_id);
 
     return pane != nullptr && index < pane->blocks.size() && std::ranges::find(pane->folded, blockKey(*pane, index)) != pane->folded.end();
+  }
+
+  std::uint32_t Session::blockMarks(const Pane<Memory>& pane, std::size_t index) noexcept {
+    const auto key = blockKey(pane, index);
+    std::uint32_t letters = 0;
+
+    for (std::size_t letter = 0; letter < Pane<Memory>::mark_count; ++letter) {
+      if (const auto& mark = pane.marks[letter]; mark && mark->block == key) {
+        letters |= std::uint32_t{1} << letter;
+      }
+    }
+
+    return letters;
   }
 
   void Session::fold(BlockAt block, bool fold) {
@@ -149,7 +163,7 @@ namespace telar::gui::application {
   }
 
   void Session::refreshFolds(Pane<Memory>& pane) {
-    if (pane.folded.empty() && pane.inline_documents.empty()) {
+    if (pane.folded.empty() && pane.inline_documents.empty() && !terminal::filter::indexOf(block_filter, pane)) {
       if (!pane.folds.empty()) {
         pane.folds.clear();
         ++pane.fold_revision;
@@ -179,6 +193,9 @@ namespace telar::gui::application {
       }
     }
 
+    // The lines the filter of a block's output leaves out.
+    terminal::filter::hide(block_filter, pane, spans);
+
     // A fold stays while a command still starts at its row.
     pane.folded.retain([&blocks = pane.blocks, trimmed = pane.scrollback_trimmed](std::uint64_t key) {
       return std::ranges::any_of(blocks, [&](const CommandBlock& block) {
@@ -200,9 +217,20 @@ namespace telar::gui::application {
 
     // The selected block stays selected wherever it now is among the blocks.
     const auto selected = selectedBlockKey(*pane);
+    // The commands running before, a few being all a shell runs at once.
+    constexpr std::size_t watched_running = 4;
+    ds::Array<std::uint64_t, watched_running> running{};
+    std::size_t running_count = 0;
+
+    for (std::size_t index = 0; index < pane->blocks.size() && running_count < watched_running; ++index) {
+      if (pane->blocks[index].state == CommandBlockState::running) {
+        running.atMut(running_count++) = blockKey(*pane, index);
+      }
+    }
 
     pane->setBlocks(message.blocks);
     restoreBlock(*pane, selected);
+    alertFinished(*pane, std::span{running}.first(running_count));
 
     // A command that ran without the shell finding it missing exists, though the shell never
     // reported it: a function defined since its last report, say.
@@ -215,6 +243,8 @@ namespace telar::gui::application {
       }
     }
 
+    restoreMarks(*pane);
+    retainMarks(*pane);
     if (!pane->refold.empty()) {
       for (std::size_t at = 0; at < pane->refold.size(); ++at) {
         if (const auto index = pane->refold[at]; index < pane->blocks.size()) {
@@ -226,6 +256,7 @@ namespace telar::gui::application {
     }
 
     refreshFolds(*pane);
+    followFilter(pane->id);
     changed_pane_ = pane->id;
     return Change::terminal;
   }
@@ -305,11 +336,11 @@ namespace telar::gui::application {
         stepFailedBlock(pane_id, direction);
         return true;
       }
-    } else if (pending != 0 && selection && blockChord(pending, {.pane_id = pane_id, .index = *selection}, character)) {
+    } else if (markChord(pane_id, selection, {.pending = pending, .character = character}) || (pending != 0 && selection && blockChord(pending, {.pane_id = pane_id, .index = *selection}, character))) {
       return true;
     }
 
-    if (character != '[' && character != ']') {
+    if (character != '[' && character != ']' && character != '\'' && character != '`') {
       return false;
     }
 
@@ -500,6 +531,90 @@ namespace telar::gui::application {
     }
   }
 
+  bool Session::markChord(std::uint64_t pane_id, ds::Option<std::size_t> selection, Chord chord) {
+    const auto [pending, character] = chord;
+    if ((pending != 'm' && pending != '\'' && pending != '`') || character < 'a' || character > 'z') {
+      return false;
+    }
+
+    auto* pane = findPaneMut(pane_id);
+    auto* line = features::prompt::find(prompt_lines, pane_id);
+    if (pane == nullptr || line == nullptr || (pending == 'm' && !selection)) {
+      return false;
+    }
+
+    auto& mark = pane->marks.atMut(static_cast<std::size_t>(character - 'a'));
+
+    if (pending == 'm') {
+      const auto key = blockKey(*pane, *selection);
+      const auto top = jumpRow(*pane);
+
+      mark = Pane<Memory>::BlockMark{.block = key, .offset = top > key ? top - key : 0};
+      changed_pane_ = pane_id;
+      block_changed_ = true;
+      return true;
+    }
+
+    // A mark not set, or whose block is gone, goes nowhere.
+    ds::Option<std::size_t> index;
+
+    for (std::size_t at = 0; mark && at < pane->blocks.size(); ++at) {
+      if (blockKey(*pane, at) == mark->block) {
+        index = at;
+        break;
+      }
+    }
+
+    if (!index) {
+      return true;
+    }
+
+    if (pending == '\'') {
+      jumpToBlock(pane_id, *index);
+      return true;
+    }
+
+    const auto row = mark->block + mark->offset - pane->scrollback_trimmed;
+
+    recordJump(*pane, *line);
+    features::prompt::selectBlock(*line, *index);
+    scrollToShownRow(*pane, pane->folds.display(static_cast<std::uint32_t>(std::min<std::uint64_t>(row, std::numeric_limits<std::uint32_t>::max()))));
+    return true;
+  }
+
+  void Session::retainMarks(Pane<Memory>& pane) noexcept {
+    for (auto& mark : pane.marks.viewMut()) {
+      if (mark && std::ranges::none_of(pane.blocks, [&](const CommandBlock& block) {
+            return pane.scrollback_trimmed + block.row == mark->block;
+          })) {
+        mark.reset();
+      }
+    }
+  }
+
+  void Session::rememberMarks(Pane<Memory>& pane) noexcept {
+    for (std::size_t letter = 0; letter < Pane<Memory>::mark_count; ++letter) {
+      auto& mark = pane.marks.atMut(letter);
+
+      pane.remark.atMut(letter).reset();
+      for (std::size_t index = 0; mark && index < pane.blocks.size(); ++index) {
+        if (blockKey(pane, index) == mark->block) {
+          pane.remark.atMut(letter) = std::pair{index, mark->offset};
+        }
+      }
+
+      mark.reset();
+    }
+  }
+
+  void Session::restoreMarks(Pane<Memory>& pane) noexcept {
+    for (std::size_t letter = 0; letter < Pane<Memory>::mark_count; ++letter) {
+      if (const auto remembered = std::exchange(pane.remark.atMut(letter), ds::none); remembered && remembered->first < pane.blocks.size()) {
+        pane.marks.atMut(letter) = Pane<Memory>::BlockMark{.block = blockKey(pane, remembered->first), .offset = remembered->second};
+      }
+    }
+  }
+
   bool Session::foldChord(BlockAt block, char32_t character) {
     const auto [pane_id, index] = block;
     const auto* pane = findPaneMut(pane_id);
@@ -573,6 +688,7 @@ namespace telar::gui::application {
     case 'g':
     case 'z':
     case 'y':
+    case 'm':
       features::prompt::beginChord(*line, static_cast<char>(character));
       return true;
     case '/':
@@ -584,6 +700,18 @@ namespace telar::gui::application {
       return true;
     case 'Y':
       static_cast<void>(copyBlock(block, BlockCopy::output));
+      return true;
+    case '&':
+      static_cast<void>(openFilter(block));
+      return true;
+    case 'e':
+      static_cast<void>(reuseBlock(block, BlockReuse::edit));
+      return true;
+    case 'E':
+      static_cast<void>(reuseBlock(block, BlockReuse::edit_as_root));
+      return true;
+    case 'R':
+      static_cast<void>(reuseBlock(block, BlockReuse::run));
       return true;
     case 'q':
       selectBlock(pane_id, ds::none);
@@ -682,12 +810,17 @@ namespace telar::gui::application {
   }
 
   void Session::copyBlockCommand(const Pane<Memory>& pane, std::size_t index) {
-    const auto& block = pane.blocks[index];
-
-    if (block.rows == 0 || block.command.empty()) {
-      clipboard_.assign(block.command);
+    command_reuse_.reset();
+    if (!readBlockCommand(pane, index)) {
+      clipboard_.assign(pane.blocks[index].command);
       clipboard_written_ = true;
-      return;
+    }
+  }
+
+  bool Session::readBlockCommand(const Pane<Memory>& pane, std::size_t index) {
+    const auto& block = pane.blocks[index];
+    if (block.rows == 0 || block.command.empty()) {
+      return false;
     }
 
     // Enough of the command's start to find it past whatever a prompt left on its first row.
@@ -696,7 +829,77 @@ namespace telar::gui::application {
 
     command_copy_.assign(block.command.substr(0, std::min(start_bytes, block.command.size())));
     command_copy_pane_ = pane.id;
+    command_copy_lines_ = std::size_t{block.lines} + 1;
     link.send(CopySelection{.pane_id = pane.id, .start_x = 0, .start_y = block.row, .end_x = static_cast<std::uint16_t>(columns == 0 ? 0 : columns - 1), .end_y = block.row + block.rows - 1U, .linewise = true});
+    return true;
+  }
+
+  bool Session::reuseBlock(BlockAt block, BlockReuse how) {
+    const auto [pane_id, index] = block;
+    const auto* pane = findPane(pane_id);
+    if (pane == nullptr || index >= pane->blocks.size() || pane->blocks[index].command.empty() || !prompt::edits(*this, pane_id)) {
+      return false;
+    }
+
+    const auto& chosen = pane->blocks[index];
+    const auto safe = wholeCommand(chosen) || how != BlockReuse::run ? how : BlockReuse::edit;
+
+    if (!wholeCommand(chosen) && readBlockCommand(*pane, index)) {
+      command_reuse_ = safe;
+      return true;
+    }
+
+    // Copied out of the pane, which the editor's line must not view while it changes.
+    const ds::String<Memory> command{memory, chosen.command};
+
+    reuseCommand(pane_id, command, safe);
+    return true;
+  }
+
+  bool Session::reuseRestored(std::uint64_t pane_id, std::size_t index, BlockReuse how) {
+    const auto* pane = findPane(pane_id);
+    if (pane == nullptr || index >= pane->restored.size() || pane->restored[index].command.empty() || !prompt::edits(*this, pane_id)) {
+      return false;
+    }
+
+    // Its rows went with the runtime that ran it: a command it holds cut short only goes to the
+    // editor, as it is.
+    const auto& chosen = pane->restored[index];
+    const ds::String<Memory> command{memory, chosen.command};
+
+    reuseCommand(pane_id, command, wholeCommand(chosen) || how != BlockReuse::run ? how : BlockReuse::edit);
+    return true;
+  }
+
+  bool Session::wholeCommand(const CommandBlock& block) noexcept {
+    // A block carries its command's first line, cut at a character's boundary short of the
+    // limit: one with more lines, or near the limit, may have been cut.
+    constexpr std::size_t longest_character = 4;
+
+    return block.lines == 0 && block.command.size() + longest_character <= max_block_command_bytes;
+  }
+
+  void Session::reuseCommand(std::uint64_t pane_id, std::string_view command, BlockReuse how) {
+    constexpr std::string_view root = "sudo ";
+    ds::String<Memory> text{memory};
+
+    // The rows a command was read from end in a line break, and may hold spaces after it.
+    while (!command.empty() && (command.back() == '\n' || command.back() == '\r' || command.back() == ' ')) {
+      command.remove_suffix(1);
+    }
+
+    if (how == BlockReuse::edit_as_root && !command.starts_with(root)) {
+      text.append(root);
+    }
+
+    text.append(command);
+    selectBlock(pane_id, ds::none);
+    prompt::write(*this, pane_id, text);
+    if (how == BlockReuse::run) {
+      static_cast<void>(prompt::key(*this, pane_id, prompt::KeyPress{.key = prompt::Key::enter}));
+    }
+
+    changed_pane_ = pane_id;
   }
 
   bool Session::copyBlock(BlockAt block, BlockCopy what) {
@@ -706,11 +909,13 @@ namespace telar::gui::application {
       return false;
     }
 
-    const bool copied = what == BlockCopy::command || blockOutput(*pane, index).hasValue();
+    // Output no command printed has no command to copy.
+    const bool copied = what == BlockCopy::command ? !pane->blocks[index].command.empty() : blockOutput(*pane, index).hasValue();
 
+    // A filtered output copies the lines the filter shows.
     if (copied && what == BlockCopy::command) {
       copyBlockCommand(*pane, index);
-    } else if (copied) {
+    } else if (copied && !copyFiltered(block)) {
       copyBlockOutput(*pane, index);
     }
 
@@ -731,6 +936,33 @@ namespace telar::gui::application {
     }
   }
 
+  void Session::windowActivated(bool active) noexcept {
+    window_active_ = active;
+  }
+
+  void Session::alertFinished(const Pane<Memory>& pane, std::span<const std::uint64_t> running) {
+    if (running.empty() || !configuration.long_commands.enabled) {
+      return;
+    }
+
+    const bool watched = window_active_ && notifications::targetVisible(*this, {.kind = NotificationTarget::Kind::pane, .id = pane.id});
+
+    for (std::size_t index = 0; index < pane.blocks.size(); ++index) {
+      const auto& block = pane.blocks[index];
+      const bool ended = block.state == CommandBlockState::succeeded || block.state == CommandBlockState::failed;
+      if (!ended || std::ranges::find(running, blockKey(pane, index)) == running.end()) {
+        continue;
+      }
+
+      const features::notifications::FinishedCommand finished{.pane_id = pane.id, .command = block.command, .failed = block.state == CommandBlockState::failed, .status = block.status, .duration_ms = block.duration_ms};
+      if (features::notifications::CommandAlerts::alerts(configuration.long_commands, finished, watched)) {
+        features::notifications::CommandAlerts::Message message;
+
+        notifications::publish(*this, features::notifications::CommandAlerts::input(finished, message), now_());
+      }
+    }
+  }
+
   bool Session::takeBlockChange() noexcept {
     return std::exchange(block_changed_, false);
   }
@@ -746,6 +978,19 @@ namespace telar::gui::application {
     }
   }
 
+  std::uint64_t Session::liveFrom(const Pane<Memory>& pane) noexcept {
+    const auto& blocks = pane.blocks;
+    if (blocks.empty()) {
+      return 0;
+    }
+
+    // Output no command printed starts on the row a prompt was drawn on before a job's report
+    // wrote over it: that row is the output's, not the live prompt's.
+    const auto& last = blocks.back();
+
+    return static_cast<std::uint64_t>(last.row) + std::max<std::uint32_t>(last.rows, last.state == CommandBlockState::background ? 1 : 0);
+  }
+
   ds::Option<std::uint32_t> Session::livePromptRow(const Pane<Memory>& pane) {
     const auto& screen = pane.screen;
     const auto& scroll = screen.scroll();
@@ -753,15 +998,25 @@ namespace telar::gui::application {
       return ds::none;
     }
 
-    // The prompt is looked for on the cursor's row and the rows right above it.
-    constexpr std::size_t searched_rows = 8;
-    const auto cursor = static_cast<std::size_t>(screen.cursor().y);
+    // The prompt is looked for from the cursor's row up, however many rows a prompt and the
+    // command typed at it take, and no higher than the last command's own rows: above them is
+    // output, and a prompt there is a command's, not the live one.
+    // After output no command printed, the shell drew its prompt again without saying so: the
+    // live prompt is on the cursor's row when no row says it is a prompt.
+    const auto& blocks = pane.blocks;
+    const bool background = !blocks.empty() && blocks.back().state == CommandBlockState::background;
+    const auto live_from = liveFrom(pane);
+    const auto first = static_cast<std::size_t>(live_from > scroll.offset ? live_from - scroll.offset : 0);
+    const auto end = std::min(static_cast<std::size_t>(screen.cursor().y) + 1, static_cast<std::size_t>(screen.rows()));
 
-    for (std::size_t above = 0; above < searched_rows && above <= cursor; ++above) {
-      const auto row = cursor - above;
+    for (auto row = end; row-- > first;) {
       if ((screen.rowFlags(row) & static_cast<Byte>(RowFlag::prompt)) != 0) {
         return scroll.offset + static_cast<std::uint32_t>(row);
       }
+    }
+
+    if (background && end > first) {
+      return scroll.offset + static_cast<std::uint32_t>(end - 1);
     }
 
     return ds::none;

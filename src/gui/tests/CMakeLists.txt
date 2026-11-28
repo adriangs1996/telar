@@ -72,6 +72,7 @@ if(TELAR_GUI_NATIVE)
     qt_case/qt_case.cppm
     screen_fixture/screen_fixture.cppm
     shape_atlas/shape_atlas.cppm
+    shots_fixture/shots_fixture.cppm
     terminal_cursor_fixture/terminal_cursor_fixture.cppm
     wire_runtime/wire_runtime.cppm)
   telar_add_test(gui-qt-test-fixtures STATIC SOURCES ${gui_qt_test_fixtures}
@@ -254,7 +255,7 @@ if(TELAR_GUI_NATIVE)
   telar_add_test(gui-configuration-source-test QT SOURCES configuration_source_test.cpp LIBRARIES gui-quick gui-quickplugin gui-qt-test-fixtures Qt6::Test gui-test-fixtures
     TEST gui-configuration-source LABELS gui.ui ENVIRONMENT QT_QPA_PLATFORM=offscreen TIMEOUT 30)
   telar_add_qt_test_moc(gui-configuration-source-test)
-  telar_add_test(gui-separators-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/separators_probe.cpp LIBRARIES gui-quick gui-quickplugin gui-test-fixtures)
+  telar_add_test(gui-separators-probe QT PROBE SOURCES ${TELAR_PROCESS_SOURCE_DIR}/tools/separators_probe.cpp LIBRARIES gui-quick gui-quickplugin gui-qt-test-fixtures gui-test-fixtures)
   telar_add_test(gui-plugin-worker-test QT SOURCES plugin_worker_test.cpp LIBRARIES gui-quick gui-quickplugin gui-foundation-actions gui-posix Qt6::Concurrent Qt6::Test gui-features-plugins gui-application
     TEST gui-plugin-worker LABELS gui.ui TIMEOUT 30)
   telar_add_qt_test_moc(gui-plugin-worker-test)

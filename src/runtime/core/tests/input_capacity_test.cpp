@@ -156,5 +156,50 @@ namespace {
     panes.remove(model, clients, pane.core.id);
   }
 
+  // A command the editor runs is answered: refused while the pane's input queue is full, with
+  // nothing typed, and completed once there is room, as the editor keeps a refused one.
+  void testCommandIsAnswered() {
+    telar::testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    RuntimeModel model{memory};
+    ClientStore clients{memory};
+    LimitService limits;
+    NativeEventLoop<ConcurrentMemory> poller{memory};
+    PaneService panes{memory, poller, limits, PaneLaunchOptions{.socket = "/unused/input-capacity.sock"}};
+    WorkspaceService<decltype(poller)> workspaces{memory};
+    ClientPeer owner{memory, model, clients, ClientRole::interactive};
+    ClientPeer outsider{memory, model, clients, ClientRole::interactive};
+    const ds::Array<std::string_view, 1> arguments{"/bin/cat"};
+
+    workspaces.open(model, panes, clients, owner.session().id, OpenPane{.request_id = 1, .size = {80, 24, 0, 0}, .launch = Launch{.cwd = "/tmp", .arguments = arguments}});
+    const auto opened = owner.receive<PaneOpened>();
+    const auto pane = panes.requireTerminal(model.panes, opened.pane_id);
+    const std::vector<Byte> retained(TerminalBody::input_limit, 'a');
+    const ds::Array<Byte, 4> command{'m', 'a', 'k', 'e'};
+
+    pane.body.input.append(retained);
+    panes.runCommand(model, clients, owner.session().id, RunPaneCommand{.request_id = 2, .pane_id = pane.core.id, .text = command});
+    const auto refused = owner.receive<RequestFailed>();
+
+    check(refused.request_id == 2 && refused.code == FailureCode::resource_limit && refused.message.contains("input queue"), "a full queue refuses the command with why");
+    check(pane.body.input.size() == retained.size(), "and types none of it");
+
+    pane.body.input.truncate(0);
+    panes.runCommand(model, clients, owner.session().id, RunPaneCommand{.request_id = 3, .pane_id = pane.core.id, .text = command});
+    check(owner.receive<RequestCompleted>().request_id == 3, "a command typed is completed");
+
+    bool rejected = false;
+
+    try {
+      panes.runCommand(model, clients, outsider.session().id, RunPaneCommand{.request_id = 4, .pane_id = pane.core.id, .text = command});
+    } catch (const RequestError& error) {
+      rejected = error.code() == FailureCode::invalid_request;
+    }
+
+    check(rejected, "a client the pane is not attached to is refused");
+    panes.remove(model, clients, pane.core.id);
+  }
+
   const telar::testing::Case case_input_capacity{"input_capacity.input_capacity", testInputCapacity};
+  const telar::testing::Case case_command_is_answered{"input_capacity.command_is_answered", testCommandIsAnswered};
 }

@@ -32,6 +32,7 @@ static_assert(true);
 #include <QtCore/qobjectdefs.h>
 #include <QtCore/qpoint.h>
 #include <QtCore/qstringliteral.h>
+#include <QtCore/qtenvironmentvariables.h>
 #include <QtCore/qtmetamacros.h>
 #include <QtCore/qtypes.h>
 #include <QtGui/qtestsupport_gui.h>
@@ -99,7 +100,7 @@ namespace {
         {QStringLiteral("selection"), 0},
         {QStringLiteral("offset"), page_offset},
         {QStringLiteral("hasMore"), true},
-        {QStringLiteral("matchFuzzy"), true},
+        {QStringLiteral("match"), QStringLiteral("regex")},
         {QStringLiteral("query"), QStringLiteral("git")},
         {QStringLiteral("macStyle"), true},
         {QStringLiteral("enterRuns"), false},
@@ -208,7 +209,7 @@ namespace {
     return items;
   }
 
-  // Each match keeps its delegate while the query grows, shrinks or matches nothing.
+  // Each match keeps its delegate while what the runtime marked grows, shrinks or is nothing.
   void verifyMatchesKeepTheirDelegates(QQuickItem& row, const QVariantMap& colors) {
     QTRY_COMPARE_WITH_TIMEOUT(visibleMatches(row).size(), qsizetype{2}, wait_ms);
     const QPointer<QQuickItem> first = visibleMatches(row)[0];
@@ -216,7 +217,7 @@ namespace {
 
     QCOMPARE(first->property("text").toString(), QStringLiteral("a"));
     QCOMPARE(second->property("text").toString(), QStringLiteral("b"));
-    row.setProperty("query", QStringLiteral("bc"));
+    row.setProperty("ranges", QVariantList{1, 3});
     QTRY_VERIFY_WITH_TIMEOUT(first && first->property("text").toString() == QStringLiteral("b"), wait_ms);
     QCOMPARE(visibleMatches(row)[0], first.data());
     QCOMPARE(visibleMatches(row)[1], second.data());
@@ -224,22 +225,22 @@ namespace {
     QCOMPARE(first->property("color").value<QColor>(), colors.value(QStringLiteral("accent")).value<QColor>());
     QVERIFY(first->property("bold").toBool());
 
-    row.setProperty("query", QStringLiteral("abc"));
+    row.setProperty("ranges", QVariantList{0, 3});
     QTRY_COMPARE_WITH_TIMEOUT(visibleMatches(row).size(), qsizetype{3}, wait_ms);
     QCOMPARE(visibleMatches(row)[0], first.data());
     QCOMPARE(visibleMatches(row)[1], second.data());
     const QPointer<QQuickItem> third = visibleMatches(row)[2];
 
-    row.setProperty("query", QStringLiteral("a"));
+    row.setProperty("ranges", QVariantList{0, 1});
     QTRY_COMPARE_WITH_TIMEOUT(visibleMatches(row).size(), qsizetype{1}, wait_ms);
     QCOMPARE(visibleMatches(row)[0], first.data());
     QVERIFY(second && third);
     QVERIFY(!second->isVisible() && !third->isVisible());
     QCOMPARE(first->property("text").toString(), QStringLiteral("a"));
-    row.setProperty("query", QStringLiteral("z"));
+    row.setProperty("ranges", QVariantList{});
     QTRY_VERIFY_WITH_TIMEOUT(visibleMatches(row).isEmpty(), wait_ms);
     QVERIFY(first && !first->isVisible());
-    row.setProperty("query", QStringLiteral("abc"));
+    row.setProperty("ranges", QVariantList{0, 3});
     QTRY_COMPARE_WITH_TIMEOUT(visibleMatches(row).size(), qsizetype{3}, wait_ms);
     QCOMPARE(visibleMatches(row)[0], first.data());
     QCOMPARE(visibleMatches(row)[1], second.data());
@@ -250,7 +251,7 @@ namespace {
   void verifyWideAndCombiningMatches(QQuickItem& row, QVariantMap& record) {
     record.insert(QStringLiteral("command"), QStringLiteral("a界e\u0301"));
     row.setProperty("record", record);
-    row.setProperty("query", QStringLiteral("界e\u0301"));
+    row.setProperty("ranges", QVariantList{1, 7});
     QTRY_COMPARE_WITH_TIMEOUT(visibleMatches(row).size(), qsizetype{2}, wait_ms);
     const auto* const wide = visibleMatches(row)[0];
     const auto* const combining = visibleMatches(row)[1];
@@ -315,6 +316,8 @@ namespace {
       constexpr int empty_height = 360;
       auto item = createChrome(engine, QStringLiteral("HistoryEmpty"), {{QStringLiteral("state"), QVariantMap{}}, {QStringLiteral("colors"), themeColors({})}, {QStringLiteral("typography"), historyTypography()}, {QStringLiteral("workspace"), QStringLiteral("thread 🧵")}, {QStringLiteral("width"), wide_width}, {QStringLiteral("height"), empty_height}});
 
+      // Over the workbench's background, as the history panel shows it.
+      window.setColor(themeColors({}).value(QStringLiteral("workbenchBackground")).value<QColor>());
       item->setParentItem(window.contentItem());
       window.resize(wide_width, empty_height);
       QVERIFY(showComponentWindow(window, wait_ms));
@@ -333,7 +336,9 @@ namespace {
           Case{.phase = QStringLiteral("loading"), .title = QStringLiteral("Searching your command history…"), .has_page = false},
           Case{.phase = QStringLiteral("failed"), .title = QStringLiteral("Could not load the command history")},
           Case{.title = QStringLiteral("No commands yet"), .action = QStringLiteral("import")},
-          Case{.author = QStringLiteral("human"), .title = QStringLiteral("No matching commands")},
+          // A new person's first search shows only their own commands, and still finds none.
+          Case{.author = QStringLiteral("human"), .title = QStringLiteral("No commands yet"), .action = QStringLiteral("import")},
+          Case{.author = QStringLiteral("agent"), .title = QStringLiteral("No matching commands")},
           Case{.scope = QStringLiteral("workspace"), .title = QStringLiteral("No matches in workspace thread 🧵"), .action = QStringLiteral("everywhere")},
           Case{.scope = QStringLiteral("cwd"), .title = QStringLiteral("No matches in this directory"), .action = QStringLiteral("everywhere")},
           Case{.scope = QStringLiteral("pane"), .title = QStringLiteral("No matches in this pane"), .action = QStringLiteral("everywhere")},
@@ -347,6 +352,10 @@ namespace {
         QTRY_COMPARE_WITH_TIMEOUT(item->property("title").toString(), sample.title, wait_ms);
         QTRY_COMPARE_WITH_TIMEOUT(item->property("action").toString(), sample.action, wait_ms);
         QTRY_VERIFY_WITH_TIMEOUT(item->property("layout").toMap().value(QStringLiteral("title")).toRectF().width() > 0, wait_ms);
+        // A new person's empty history, as the window shows it.
+        if (const auto directory = qEnvironmentVariable("TELAR_GUI_TEST_ARTIFACT_DIRECTORY"); !directory.isEmpty() && sample.author == QStringLiteral("human")) {
+          QVERIFY(window.grabWindow().save(directory + QStringLiteral("/12-empty-history-offers-import.png")));
+        }
       }
 
       auto state = item->property("state").toMap();
@@ -737,7 +746,7 @@ namespace {
 
       QVERIFY(key_labels.contains(QStringLiteral("Tab")));
       QVERIFY(key_labels.contains(QStringLiteral("Shift+Tab")));
-      QVERIFY(key_labels.contains(QStringLiteral("!")));
+      QVERIFY(key_labels.contains(QStringLiteral("exit:fail")));
     }
 
     [[qt::slot]] static void filtersHideKeyHintsBeforeTheRightControls() {
@@ -764,7 +773,8 @@ namespace {
       };
 
       QTRY_VERIFY_WITH_TIMEOUT(layout().value(QStringLiteral("showKeys")).toBool(), wait_ms);
-      constexpr int controls_only_width = 500;
+      // Wide enough for the five scopes, the authors and the failed filter, not for the keys.
+      constexpr int controls_only_width = 580;
 
       window.resize(controls_only_width, header_height);
       QTRY_VERIFY_WITH_TIMEOUT(!layout().value(QStringLiteral("showKeys")).toBool(), wait_ms);
@@ -886,6 +896,55 @@ namespace {
       QVERIFY(continuation->x() + continuation->width() <= row->width());
     }
 
+    // A row tells the machine it ran on when asked, shows the output's excerpt in place of its
+    // directory, and a run shown around a match is dimmed.
+    [[qt::slot]] static void rowsShowTheMachineTheExcerptAndNeighbours() {
+      SystemAllocator memory;
+      application::history::HistoryRow<SystemAllocator> entry{memory};
+      const telar::ds::Array excerpt_ranges{telar::HistoryRange{.start = 7, .end = 13}};
+
+      entry.command.assign("cargo build");
+      entry.cwd.assign("/work/project");
+      entry.host.assign("build-01");
+      // Run a while ago, as a row of a day's history is.
+      entry.started_at_ms = QDateTime::currentMSecsSinceEpoch() - std::int64_t{40} * 60 * 1000;
+      entry.excerpt.assign("error: linker failed");
+      entry.excerpt_ranges.assign(excerpt_ranges);
+      entry.exit_code = 1;
+      entry.neighbour = true;
+      const auto record = historyRecord(entry, {});
+      QQuickWindow window;
+      QQmlEngine engine;
+      auto row = createChrome(engine, QStringLiteral("HistoryRow"), {
+                                                                        {QStringLiteral("record"), record},
+                                                                        {QStringLiteral("colors"), themeColors({})},
+                                                                        {QStringLiteral("typography"), historyTypography()},
+                                                                        {QStringLiteral("rowHeight"), row_height},
+                                                                        {QStringLiteral("width"), wide_width},
+                                                                        {QStringLiteral("height"), row_height},
+                                                                    });
+
+      row->setParentItem(window.contentItem());
+      window.resize(wide_width, row_height);
+      QVERIFY(showComponentWindow(window, wait_ms));
+      followWindowSize(*row, window);
+      QVERIFY(!row->property("detailText").toString().contains(QStringLiteral("build-01")));
+      row->setProperty("showHost", true);
+      QTRY_VERIFY_WITH_TIMEOUT(row->property("detailText").toString().startsWith(QStringLiteral("build-01")), wait_ms);
+      const auto* directory = row->findChild<QQuickItem*>(QStringLiteral("historyDirectory"));
+      const auto* excerpt = row->findChild<QQuickItem*>(QStringLiteral("historyExcerpt"));
+
+      QVERIFY(directory != nullptr && excerpt != nullptr);
+      QVERIFY(row->property("excerpted").toBool() && !directory->isVisible());
+      QVERIFY(excerpt->parentItem() != nullptr && excerpt->parentItem()->opacity() < 1);
+      row->setProperty("selected", true);
+      QTRY_COMPARE_WITH_TIMEOUT(excerpt->parentItem()->opacity(), qreal{1}, wait_ms);
+      // The machine first in the row's facts, as a page of runs of several machines shows it.
+      if (const auto pictures = qEnvironmentVariable("TELAR_GUI_TEST_ARTIFACT_DIRECTORY"); !pictures.isEmpty()) {
+        QVERIFY(window.grabWindow().save(pictures + QStringLiteral("/18-host-column.png")));
+      }
+    }
+
     [[qt::slot]] static void rowsRetireGesturesWhenTheContentRevisionChanges() {
       SystemAllocator memory;
       application::history::HistoryRow<SystemAllocator> entry{memory};
@@ -941,7 +1000,7 @@ namespace {
                                                                         {QStringLiteral("rowHeight"), row_height},
                                                                         {QStringLiteral("width"), wide_width},
                                                                         {QStringLiteral("height"), row_height},
-                                                                        {QStringLiteral("query"), QStringLiteral("gb")},
+                                                                        {QStringLiteral("ranges"), QVariantList{0, 1, 4, 5}},
                                                                     });
 
       row->setParentItem(window.contentItem());
@@ -977,7 +1036,7 @@ namespace {
         geometry_changed = std::make_unique<QSignalSpy>(row.get(), row->metaObject()->method(geometry_signal));
       }
 
-      row->setProperty("query", QStringLiteral("gt"));
+      row->setProperty("ranges", QVariantList{0, 1, 2, 3});
       QTRY_VERIFY_WITH_TIMEOUT(regions().value(QStringLiteral("lines")) != before.value(QStringLiteral("lines")), wait_ms);
       QCOMPARE(geometry(), before_geometry);
       QTRY_VERIFY_WITH_TIMEOUT(!layout_changed.isEmpty(), wait_ms);
@@ -1031,7 +1090,7 @@ namespace {
                                                                         {QStringLiteral("rowHeight"), row_height},
                                                                         {QStringLiteral("width"), wide_width},
                                                                         {QStringLiteral("height"), row_height},
-                                                                        {QStringLiteral("query"), QStringLiteral("ab")},
+                                                                        {QStringLiteral("ranges"), QVariantList{0, 2}},
                                                                     });
 
       row->setParentItem(window.contentItem());
@@ -1048,7 +1107,7 @@ namespace {
 
       record.insert(QStringLiteral("command"), many_matches);
       row->setProperty("record", record);
-      row->setProperty("query", many_matches);
+      row->setProperty("ranges", QVariantList{0, many_matches.size()});
       QTRY_COMPARE_WITH_TIMEOUT(visibleMatches(*row).size(), retention_bound + overflow, wait_ms);
       QList<QPointer<QQuickItem>> retained;
 
@@ -1056,7 +1115,7 @@ namespace {
         retained.append(item);
       }
 
-      row->setProperty("query", QStringLiteral("a"));
+      row->setProperty("ranges", QVariantList{0, 1});
       QTRY_COMPARE_WITH_TIMEOUT(visibleMatches(*row).size(), qsizetype{1}, wait_ms);
       QTRY_COMPARE_WITH_TIMEOUT(visualItems(*row, QStringLiteral("historyMatch")).size(), retention_bound, wait_ms);
       for (qsizetype index = 0; index < retained.size(); ++index) {
@@ -1068,7 +1127,7 @@ namespace {
         }
       }
 
-      row->setProperty("query", QStringLiteral("z"));
+      row->setProperty("ranges", QVariantList{});
       QTRY_VERIFY_WITH_TIMEOUT(visibleMatches(*row).isEmpty(), wait_ms);
       QCOMPARE(visualItems(*row, QStringLiteral("historyMatch")).size(), retention_bound);
       row.reset();
@@ -1128,7 +1187,8 @@ namespace {
 
       QVERIFY(row->implicitHeight() > minimum_card_height);
       QVERIFY(row->implicitHeight() < card_height);
-      row->setProperty("query", QStringLiteral("cS"));
+      // The c of the first line's command and the s of the second's, as the runtime marked them.
+      row->setProperty("ranges", QVariantList{6, 7, 14, 15});
       constexpr qsizetype expected_matches = 2;
 
       QTRY_COMPARE_WITH_TIMEOUT(visualItems(*row, QStringLiteral("historyMatch")).size(), expected_matches, wait_ms);
@@ -1742,7 +1802,7 @@ namespace {
 
       QVERIFY(range != nullptr && error != nullptr);
       QTRY_VERIFY_WITH_TIMEOUT(range->isVisible(), wait_ms);
-      QCOMPARE(range->property("text").toString(), QStringLiteral("257–268  ·  ⇞ older  ·  fuzzy"));
+      QCOMPARE(range->property("text").toString(), QStringLiteral("257–268  ·  ⇞ older  ·  ⌥M regex"));
       constexpr int constrained_width = 180;
 
       window.resize(constrained_width, footer_height);

@@ -8,6 +8,7 @@ static_assert(true);
 #include <QByteArray>
 #include <QClipboard>
 #include <QCursor>
+#include <QDate>
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
@@ -36,6 +37,7 @@ static_assert(true);
 #include <QStyleHints>
 #include <QTemporaryDir>
 #include <QThreadPool>
+#include <QTime>
 #include <QTimer>
 #include <QUrl>
 #include <QVariant>
@@ -535,6 +537,15 @@ return {api_version = 2, client = {
     QString error_;
     telar::ds::Array<telar::Byte, response_capacity> storage_{};
   };
+
+  // When a fixture's command ran: four hours before the tests started, plus `offset` milliseconds,
+  // so the history reads as a day's commands do and the fixtures keep their order.
+  std::int64_t recentMs(std::int64_t offset) {
+    constexpr std::int64_t before_ms = std::int64_t{4} * 60 * 60 * 1000;
+    static const auto base = QDateTime::currentMSecsSinceEpoch() - before_ms;
+
+    return base + offset;
+  }
 
   enum class PluginCatalogRequest : std::uint8_t {
     unconfigured = 2,
@@ -6279,8 +6290,8 @@ return {api_version=2, client={keybindings={
 
     [[qt::slot]] void historyPointerSelectionNeverSubmits() {
       const telar::ds::Array entries{
-          telar::ImportHistoryEntry{.started_at_ms = 100, .command = "echo GUI_HISTORY_POINTER_FIRST"},
-          telar::ImportHistoryEntry{.started_at_ms = 101, .command = "echo GUI_HISTORY_POINTER_SECOND"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo GUI_HISTORY_POINTER_FIRST"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(101), .command = "echo GUI_HISTORY_POINTER_SECOND"},
       };
 
       importHistory(entries, "gui-history-pointer");
@@ -6532,10 +6543,10 @@ return {api_version=2, client={keybindings={
 
     [[qt::slot]] void historyCardPressCannotFollowAReplacedRecord() {
       const telar::ds::Array entries{
-          telar::ImportHistoryEntry{.started_at_ms = 100, .command = "echo GUI_REUSE_PRESS_A_FIRST"},
-          telar::ImportHistoryEntry{.started_at_ms = 101, .command = "echo GUI_REUSE_PRESS_A_SECOND"},
-          telar::ImportHistoryEntry{.started_at_ms = 102, .command = "echo GUI_REUSE_PRESS_B_FIRST"},
-          telar::ImportHistoryEntry{.started_at_ms = 103, .command = "echo GUI_REUSE_PRESS_B_SECOND"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo GUI_REUSE_PRESS_A_FIRST"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(101), .command = "echo GUI_REUSE_PRESS_A_SECOND"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(102), .command = "echo GUI_REUSE_PRESS_B_FIRST"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(103), .command = "echo GUI_REUSE_PRESS_B_SECOND"},
       };
 
       importHistory(entries, "gui-reuse-press");
@@ -6731,8 +6742,8 @@ return {api_version=2, client={keybindings={
 
     [[qt::slot]] void historyFooterRequiresDeliveredChoices() {
       const telar::ds::Array entries{
-          telar::ImportHistoryEntry{.started_at_ms = 100, .command = "echo GUI_HISTORY_DELIVERY_FIRST"},
-          telar::ImportHistoryEntry{.started_at_ms = 101, .command = "echo GUI_HISTORY_DELIVERY_SECOND"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo GUI_HISTORY_DELIVERY_FIRST"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(101), .command = "echo GUI_HISTORY_DELIVERY_SECOND"},
       };
 
       importHistory(entries, "gui-history-delivery");
@@ -6821,10 +6832,10 @@ return {api_version=2, client={keybindings={
 
     [[qt::slot]] void historyRowsRequireTheDeliveredContentRevision() {
       const telar::ds::Array entries{
-          telar::ImportHistoryEntry{.started_at_ms = 100, .command = "echo GUI_ROW_PRESENTATION_A_FIRST"},
-          telar::ImportHistoryEntry{.started_at_ms = 101, .command = "echo GUI_ROW_PRESENTATION_A_SECOND"},
-          telar::ImportHistoryEntry{.started_at_ms = 102, .command = "echo GUI_ROW_PRESENTATION_B_FIRST"},
-          telar::ImportHistoryEntry{.started_at_ms = 103, .command = "echo GUI_ROW_PRESENTATION_B_SECOND"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo GUI_ROW_PRESENTATION_A_FIRST"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(101), .command = "echo GUI_ROW_PRESENTATION_A_SECOND"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(102), .command = "echo GUI_ROW_PRESENTATION_B_FIRST"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(103), .command = "echo GUI_ROW_PRESENTATION_B_SECOND"},
       };
 
       importHistory(entries, "gui-row-presentation");
@@ -6923,8 +6934,8 @@ return {api_version=2, client={keybindings={
 
     void verifyHistoryReplacementAfterRestore(bool minimize) {
       const telar::ds::Array entries{
-          telar::ImportHistoryEntry{.started_at_ms = 100, .command = "echo GUI_HISTORY_RESTORE_FIRST"},
-          telar::ImportHistoryEntry{.started_at_ms = 101, .command = "echo GUI_HISTORY_RESTORE_SECOND"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo GUI_HISTORY_RESTORE_FIRST"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(101), .command = "echo GUI_HISTORY_RESTORE_SECOND"},
       };
 
       importHistory(entries, "gui-history-restore");
@@ -7109,7 +7120,7 @@ return {api_version=2, client={keybindings={
     // Imports the command tagged `tag` as the only entry of its source and opens history on it.
     void openRenderedHistoryCommand(const QString& tag) {
       const auto encoded = renderedHistoryCommand(tag).toUtf8();
-      const telar::ds::Array entries{telar::ImportHistoryEntry{.started_at_ms = 100, .command = std::string_view{encoded.constData(), static_cast<std::size_t>(encoded.size())}}};
+      const telar::ds::Array entries{telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = std::string_view{encoded.constData(), static_cast<std::size_t>(encoded.size())}}};
       const auto source = QByteArray{"gui-history-render-"} + tag.toUtf8();
 
       importHistory(entries, source.constData());
@@ -7293,24 +7304,28 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(!search->property("layout").toMap().value(QStringLiteral("composing")).toBool(), runtime_wait_ms);
     }
 
-    // The failed chip shows and controls the filter a leading ! turned on: turning it off takes
-    // the ! out of the search.
-    [[qt::slot]] void historyFailedChipControlsTheMarker() {
+    // Failed commands are a filter of their own, typed as exit:fail: a leading ! stays in the
+    // search, for the matcher to read as fzf does.
+    [[qt::slot]] void historyFailedFilterIsAWordOfItsOwn() {
       client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
         client_->commands()->execute(window_actions::Action::cancel);
       });
 
-      client_->history()->search(QStringLiteral("!  GUI_HISTORY_FIXTURE"));
-      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
-      QVERIFY(client_->history()->state().value(QStringLiteral("failedOnly")).toBool());
-      client_->history()->setFilters({{QStringLiteral("failedOnly"), false}});
+      client_->history()->search(QStringLiteral("!GUI_HISTORY_FIXTURE"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
       QVERIFY(!client_->history()->state().value(QStringLiteral("failedOnly")).toBool());
+      client_->history()->search(QStringLiteral("exit:fail GUI_HISTORY_FIXTURE"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+      QVERIFY(client_->history()->state().value(QStringLiteral("failedOnly")).toBool());
       auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
 
       QVERIFY(search != nullptr);
       QTRY_COMPARE_WITH_TIMEOUT(search->property("text").toString(), QStringLiteral("GUI_HISTORY_FIXTURE"), runtime_wait_ms);
+      captureHistoryArtifact(QStringLiteral("11-failed-filter-typed"));
+      client_->history()->setFilters({{QStringLiteral("failedOnly"), false}});
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+      QVERIFY(!client_->history()->state().value(QStringLiteral("failedOnly")).toBool());
     }
 
     // While the history is open its ages move on, and a running command is read again; closing
@@ -7589,7 +7604,7 @@ return {api_version=2, client={keybindings={
         command += "printf GUI_SCROLL_INSPECTION_" + std::to_string(index) + "\n";
       }
 
-      const telar::ds::Array entries{telar::ImportHistoryEntry{.started_at_ms = 100, .command = command}};
+      const telar::ds::Array entries{telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = command}};
 
       importHistory(entries, "gui-wheel-inspection");
       client_->commands()->execute(window_actions::Action::history);
@@ -7698,7 +7713,7 @@ return {api_version=2, client={keybindings={
 
       for (std::size_t index = 0; index < entries.size(); ++index) {
         commands.atMut(index) = "echo GUI_SCROLL_PAGE_" + std::to_string(index);
-        entries.atMut(index) = {.started_at_ms = static_cast<std::int64_t>(index), .command = commands[index]};
+        entries.atMut(index) = {.started_at_ms = recentMs(static_cast<std::int64_t>(index)), .command = commands[index]};
       }
 
       importHistory(entries, "gui-wheel-page");
@@ -7836,7 +7851,7 @@ return {api_version=2, client={keybindings={
 
       for (std::size_t index = 0; index < entries.size(); ++index) {
         commands.atMut(index) = "echo GUI_REPLACEMENT_TARGET_" + std::to_string(index);
-        entries.atMut(index) = {.started_at_ms = static_cast<std::int64_t>(index) + 1, .command = commands[index]};
+        entries.atMut(index) = {.started_at_ms = recentMs(static_cast<std::int64_t>(index) + 1), .command = commands[index]};
       }
 
       importHistory(entries, "gui-replacement-target");
@@ -7979,6 +7994,790 @@ return {api_version=2, client={keybindings={
       client_->terminals()->input(pane->id, "\x15");
     }
 
+    // Three commands of one search, newest first, the dialog open on them.
+    void openHistoryOn(std::string_view source, std::span<const telar::ImportHistoryEntry> entries, const QString& query) {
+      importHistory(entries, source);
+      client_->commands()->execute(window_actions::Action::history);
+      client_->history()->search(query);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && std::cmp_equal(client_->history()->rows()->rowCount(), entries.size()), runtime_wait_ms);
+    }
+
+    [[nodiscard]] QString selectedHistoryCommand() const {
+      auto* rows = client_->history()->rows();
+      const auto selection = client_->history()->state().value(QStringLiteral("selection")).toInt();
+
+      return rows->data(rows->index(selection, 0), ListModel::record_role).toMap().value(QStringLiteral("command")).toString();
+    }
+
+    // Runs deleted from a page already read, by another client, take nothing from the pages after
+    // it: each next page starts right after the last run the one before it showed.
+    [[qt::slot]] void historyDeletesBetweenPagesSkipNothing() {
+      constexpr std::size_t page_entries = application::history::HistoryLimits::page_entries;
+      constexpr std::size_t entry_count = (2 * page_entries) + (page_entries / 2);
+      telar::ds::Array<std::string, entry_count> commands;
+      telar::ds::Array<telar::ImportHistoryEntry, entry_count> entries{};
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+
+      for (std::size_t index = 0; index < entries.size(); ++index) {
+        commands.atMut(index) = "echo GUI_KEYSET_" + std::to_string(index);
+        entries.atMut(index) = {.started_at_ms = recentMs(static_cast<std::int64_t>(index) + 1000), .command = commands[index]};
+      }
+
+      importHistory(entries, "gui-history-keyset");
+      client_->commands()->execute(window_actions::Action::history);
+      client_->history()->search(QStringLiteral("sort:time GUI_KEYSET_"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && std::cmp_equal(client_->history()->rows()->rowCount(), page_entries), runtime_wait_ms);
+      const auto newest = [this] {
+        return historyRecordAt(0).value(QStringLiteral("command")).toString();
+      };
+      telar::ds::Array<std::uint64_t, 3> deleted{};
+
+      for (std::size_t index = 0; index < deleted.size(); ++index) {
+        deleted.atMut(index) = historyRecordAt(static_cast<int>(index)).value(QStringLiteral("key")).toString().toULongLong();
+      }
+
+      client_->history()->execute(HistoryController::Action::older);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && newest() == QStringLiteral("echo GUI_KEYSET_%1").arg(entry_count - page_entries - 1), runtime_wait_ms);
+
+      // Three runs of the first page go while the second is shown: the runtime tells the panel,
+      // which reads the second page anew, from where it began.
+      for (const auto id : deleted) {
+        deleteHistory(id);
+      }
+
+      QTest::qWait(500);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+      QCOMPARE(newest(), QStringLiteral("echo GUI_KEYSET_%1").arg(entry_count - page_entries - 1));
+      QCOMPARE(client_->history()->rows()->rowCount(), static_cast<int>(page_entries));
+
+      client_->history()->execute(HistoryController::Action::older);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && newest() != QStringLiteral("echo GUI_KEYSET_%1").arg(entry_count - page_entries - 1), runtime_wait_ms);
+      QCOMPARE(newest(), QStringLiteral("echo GUI_KEYSET_%1").arg(entry_count - (2 * page_entries) - 1));
+      QCOMPARE(client_->history()->rows()->rowCount(), static_cast<int>(entry_count - (2 * page_entries)));
+    }
+
+    // Enter while the open page is read anew runs the row the person chose, not the first one:
+    // only a query typed since makes Enter wait for its best match.
+    [[qt::slot]] void historyEnterRunsTheSelectedRowDuringARefresh() {
+      const telar::ds::Array entries{
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo W7REFRESH_OLDEST"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(101), .command = "echo W7REFRESH_MIDDLE"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(102), .command = "echo W7REFRESH_NEWEST"},
+      };
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+        if (const auto* pane = firstPane()) {
+          client_->terminals()->input(pane->id, "\x15");
+        }
+      });
+
+      openHistoryOn("gui-history-refresh-enter", entries, QStringLiteral("W7REFRESH"));
+      client_->history()->select(1);
+      QTRY_COMPARE(selectedHistoryCommand(), QStringLiteral("echo W7REFRESH_MIDDLE"));
+      // The dialog's periodic refresh, sent now; Enter comes before its page.
+      test::HistoryPresentation::age(*client_);
+      QVERIFY(!client_->history()->loading());
+      client_->history()->use(1);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
+      const auto* pane = firstPane();
+      if (pane == nullptr) {
+        QFAIL("Required terminal fixture is missing");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen, ScreenTextLayout::logical).contains(QLatin1StringView("echo W7REFRESH_MIDDLE")), runtime_wait_ms);
+      QVERIFY(!screenText(pane->screen, ScreenTextLayout::logical).contains(QLatin1StringView("echo W7REFRESH_NEWEST")));
+    }
+
+    // Control+R steps to an older match and Control+S to a newer one, in the dialog, whose rows
+    // run up from the search, as under the prompt line, whose rows run down.
+    [[qt::slot]] void historyControlRMovesToAnOlderMatch() {
+      const telar::ds::Array entries{
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo W7STEP_OLDER"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(101), .command = "echo W7STEP_NEWER"},
+      };
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+
+      openHistoryOn("gui-history-step", entries, QStringLiteral("W7STEP"));
+      auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
+      if (search == nullptr) {
+        QFAIL("Required history search fixture is missing");
+      }
+
+      search->forceActiveFocus();
+      QCOMPARE(selectedHistoryCommand(), QStringLiteral("echo W7STEP_NEWER"));
+      QKeyEvent older{QEvent::KeyPress, Qt::Key_R, NativeKeyAdapter::control_modifier};
+
+      QCoreApplication::sendEvent(search, &older);
+      QTRY_COMPARE(selectedHistoryCommand(), QStringLiteral("echo W7STEP_OLDER"));
+      QKeyEvent newer{QEvent::KeyPress, Qt::Key_S, NativeKeyAdapter::control_modifier};
+
+      QCoreApplication::sendEvent(search, &newer);
+      QTRY_COMPARE(selectedHistoryCommand(), QStringLiteral("echo W7STEP_NEWER"));
+    }
+
+    // A refresh keeps the selection on the command chosen, wherever the commands recorded since
+    // put it.
+    [[qt::slot]] void historySelectionStaysOnItsCommandAfterARefresh() {
+      const telar::ds::Array entries{
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo W7KEEP_OLDEST"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(101), .command = "echo W7KEEP_CHOSEN"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(102), .command = "echo W7KEEP_NEWEST"},
+      };
+      const telar::ds::Array later{telar::ImportHistoryEntry{.started_at_ms = recentMs(103), .command = "echo W7KEEP_LATER"}};
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+
+      openHistoryOn("gui-history-keep", entries, QStringLiteral("W7KEEP"));
+      client_->history()->select(1);
+      QTRY_COMPARE(selectedHistoryCommand(), QStringLiteral("echo W7KEEP_CHOSEN"));
+      importHistory(later, "gui-history-keep-later");
+      test::HistoryPresentation::age(*client_);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->history()->rows()->rowCount(), 4, runtime_wait_ms);
+      QCOMPARE(selectedHistoryCommand(), QStringLiteral("echo W7KEEP_CHOSEN"));
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), 2);
+      captureHistoryArtifact(QStringLiteral("09-selection-kept-after-refresh"));
+    }
+
+    // Moves made while the rows of a new query load apply to those rows, and Enter after them
+    // runs the row they reached.
+    [[qt::slot]] void historyMovesWhileTypingApplyToTheNewRows() {
+      const telar::ds::Array entries{
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo W7TYPED_THIRD"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(101), .command = "echo W7TYPED_SECOND"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(102), .command = "echo W7TYPED_FIRST"},
+      };
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+        if (const auto* pane = firstPane()) {
+          client_->terminals()->input(pane->id, "\x15");
+        }
+      });
+
+      openHistoryOn("gui-history-typed", entries, QStringLiteral("W7TYPE"));
+      client_->history()->search(QStringLiteral("W7TYPED"));
+      QVERIFY(client_->history()->loading());
+      client_->history()->move(1);
+      client_->history()->move(1);
+      client_->history()->use(0);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
+      const auto* pane = firstPane();
+      if (pane == nullptr) {
+        QFAIL("Required terminal fixture is missing");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen, ScreenTextLayout::logical).contains(QLatin1StringView("echo W7TYPED_THIRD")), runtime_wait_ms);
+    }
+
+    // Copying while the rows of a new query load copies the command the person sees selected.
+    [[qt::slot]] void historyCopyWhileTypingCopiesTheShownCommand() {
+      const telar::ds::Array entries{
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo W7COPYSHOWN"},
+      };
+      auto* clipboard = QGuiApplication::clipboard();
+      auto saved_clipboard = test::copyClipboard();
+      const auto restore = qScopeGuard([this, clipboard, saved = std::move(saved_clipboard)] mutable {
+        clipboard->setMimeData(saved.release());
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+
+      openHistoryOn("gui-history-copy-typing", entries, QStringLiteral("W7COPYSHOWN"));
+      client_->history()->search(QStringLiteral("W7COPYSHOWNX"));
+      QVERIFY(client_->history()->loading());
+      client_->history()->execute(telar::gui::qt::HistoryController::Action::copy);
+      QCOMPARE(clipboard->text(), QStringLiteral("echo W7COPYSHOWN"));
+    }
+
+    // A filter typed as a word becomes a chip, leaves the query and filters; Backspace's removal
+    // brings the rows back.
+    [[qt::slot]] void historyTypedFiltersBecomeChips() {
+      const telar::ds::Array entries{
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo W7CHIP_FIRST"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(101), .command = "echo W7CHIP_SECOND"},
+      };
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+
+      openHistoryOn("gui-history-chip", entries, QStringLiteral("W7CHIP"));
+      client_->history()->search(QStringLiteral("cwd:/telar/no/such/directory W7CHIP"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 0, runtime_wait_ms);
+      const auto chips = client_->history()->state().value(QStringLiteral("chips")).toList();
+
+      QCOMPARE(chips.size(), 1);
+      QCOMPARE(chips.front().toMap().value(QStringLiteral("label")).toString(), QStringLiteral("cwd:/telar/no/such/directory"));
+      QCOMPARE(client_->history()->state().value(QStringLiteral("editorText")).toString(), QStringLiteral("W7CHIP"));
+      client_->history()->search(QStringLiteral("since:today W7CHIP"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+      captureHistoryArtifact(QStringLiteral("01-typed-filters-become-chips"));
+      client_->history()->removeChip(-1);
+      client_->history()->removeChip(-1);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->history()->rows()->rowCount(), 2, runtime_wait_ms);
+      QVERIFY(client_->history()->state().value(QStringLiteral("chips")).toList().isEmpty());
+    }
+
+    // A search that finds nothing offers filters to try, which apply as if typed.
+    [[qt::slot]] void historyEmptySearchOffersFilters() {
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+
+      client_->commands()->execute(window_actions::Action::history);
+      client_->history()->search(QStringLiteral("W7NOTHINGMATCHES"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 0, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(!test::visualItems(*window_->contentItem(), QStringLiteral("historyEmptyFilter")).isEmpty(), runtime_wait_ms);
+      captureHistoryArtifact(QStringLiteral("02-empty-search-offers-filters"));
+      client_->history()->applyFilter(QStringLiteral("exit:fail"));
+      QTRY_VERIFY(client_->history()->state().value(QStringLiteral("failedOnly")).toBool());
+    }
+
+    // Commands marked go together: run, joined by && in the order they were marked.
+    [[qt::slot]] void historyMarkedCommandsRunTogether() {
+      const telar::ds::Array entries{
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo W7MARK_ONE"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(101), .command = "echo W7MARK_TWO"},
+      };
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+        if (const auto* pane = firstPane()) {
+          client_->terminals()->input(pane->id, "\x15");
+        }
+      });
+
+      openHistoryOn("gui-history-mark", entries, QStringLiteral("W7MARK"));
+      client_->history()->select(1);
+      QTRY_COMPARE(selectedHistoryCommand(), QStringLiteral("echo W7MARK_ONE"));
+      client_->history()->execute(telar::gui::qt::HistoryController::Action::mark);
+      client_->history()->select(0);
+      QTRY_COMPARE(selectedHistoryCommand(), QStringLiteral("echo W7MARK_TWO"));
+      client_->history()->execute(telar::gui::qt::HistoryController::Action::mark);
+      QTRY_COMPARE(client_->history()->state().value(QStringLiteral("marks")).toList().size(), 2);
+      captureHistoryArtifact(QStringLiteral("03-marked-commands"));
+      client_->history()->use(0, true);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
+      const auto* pane = firstPane();
+      if (pane == nullptr) {
+        QFAIL("Required terminal fixture is missing");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen, ScreenTextLayout::logical).contains(QLatin1StringView("echo W7MARK_ONE && echo W7MARK_TWO")), runtime_wait_ms);
+    }
+
+    // A delete takes its row away at once and waits for its undo, which brings it back.
+    [[qt::slot]] void historyDeleteWaitsForItsUndo() {
+      const telar::ds::Array entries{
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo W7UNDO_KEPT"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(101), .command = "echo W7UNDO_DELETED"},
+      };
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+
+      openHistoryOn("gui-history-undo", entries, QStringLiteral("W7UNDO"));
+      client_->history()->execute(telar::gui::qt::HistoryController::Action::erase);
+      QTRY_COMPARE(client_->history()->rows()->rowCount(), 1);
+      QVERIFY(client_->history()->state().value(QStringLiteral("hidden")).toBool());
+      QCOMPARE(client_->history()->state().value(QStringLiteral("hiddenCommand")).toString(), QStringLiteral("echo W7UNDO_DELETED"));
+      captureHistoryArtifact(QStringLiteral("04-delete-with-undo"));
+      client_->history()->execute(telar::gui::qt::HistoryController::Action::undo);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->history()->rows()->rowCount(), 2, runtime_wait_ms);
+      QVERIFY(!client_->history()->state().value(QStringLiteral("hidden")).toBool());
+    }
+
+    // Alt and a digit run that row of the page at once.
+    [[qt::slot]] void historyQuickSelectRunsTheRow() {
+      const telar::ds::Array entries{
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo W7QUICK_SECOND"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(101), .command = "echo W7QUICK_FIRST"},
+      };
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+        if (const auto* pane = firstPane()) {
+          client_->terminals()->input(pane->id, "\x15");
+        }
+      });
+
+      openHistoryOn("gui-history-quick", entries, QStringLiteral("W7QUICK"));
+      captureHistoryArtifact(QStringLiteral("05-quick-select-digits"));
+      auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
+      if (search == nullptr) {
+        QFAIL("Required history search fixture is missing");
+      }
+
+      search->forceActiveFocus();
+      QKeyEvent second{QEvent::KeyPress, Qt::Key_2, Qt::AltModifier};
+
+      QCoreApplication::sendEvent(search, &second);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
+      const auto* pane = firstPane();
+      if (pane == nullptr) {
+        QFAIL("Required terminal fixture is missing");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen, ScreenTextLayout::logical).contains(QLatin1StringView("echo W7QUICK_SECOND")), runtime_wait_ms);
+    }
+
+    // A pinned command shows first, and runs from its pin.
+    [[qt::slot]] void historyPinnedCommandsShowFirst() {
+      const telar::ds::Array entries{
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo W7PINNED"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(101), .command = "echo W7PINOTHER"},
+      };
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+        if (const auto* pane = firstPane()) {
+          client_->terminals()->input(pane->id, "\x15");
+        }
+      });
+
+      openHistoryOn("gui-history-pin", entries, QStringLiteral("W7PIN"));
+      client_->history()->select(1);
+      QTRY_COMPARE(selectedHistoryCommand(), QStringLiteral("echo W7PINNED"));
+      client_->history()->execute(telar::gui::qt::HistoryController::Action::pin);
+      QTRY_COMPARE(client_->history()->state().value(QStringLiteral("pins")).toList().size(), 1);
+      captureHistoryArtifact(QStringLiteral("06-pinned-commands-first"));
+      client_->history()->search(QStringLiteral("W7PINOTHER"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+      QVERIFY(client_->history()->state().value(QStringLiteral("pins")).toList().isEmpty());
+      client_->history()->search(QStringLiteral("W7PIN"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
+      client_->history()->usePin(0);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
+      const auto* pane = firstPane();
+      if (pane == nullptr) {
+        QFAIL("Required terminal fixture is missing");
+      }
+
+      QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen, ScreenTextLayout::logical).contains(QLatin1StringView("echo W7PINNED")), runtime_wait_ms);
+      // The pin goes, so the window's other cases find none.
+      client_->terminals()->input(pane->id, "\x15");
+      client_->commands()->execute(window_actions::Action::history);
+      client_->history()->search(QStringLiteral("W7PINNED"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
+      client_->history()->execute(telar::gui::qt::HistoryController::Action::pin);
+      QTRY_VERIFY(client_->history()->state().value(QStringLiteral("pins")).toList().isEmpty());
+    }
+
+    // The highlight marks what matched beyond ASCII, in the dialog and under the prompt line.
+    [[qt::slot]] void historyHighlightsNonAsciiMatches() {
+      const telar::ds::Array entries{telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo W7ÜBER_ÉCOLE"}};
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+
+      openHistoryOn("gui-history-unicode", entries, QStringLiteral("w7über_éc"));
+      const auto matched = [&] {
+        QString text;
+
+        for (const auto* item : test::visualItems(*window_->contentItem(), QStringLiteral("historyMatch"))) {
+          if (item->isVisible()) {
+            text.append(item->property("text").toString());
+          }
+        }
+
+        return text;
+      };
+
+      QTRY_VERIFY_WITH_TIMEOUT(matched().contains(QStringLiteral("Ü")) && matched().contains(QStringLiteral("É")), runtime_wait_ms);
+      captureHistoryArtifact(QStringLiteral("07-highlight-non-ascii"));
+      // Under the prompt line, the bytes the runtime marked, whatever UTF-16 makes of the
+      // characters before them: İ takes two, 𝒜 four.
+      const auto runs = client_->history()->marked(QStringLiteral("İ 𝒜 ÉCOLE"), QVariantList{8, 11});
+      QString marked;
+
+      for (const auto& run : runs) {
+        if (run.toMap().value(QStringLiteral("marked")).toBool()) {
+          marked.append(run.toMap().value(QStringLiteral("text")).toString());
+        }
+      }
+
+      QCOMPARE(marked, QStringLiteral("ÉC"));
+    }
+
+    // Runs `command` in the first pane and waits for `printed` on a line of its own.
+    void runInFirstPane(const QString& command, const QString& printed) {
+      const auto pane_id = firstPane()->id;
+
+      client_->terminals()->input(pane_id, (command + QLatin1Char(0x0A)).toUtf8());
+      QTRY_VERIFY_WITH_TIMEOUT(std::ranges::any_of(screenText(firstPane()->screen, ScreenTextLayout::logical).split(QLatin1Char('\n')), [&printed](const auto& line) {
+        return line.trimmed() == printed;
+      }),
+          runtime_wait_ms);
+    }
+
+    // The value of the inspector's fact `label`; empty when it shows none.
+    [[nodiscard]] QStringList inspectorFacts(const QString& label) const {
+      QStringList texts;
+
+      for (const auto& fact : client_->history()->inspection().value(QStringLiteral("facts")).toList()) {
+        if (fact.toMap().value(QStringLiteral("label")).toString() == label) {
+          texts.append(fact.toMap().value(QStringLiteral("text")).toString());
+        }
+      }
+
+      return texts;
+    }
+
+    [[nodiscard]] QVariantMap historyRecordAt(int row) const {
+      auto* rows = client_->history()->rows();
+
+      return rows->data(rows->index(row, 0), ListModel::record_role).toMap();
+    }
+
+    [[nodiscard]] QStringList historyChipLabels() const {
+      QStringList labels;
+
+      for (const auto& chip : client_->history()->state().value(QStringLiteral("chips")).toList()) {
+        labels.append(chip.toMap().value(QStringLiteral("label")).toString());
+      }
+
+      return labels;
+    }
+
+    // A command run while the panel is open shows in it at once: the runtime tells the window of
+    // each change, long before the ages are told anew.
+    [[qt::slot]] void historyShowsCommandsRecordedWhileOpen() {
+      QVERIFY(terminalReady());
+      const telar::ds::Array entries{telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo W7LIVE_IMPORTED"}};
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+
+      openHistoryOn("gui-history-live", entries, QStringLiteral("W7LIVE"));
+      client_->terminals()->input(firstPane()->id, "echo W7LIVE_RAN\n");
+      QTRY_VERIFY_WITH_TIMEOUT(client_->history()->rows()->rowCount() == 2 && historyRecordAt(0).value(QStringLiteral("command")).toString() == QStringLiteral("echo W7LIVE_RAN"), runtime_wait_ms);
+    }
+
+    // The shell a command ran in, by its name, and the time it ran before narrow the search as
+    // chips: a command imported hours ago ran in no shell the history knows, one just run ran in
+    // the pane's, /bin/sh.
+    [[qt::slot]] void historyShellAndUntilChipsNarrowTheRuns() {
+      QVERIFY(terminalReady());
+      const telar::ds::Array entries{telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo X4SHELL_IMPORTED"}};
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+      const auto commands = [this] {
+        QStringList shown;
+
+        for (int row = 0; row < client_->history()->rows()->rowCount(); ++row) {
+          shown.append(historyRecordAt(row).value(QStringLiteral("command")).toString());
+        }
+
+        return shown;
+      };
+
+      openHistoryOn("gui-history-shell", entries, QStringLiteral("X4SHELL"));
+      client_->terminals()->input(firstPane()->id, "echo X4SHELL_RAN\n");
+      QTRY_COMPARE_WITH_TIMEOUT(client_->history()->rows()->rowCount(), 2, runtime_wait_ms);
+
+      client_->history()->search(QStringLiteral("shell:sh X4SHELL"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && commands() == QStringList{QStringLiteral("echo X4SHELL_RAN")}, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("until:2099-12-31 X4SHELL"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && commands() == QStringList{QStringLiteral("echo X4SHELL_RAN")}, runtime_wait_ms);
+      QCOMPARE(historyChipLabels(), (QStringList{QStringLiteral("shell:sh"), QStringLiteral("until:2099-12-31")}));
+      captureHistoryArtifact(QStringLiteral("39-history-shell-until-chips"));
+      client_->history()->removeChip(-1);
+      client_->history()->removeChip(-1);
+      client_->history()->search(QStringLiteral("shell:fish X4SHELL"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && commands().isEmpty(), runtime_wait_ms);
+      client_->history()->removeChip(-1);
+      client_->history()->search(QStringLiteral("until:-1h shell:sh X4SHELL"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && commands().isEmpty(), runtime_wait_ms);
+      client_->history()->removeChip(-1);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && commands() == QStringList{QStringLiteral("echo X4SHELL_IMPORTED")}, runtime_wait_ms);
+      QCOMPARE(historyChipLabels(), QStringList{QStringLiteral("until:-1h")});
+    }
+
+    // The person chooses how the query matches: typed as a chip, or stepped with Alt+M, and the
+    // footer tells the mode the search matches with and the key that steps it.
+    [[qt::slot]] void historyMatchModeIsTypedOrStepped() {
+      const telar::ds::Array entries{
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(300), .command = "echo X4MODE_ab12"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(301), .command = "git X4MODE_cd"},
+      };
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+      const auto commands = [this] {
+        QStringList shown;
+
+        for (int row = 0; row < client_->history()->rows()->rowCount(); ++row) {
+          shown.append(historyRecordAt(row).value(QStringLiteral("command")).toString());
+        }
+
+        return shown;
+      };
+      const auto footer = [this] {
+        const auto* range = window_->findChild<QQuickItem*>(QStringLiteral("historyRange"));
+
+        return range == nullptr ? QString{} : range->property("text").toString();
+      };
+      const auto key = platform::usesCommandKey() ? QStringLiteral("⌥M ") : QStringLiteral("Alt+M ");
+
+      openHistoryOn("gui-history-mode", entries, QStringLiteral("X4MODE"));
+      QTRY_VERIFY_WITH_TIMEOUT(footer().endsWith(key + QStringLiteral("fuzzy")), runtime_wait_ms);
+
+      client_->history()->search(QStringLiteral("mode:prefix echo X4MODE"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && commands() == QStringList{QStringLiteral("echo X4MODE_ab12")}, runtime_wait_ms);
+      QCOMPARE(historyChipLabels(), QStringList{QStringLiteral("mode:prefix")});
+      client_->history()->search(QStringLiteral("mode:regex X4MODE_[a-z]+$"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && commands() == QStringList{QStringLiteral("git X4MODE_cd")}, runtime_wait_ms);
+      QCOMPARE(historyChipLabels(), QStringList{QStringLiteral("mode:regex")});
+      QTRY_VERIFY_WITH_TIMEOUT(footer().endsWith(key + QStringLiteral("regex")), runtime_wait_ms);
+      captureHistoryArtifact(QStringLiteral("38-history-match-mode-chip"));
+
+      // Alt+M steps from regex back to fuzzy: the regex typed is now a fuzzy query.
+      auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
+      if (search == nullptr) {
+        QFAIL("Required command search fixture is missing");
+      }
+
+      QKeyEvent step{QEvent::KeyPress, Qt::Key_M, Qt::AltModifier};
+
+      QCoreApplication::sendEvent(search, &step);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && historyChipLabels() == QStringList{QStringLiteral("mode:fuzzy")}, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(footer().endsWith(key + QStringLiteral("fuzzy")), runtime_wait_ms);
+      QCoreApplication::sendEvent(search, &step);
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && historyChipLabels() == QStringList{QStringLiteral("mode:substring")}, runtime_wait_ms);
+      client_->history()->search(QStringLiteral("X4MODE_c"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && commands() == QStringList{QStringLiteral("git X4MODE_cd")}, runtime_wait_ms);
+      QVERIFY(footer().endsWith(key + QStringLiteral("substring")));
+    }
+
+    // A command that arrives on top of the rows shown, while the person looks at older ones,
+    // leaves them as they are: the same rows on screen, in the same places, the same one selected.
+    [[qt::slot]] void historyRowsStayPutWhenACommandArrivesOnTop() {
+      verifyRowsStayPut("X4STAY", 30);
+    }
+
+    // On a full page the oldest row leaves for the one arriving on top, and the others stay put.
+    [[qt::slot]] void historyRowsStayPutWhenAFullPageTakesACommand() {
+      verifyRowsStayPut("X4FULL", application::history::HistoryLimits::page_entries);
+    }
+
+    void verifyRowsStayPut(std::string_view prefix, std::size_t entry_count) {
+      constexpr int selected_row = 20;
+      std::vector<std::string> names(entry_count);
+      std::vector<telar::ImportHistoryEntry> entries(entry_count);
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+
+      for (std::size_t index = 0; index < entries.size(); ++index) {
+        names[index] = "echo " + std::string{prefix} + "_" + std::to_string(index);
+        entries[index] = {.started_at_ms = recentMs(static_cast<std::int64_t>(index) + 500), .command = names[index]};
+      }
+
+      openHistoryOn(prefix, entries, QStringLiteral("sort:time %1_").arg(QString::fromUtf8(prefix)));
+      auto* const results = window_->findChild<QQuickItem*>(QStringLiteral("historyResults"));
+      if (results == nullptr) {
+        QFAIL("Required history result view is missing");
+      }
+
+      // The rows' places once the selected card has opened: two looks a moment apart agree.
+      const auto settled = [&] {
+        QList<qreal> before;
+        QList<qreal> after;
+
+        for (const auto* item : test::visualItems(*results, QStringLiteral("historyResult"))) {
+          before.append(item->mapToScene({}).y());
+        }
+
+        QTest::qWait(100);
+        for (const auto* item : test::visualItems(*results, QStringLiteral("historyResult"))) {
+          after.append(item->mapToScene({}).y());
+        }
+
+        return before == after;
+      };
+
+      client_->history()->select(selected_row);
+      QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("selection")).toInt(), selected_row, runtime_wait_ms);
+      QTRY_VERIFY_WITH_TIMEOUT(settled(), runtime_wait_ms);
+      const auto selected = selectedHistoryCommand();
+      QHash<QString, QPointer<QQuickItem>> shown;
+      QHash<QString, qreal> places;
+
+      const auto view = results->mapRectToScene(results->boundingRect());
+      const auto inside = [&view](const QQuickItem& item) {
+        return view.contains(item.mapRectToScene(item.boundingRect()));
+      };
+
+      for (auto* item : test::visualItems(*results, QStringLiteral("historyResult"))) {
+        const auto key = item->property("record").toMap().value(QStringLiteral("key")).toString();
+
+        if (inside(*item)) {
+          shown.insert(key, item);
+          places.insert(key, item->mapToScene({}).y());
+        }
+      }
+
+      QVERIFY(shown.size() > 3);
+      const auto newest = "echo " + std::string{prefix} + "_NEWER";
+      const telar::ds::Array newer{telar::ImportHistoryEntry{.started_at_ms = recentMs(600), .command = newest}};
+      const auto expected_rows = static_cast<int>(std::min(entry_count + 1, std::size_t{application::history::HistoryLimits::page_entries}));
+
+      importHistory(newer, std::string{prefix} + "-newer");
+      QTRY_COMPARE_WITH_TIMEOUT(historyRecordAt(0).value(QStringLiteral("command")).toString(), QString::fromStdString(newest), runtime_wait_ms);
+      QCOMPARE(client_->history()->rows()->rowCount(), expected_rows);
+      QTRY_VERIFY_WITH_TIMEOUT(settled(), runtime_wait_ms);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), selected_row + 1);
+      QCOMPARE(selectedHistoryCommand(), selected);
+
+      for (auto* item : test::visualItems(*results, QStringLiteral("historyResult"))) {
+        const auto key = item->property("record").toMap().value(QStringLiteral("key")).toString();
+
+        if (shown.contains(key)) {
+          QVERIFY2(shown.value(key) == item, "a row shown before keeps its delegate");
+          QCOMPARE(item->mapToScene({}).y(), places.value(key));
+        }
+      }
+    }
+
+    // A raw listing shows the runs around each match, which do not match, dimmed.
+    [[qt::slot]] void historyRawListingShowsNeighbours() {
+      const telar::ds::Array entries{
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(9'000'000), .command = "echo ZQRAWJX_FIRST"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(9'000'001), .command = "echo zq in between"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(9'000'002), .command = "echo ZQRAWJX_SECOND"},
+      };
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+
+      importHistory(entries, "gui-history-raw");
+      client_->commands()->execute(window_actions::Action::history);
+      client_->history()->search(QStringLiteral("ZQRAWJX"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
+      client_->history()->toggle(QStringLiteral("raw"));
+      const auto neighbour = [this](const QString& command) {
+        for (int row = 0; row < client_->history()->rows()->rowCount(); ++row) {
+          if (historyRecordAt(row).value(QStringLiteral("command")).toString() == command) {
+            return historyRecordAt(row).value(QStringLiteral("neighbour")).toBool() ? 1 : 0;
+          }
+        }
+
+        return -1;
+      };
+
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && neighbour(QStringLiteral("echo zq in between")) == 1, runtime_wait_ms);
+      QCOMPARE(neighbour(QStringLiteral("echo ZQRAWJX_FIRST")), 0);
+      QCOMPARE(neighbour(QStringLiteral("echo ZQRAWJX_SECOND")), 0);
+      QVERIFY(historyChipLabels().contains(QStringLiteral("raw:3")));
+      captureHistoryArtifact(QStringLiteral("14-raw-neighbours"));
+      client_->history()->toggle(QStringLiteral("raw"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 2, runtime_wait_ms);
+    }
+
+    // The order flips between rank and time, and shows as a chip.
+    [[qt::slot]] void historySortTogglesBetweenRankAndTime() {
+      const telar::ds::Array entries{
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(200), .command = "echo W7SORT"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(201), .command = "echo W7SORxT"},
+      };
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+
+      openHistoryOn("gui-history-sort", entries, QStringLiteral("W7SORT"));
+      QCOMPARE(historyRecordAt(0).value(QStringLiteral("command")).toString(), QStringLiteral("echo W7SORT"));
+      client_->history()->toggle(QStringLiteral("sort"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && historyChipLabels().contains(QStringLiteral("sort:time")) && historyRecordAt(0).value(QStringLiteral("command")).toString() == QStringLiteral("echo W7SORxT"), runtime_wait_ms);
+      captureHistoryArtifact(QStringLiteral("15-sort-chip"));
+      client_->history()->toggle(QStringLiteral("sort"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && historyChipLabels().contains(QStringLiteral("sort:rank")) && historyRecordAt(0).value(QStringLiteral("command")).toString() == QStringLiteral("echo W7SORT"), runtime_wait_ms);
+    }
+
+    // The pane's commands and those from before it started are a scope of their own.
+    [[qt::slot]] void historySessionScopeReadsThePaneAndBefore() {
+      QVERIFY(terminalReady());
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+
+      client_->commands()->execute(window_actions::Action::history);
+      client_->history()->setFilters({{QStringLiteral("scope"), QStringLiteral("session")}});
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->state().value(QStringLiteral("effectiveScope")).toString() == QStringLiteral("session"), runtime_wait_ms);
+      QCOMPARE(client_->history()->state().value(QStringLiteral("scopeLabel")).toString(), QStringLiteral("Session"));
+      captureHistoryArtifact(QStringLiteral("16-session-scope"));
+    }
+
+    // The inspector tells of the command's runs and of the commands run around it in its pane.
+    [[qt::slot]] void historyInspectorTellsRunsAndContext() {
+      QVERIFY(terminalReady());
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+
+      runInFirstPane(QStringLiteral("echo W7CTX_BEFORE"), QStringLiteral("W7CTX_BEFORE"));
+      runInFirstPane(QStringLiteral("echo W7STATS_RUN"), QStringLiteral("W7STATS_RUN"));
+      runInFirstPane(QStringLiteral("echo W7CTX_AFTER"), QStringLiteral("W7CTX_AFTER"));
+      client_->commands()->execute(window_actions::Action::history);
+      client_->history()->search(QStringLiteral("W7STATS_RUN"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
+      client_->history()->execute(HistoryController::Action::inspect);
+      QTRY_VERIFY_WITH_TIMEOUT(!inspectorFacts(QStringLiteral("Runs")).isEmpty() && inspectorFacts(QStringLiteral("Before")).contains(QStringLiteral("echo W7CTX_BEFORE")) && inspectorFacts(QStringLiteral("Then")).contains(QStringLiteral("echo W7CTX_AFTER")), runtime_wait_ms);
+      // The test's shell tells no status, so the inspector has no success rate to tell.
+      QCOMPARE(inspectorFacts(QStringLiteral("Runs")), QStringList{QStringLiteral("1 run")});
+      QVERIFY(waitForHistoryPresentation());
+      captureHistoryArtifact(QStringLiteral("17-inspector-runs-context"));
+    }
+
+    // The inspector tells every run of the command as the runtime counts them, and a bar for the
+    // runs of each of the last days, today the last.
+    [[qt::slot]] void historyInspectorTellsEachDaysRuns() {
+      constexpr std::int64_t two_seconds = 2'000'000'000;
+      const auto at = [](int days_ago, int second) {
+        return QDateTime{QDate::currentDate().addDays(-days_ago), QTime{0, 0, second}}.toMSecsSinceEpoch();
+      };
+      // Five runs three days ago, one yesterday and three today, the newest of them failed.
+      std::vector<telar::ImportHistoryEntry> entries;
+
+      for (int run = 0; run < 5; ++run) {
+        entries.push_back({.started_at_ms = at(3, run + 1), .command = "echo X4STATS_DAILY", .exit_code = 0, .duration_ns = two_seconds});
+      }
+
+      entries.push_back({.started_at_ms = at(1, 1), .command = "echo X4STATS_DAILY", .exit_code = 0, .duration_ns = two_seconds});
+      for (int run = 0; run < 3; ++run) {
+        entries.push_back({.started_at_ms = at(0, run + 1), .command = "echo X4STATS_DAILY", .exit_code = run == 2 ? 1 : 0, .duration_ns = two_seconds});
+      }
+
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+
+      importHistory(entries, "gui-history-daily");
+      client_->commands()->execute(window_actions::Action::history);
+      client_->history()->search(QStringLiteral("X4STATS_DAILY"));
+      QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() == 1, runtime_wait_ms);
+      client_->history()->execute(HistoryController::Action::inspect);
+      QTRY_VERIFY_WITH_TIMEOUT(!inspectorFacts(QStringLiteral("Per day")).isEmpty(), runtime_wait_ms);
+      QCOMPARE(inspectorFacts(QStringLiteral("Runs")), QStringList{QStringLiteral("9 runs")});
+      QCOMPARE(inspectorFacts(QStringLiteral("Mean")), QStringList{QStringLiteral("2.0s")});
+      QCOMPARE(inspectorFacts(QStringLiteral("Success")), QStringList{QStringLiteral("88% of 9")});
+      QVERIFY(inspectorFacts(QStringLiteral("Last")).value(0).endsWith(QStringLiteral("exit 1")));
+      QCOMPARE(inspectorFacts(QStringLiteral("Per day")), QStringList{QStringLiteral("··········█·▂▅  3 today")});
+      QVERIFY(waitForHistoryPresentation());
+      captureHistoryArtifact(QStringLiteral("40-history-inspector-per-day"));
+    }
+
+    // The card of a long command shows it in the shell's colours.
+    [[qt::slot]] void historyCardShowsShellSyntax() {
+      const telar::ds::Array entries{telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "for f in W7SYNTAX_*; do\n  echo \"$f\" --verbose # each\ndone"}};
+      const auto restore = qScopeGuard([this] {
+        client_->commands()->execute(window_actions::Action::cancel);
+      });
+
+      openHistoryOn("gui-history-syntax", entries, QStringLiteral("W7SYNTAX"));
+      QTRY_VERIFY_WITH_TIMEOUT(test::visualItems(*window_->contentItem(), QStringLiteral("historySyntax")).size() > 3, runtime_wait_ms);
+      captureHistoryArtifact(QStringLiteral("08-card-shell-syntax"));
+    }
+
     [[qt::slot]] void historyLongCommands() {
       using Storage = application::history::HistoryLimits;
       constexpr std::size_t command_bytes = std::size_t{48} * 1024;
@@ -7990,7 +8789,7 @@ return {api_version=2, client={keybindings={
       for (std::size_t index = 0; index < entries.size(); ++index) {
         commands.atMut(index) = "echo GUI_LONG_COMMAND_" + std::to_string(index) + " ";
         commands.atMut(index).resize(command_bytes, 'x');
-        entries.atMut(index) = {.started_at_ms = static_cast<std::int64_t>(index) + 1, .command = commands[index]};
+        entries.atMut(index) = {.started_at_ms = recentMs(static_cast<std::int64_t>(index) + 1), .command = commands[index]};
       }
 
       importHistory(entries, "gui-long-command");
@@ -11202,16 +12001,11 @@ return {api_version=2, client={keybindings={
 
       QCOMPARE(qmlEngine(results), engine_.get());
       QCOMPARE(engine_->incubationController(), &deferred);
-      const auto cache_buffer = results->property("cacheBuffer");
-      const auto restore_cache = qScopeGuard([&] {
-        results->setProperty("cacheBuffer", cache_buffer);
-      });
-
-      QVERIFY(results->setProperty("cacheBuffer", 0));
+      // A flick brings rows the view had not made: it makes them as they show, and none waits
+      // in an incubation that a reply could outrun.
+      QVERIFY(QMetaObject::invokeMethod(results, "flick", Qt::DirectConnection, qreal{0}, results->height()));
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
-      // Cache delegates incubate asynchronously, independently of flick distance.
-      QVERIFY(results->setProperty("cacheBuffer", results->property("contentHeight")));
-      QTRY_VERIFY_WITH_TIMEOUT(deferred.incubatingObjectCount() > 0, runtime_wait_ms);
+      QCOMPARE(deferred.incubatingObjectCount(), 0);
       const auto retained_snapshot = expected_rows == client_->history()->rows()->rowCount();
       const auto existing = test::visualItems(*results, QStringLiteral("historyResult"));
 
@@ -11372,21 +12166,21 @@ return {api_version=2, client={keybindings={
 
     void seedHistoryScroll() {
       const telar::ds::Array entries{
-          telar::ImportHistoryEntry{.started_at_ms = 100, .command = "echo GUI_SCROLL_HISTORY_A_0"},
-          telar::ImportHistoryEntry{.started_at_ms = 101, .command = "echo GUI_SCROLL_HISTORY_A_1"},
-          telar::ImportHistoryEntry{.started_at_ms = 102, .command = "echo GUI_SCROLL_HISTORY_A_2"},
-          telar::ImportHistoryEntry{.started_at_ms = 103, .command = "echo GUI_SCROLL_HISTORY_A_3"},
-          telar::ImportHistoryEntry{.started_at_ms = 104, .command = "echo GUI_SCROLL_HISTORY_B_0"},
-          telar::ImportHistoryEntry{.started_at_ms = 105, .command = "echo GUI_SCROLL_HISTORY_B_1"},
-          telar::ImportHistoryEntry{.started_at_ms = 106, .command = "echo GUI_SCROLL_HISTORY_B_2"},
-          telar::ImportHistoryEntry{.started_at_ms = 107, .command = "echo GUI_SCROLL_HISTORY_B_3"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(100), .command = "echo GUI_SCROLL_HISTORY_A_0"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(101), .command = "echo GUI_SCROLL_HISTORY_A_1"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(102), .command = "echo GUI_SCROLL_HISTORY_A_2"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(103), .command = "echo GUI_SCROLL_HISTORY_A_3"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(104), .command = "echo GUI_SCROLL_HISTORY_B_0"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(105), .command = "echo GUI_SCROLL_HISTORY_B_1"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(106), .command = "echo GUI_SCROLL_HISTORY_B_2"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(107), .command = "echo GUI_SCROLL_HISTORY_B_3"},
       };
 
       importHistory(entries, "gui-wheel-history");
     }
 
     void seedHistory() {
-      const telar::ds::Array<telar::ImportHistoryEntry, 1> entries{{{.started_at_ms = 100, .command = "echo GUI_HISTORY_FIXTURE"}}};
+      const telar::ds::Array<telar::ImportHistoryEntry, 1> entries{{{.started_at_ms = recentMs(100), .command = "echo GUI_HISTORY_FIXTURE"}}};
 
       importHistory(entries, "gui-quick-test");
     }
@@ -11398,7 +12192,7 @@ return {api_version=2, client={keybindings={
 
       for (std::size_t index = 0; index < entries.size(); ++index) {
         commands.atMut(index) = "echo GUI_BROWSER_PAGE_" + std::to_string(index);
-        entries.atMut(index) = {.started_at_ms = static_cast<std::int64_t>(index) + 1, .command = commands[index]};
+        entries.atMut(index) = {.started_at_ms = recentMs(static_cast<std::int64_t>(index) + 1), .command = commands[index]};
       }
 
       importHistory(entries, "gui-browser-page");
@@ -11406,8 +12200,8 @@ return {api_version=2, client={keybindings={
 
     void importRetainedHistory() {
       const telar::ds::Array entries{
-          telar::ImportHistoryEntry{.started_at_ms = 200, .command = "echo GUI_HISTORY_RETAINED_ONE"},
-          telar::ImportHistoryEntry{.started_at_ms = 201, .command = "echo GUI_HISTORY_RETAINED_TWO"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(200), .command = "echo GUI_HISTORY_RETAINED_ONE"},
+          telar::ImportHistoryEntry{.started_at_ms = recentMs(201), .command = "echo GUI_HISTORY_RETAINED_TWO"},
       };
 
       importHistory(entries, "gui-history-retained");
@@ -11447,6 +12241,31 @@ return {api_version=2, client={keybindings={
         QCOMPARE(completed_request, request_id);
         offset += count;
       }
+    }
+
+    // Deletes run `id` from another client, as `telar history delete` would.
+    void deleteHistory(std::uint64_t id) {
+      bool pruned = false;
+      QString decode_error;
+      RuntimeConnection peer{memory_};
+      const QSignalSpy connected{&peer, &RuntimeConnection::connected};
+
+      connect(&peer, &RuntimeConnection::payloadReceived, &peer, [&](QByteArrayView payload) {
+        try {
+          const auto bytes = telar::byteView({payload.data(), static_cast<std::size_t>(payload.size())});
+
+          pruned = telar::Codec::decode<telar::HistoryPruned>(bytes).request_id == 1;
+        } catch (const std::exception& error) {
+          decode_error = QString::fromUtf8(error.what());
+        }
+      });
+
+      peer.open(socket_);
+      QTRY_VERIFY_WITH_TIMEOUT(!connected.isEmpty() || !peer.error().isEmpty(), runtime_wait_ms);
+      QCOMPARE(peer.error(), QString{});
+      peer.send(telar::DeleteHistory{.request_id = 1, .id = id});
+      QTRY_VERIFY_WITH_TIMEOUT(pruned || !decode_error.isEmpty(), runtime_wait_ms);
+      QCOMPARE(decode_error, QString{});
     }
 
     void verifyTerminalFrameAdmission(TerminalSuppression suppression) {

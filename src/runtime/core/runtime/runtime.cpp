@@ -21,6 +21,7 @@ import telar.base.text.utf8;
 import telar.runtime.host.launch_program;
 import telar.runtime.suggestions.engine;
 import telar.runtime.diagnostics.line;
+import telar.runtime.agents.observation.processor;
 import telar.base.ds;
 
 namespace telar::runtime {
@@ -1928,7 +1929,7 @@ namespace telar::runtime {
         clients_(memory),
         admissions_(poller_, limits_),
         client_layouts_(memory),
-        panes_(memory, poller_, limits_, PaneLaunchOptions{.socket = options.socket, .proxy = proxy, .control_policy = options.control_policy, .shell_integration = options.shell_integration, .ssh_integration = options.ssh_integration, .agent_plans = options.agent_plans}, background),
+        panes_(memory, poller_, limits_, PaneLaunchOptions{.socket = options.socket, .proxy = proxy, .control_policy = options.control_policy, .shell_integration = options.shell_integration, .ssh_integration = options.ssh_integration, .ssh_control = options.ssh_control, .agent_plans = options.agent_plans}, background),
         workspaces_(memory),
         worktrees_(memory, limits_),
         executions_(memory, poller_, limits_),
@@ -1947,6 +1948,8 @@ namespace telar::runtime {
         editor_provision_(memory),
         editor_configuration_(memory, options.editor_configuration),
         words_(memory, options.configuration_directory),
+        shell_words_(memory, ShellCompletionOptions{.enabled = options.shell_completion, .user_configuration = options.shell_completion_configuration, .cache_directory = options.data_home, .control_directory = options.ssh_control}),
+        remote_entries_(memory, ShellCompletionOptions{.enabled = !options.ssh_control.empty(), .control_directory = options.ssh_control}),
         agent_files_(memory),
         file_moves_(memory),
         descriptions_(memory, background_, options.descriptions),
@@ -1974,6 +1977,8 @@ namespace telar::runtime {
     poller_.watch(workspace_git_.descriptor(), eventToken(EventSource::worker, 0));
     poller_.watch(shell_git_.descriptor(), eventToken(EventSource::worker, 0));
     poller_.watch(words_.descriptor(), eventToken(EventSource::worker, 0));
+    poller_.watch(shell_words_.descriptor(), eventToken(EventSource::worker, 0));
+    poller_.watch(remote_entries_.descriptor(), eventToken(EventSource::worker, 0));
     poller_.watch(worktree_detection_.descriptor(), eventToken(EventSource::worker, 0));
     poller_.watch(agent_files_.descriptor(), eventToken(EventSource::worker, 0));
     if (descriptions_.descriptor() >= 0) {
@@ -2468,15 +2473,40 @@ namespace telar::runtime {
       throw RequestError{FailureCode::pane_not_found, "Could not complete words"};
     }
 
-    // A remote shell's commands, branches and hosts are not this host's to read.
+    // A remote shell's files, commands and branches are not this host's to read: its host's,
+    // asked through the connection its session shares.
     if (pane->body.shell_state.remote) {
-      client.connection.send(CompletionWords{.request_id = message.request_id, .truncated = true, .words = {}});
+      askRemote(identity, message);
+      return;
+    }
+
+    const auto directory = pane->body.shell_zones && !pane->body.shell_zones->directory().empty() ? pane->body.shell_zones->directory() : std::string_view{pane->core.cwd};
+
+    // The pane's own shell, in its directory and with its PATH; turned off, or a shell telar does
+    // not know, the line has no words of its shell.
+    if (message.provider == CompletionProvider::shell) {
+      const auto shell = pane->body.shell_state.shell;
+      if (!shell_words_.enabled() || shell == IntegratedShell::none) {
+        client.connection.send(CompletionWords{.request_id = message.request_id, .truncated = false, .words = {}});
+        return;
+      }
+
+      ShellCompletionRequest request{.client = client.id, .request = message.request_id, .pane = message.pane_id, .shell = shell, .line = {}, .directory = {}, .home = {}, .path = {}, .question = ShellQuestion::line, .control = {}};
+
+      request.line.assign(message.prefix);
+      request.directory.assign(directory);
+      request.home.assign(processHome());
+      request.path.assign(pane->body.shell_zones && !pane->body.shell_zones->path().empty() ? pane->body.shell_zones->path() : runtime_path_);
+      if (const auto dropped = shell_words_.request(request)) {
+        deliverShellWords(*dropped, {}, false);
+      }
+
       return;
     }
 
     auto request = makeWordRequest(client, message.request_id, message.provider, message.prefix, pane->body);
 
-    request.directory.assign(pane->body.shell_zones && !pane->body.shell_zones->directory().empty() ? pane->body.shell_zones->directory() : std::string_view{pane->core.cwd});
+    request.directory.assign(directory);
     request.home.assign(processHome());
     failDropped(client, words_.request(request));
   }
@@ -2498,6 +2528,66 @@ namespace telar::runtime {
     request.spec = true;
     request.known_digest = message.known_digest;
     failDropped(client, words_.request(request));
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::askRemote(std::uint64_t identity, const CompleteWords& message) {
+    auto& client = requireClient(clients_, identity);
+    // The caller found the terminal.
+    const auto terminal = asTerminal(model_.panes.find(message.pane_id));
+    const auto& pane = terminal->body;
+    // What the host answers: its files, its shell's words, and the words of every provider but
+    // its ssh hosts, read there as this host's own are here.
+    static constexpr ds::Array<std::pair<CompletionProvider, ShellQuestion>, 14> questions{
+        {
+            {CompletionProvider::path, ShellQuestion::paths},
+            {CompletionProvider::directory, ShellQuestion::directories},
+            {CompletionProvider::executable, ShellQuestion::executables},
+            {CompletionProvider::shell, ShellQuestion::line},
+            {CompletionProvider::command, ShellQuestion::provider},
+            {CompletionProvider::branch, ShellQuestion::provider},
+            {CompletionProvider::reference, ShellQuestion::provider},
+            {CompletionProvider::remote, ShellQuestion::provider},
+            {CompletionProvider::stash, ShellQuestion::provider},
+            {CompletionProvider::process, ShellQuestion::provider},
+            {CompletionProvider::make_target, ShellQuestion::provider},
+            {CompletionProvider::just_recipe, ShellQuestion::provider},
+            {CompletionProvider::package_script, ShellQuestion::provider},
+            {CompletionProvider::compose_service, ShellQuestion::provider},
+        },
+    };
+
+    const auto known = questions.view();
+    const auto asked = std::ranges::find(known, message.provider, &std::pair<CompletionProvider, ShellQuestion>::first);
+    const auto question = asked == known.end() ? ds::Option<ShellQuestion>{} : ds::Option<ShellQuestion>{asked->second};
+
+    if (!question) {
+      client.connection.send(CompletionWords{.request_id = message.request_id, .truncated = true, .words = {}});
+      return;
+    }
+
+    // A session that shares no connection, or a host whose shell telar does not know, has no
+    // words; once the connection closes, ssh finds no master and answers none either.
+    auto& service = *question == ShellQuestion::line ? shell_words_ : remote_entries_;
+    const auto control = pane.shell_zones ? pane.shell_zones->remoteControl() : std::string_view{};
+    const auto shell = pane.shell_zones ? pane.shell_zones->remoteShell() : IntegratedShell::none;
+    if (!service.enabled() || control.empty() || (*question == ShellQuestion::line && shell == IntegratedShell::none)) {
+      client.connection.send(CompletionWords{.request_id = message.request_id, .truncated = false, .words = {}});
+      return;
+    }
+
+    ShellCompletionRequest request{.client = client.id, .request = message.request_id, .pane = message.pane_id, .shell = shell, .line = {}, .directory = {}, .home = {}, .path = {}, .question = *question, .control = {}, .provider = message.provider};
+
+    request.line.assign(message.prefix);
+    request.directory.assign(pane.shell_zones->remoteDirectory());
+    request.home.assign(processHome());
+    // ssh is this host's, on the PATH of the pane's own shell.
+    request.path.assign(pane.shell_zones->path().empty() ? std::string_view{runtime_path_} : pane.shell_zones->path());
+    request.control.assign(control);
+    if (const auto dropped = service.request(request)) {
+      deliverShellWords(*dropped, {}, false);
+    }
   }
 
   template <EventLoop Poller, typename Background>
@@ -3075,7 +3165,15 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const PaneCommand& message) {
-    panes_.command(model_, clients_, identity, message, [&agents = agents_](const Pane& pane, std::span<const Byte> bytes) {
+    static_cast<void>(panes_.command(model_, clients_, identity, message, [&agents = agents_](const Pane& pane, std::span<const Byte> bytes) {
+      agents.observeInput(pane, bytes);
+    }));
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const RunPaneCommand& message) {
+    panes_.runCommand(model_, clients_, identity, message, [&agents = agents_](const Pane& pane, std::span<const Byte> bytes) {
       agents.observeInput(pane, bytes);
     });
   }
@@ -3343,10 +3441,8 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const ImportHistory& message) {
-    auto& client = requireClient(clients_, identity);
-
-    submitBackground(background_, client, message);
-    client.connection.send(RequestCompleted{.request_id = message.request_id});
+    // The store answers once the batch is written, so the importer sends the next one only then.
+    submitBackground(background_, requireClient(clients_, identity), message);
   }
 
   template <EventLoop Poller, typename Background>
@@ -3358,6 +3454,12 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const DeleteHistoryCommand& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const RewriteHistory& message) {
     submitBackground(background_, requireClient(clients_, identity), message);
   }
 
@@ -3381,8 +3483,29 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const QueryHistoryCommandStats& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::handle(std::uint64_t identity, const QueryHistoryWorkspaces& message) {
     submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const ChooseHistoryEntry& message) {
+    submitBackground(background_, requireClient(clients_, identity), message);
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::handle(std::uint64_t identity, const WatchHistory& message) {
+    auto& client = requireClient(clients_, identity);
+
+    client.watches_history = message.watch;
+    client.connection.send(RequestCompleted{.request_id = message.request_id});
   }
 
   template <EventLoop Poller, typename Background>
@@ -3458,6 +3581,13 @@ namespace telar::runtime {
     shell_git_.collect([&](const ShellGitResult& result) {
       auto pane = asTerminal(findPane(model_.panes, {.id = result.pane, .generation = result.generation}));
       if (pane && !pane->body.shell_state.remote && !(pane->core.git == result.summary)) {
+        // The branch the commands the pane runs from now carry into the history.
+        if (pane->core.git.branch.view() != result.summary.branch.view() && pane->body.observer) {
+          const auto branch = result.summary.repository ? result.summary.branch.view() : std::string_view{};
+
+          pane->body.observer->bytes(ObservationKind::branch, byteView(branch), ds::none);
+        }
+
         pane.getMut().core.git = result.summary;
         ++pane.getMut().core.git_revision;
       }
@@ -3465,6 +3595,14 @@ namespace telar::runtime {
 
     words_.collect([&](const WordResult& result) {
       deliverWords(result);
+    });
+
+    shell_words_.collect([&](const ShellCompletionResult& result) {
+      deliverShellWords({.client = result.client, .request = result.request}, result.words.view(), result.truncated);
+    });
+
+    remote_entries_.collect([&](const ShellCompletionResult& result) {
+      deliverShellWords({.client = result.client, .request = result.request}, result.words.view(), result.truncated);
     });
 
     worktree_detection_.collect(model_);
@@ -3481,6 +3619,26 @@ namespace telar::runtime {
     background_.collect([&](std::uint64_t client_id, ClientTag request_tag, std::span<const Byte> payload) {
       deliverBackgroundReply(client_id, request_tag, payload);
     });
+
+    deliverHistoryChanges();
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::deliverHistoryChanges() {
+    // Each change the history committed goes to the clients that watch it; one that cannot take
+    // it refreshes on the next.
+    const auto deliver = [&](const HistoryChanged& change) {
+      for (auto* client : clients_.items()) {
+        if (client != nullptr && client->watches_history) {
+          client->connection.trySend(change);
+        }
+      }
+    };
+
+    if constexpr (requires { background_.collectHistoryChanges(deliver); }) {
+      background_.collectHistoryChanges(deliver);
+    }
   }
 
   template <EventLoop Poller, typename Background>
@@ -3519,6 +3677,31 @@ namespace telar::runtime {
 
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
+  void Runtime<Poller, Background>::deliverShellWords(ShellCompletionAsked asked, std::span<const ShellWord> found, bool truncated) {
+    const auto [client_id, request_id] = asked;
+    auto* client = clients_.find(client_id);
+    if (client == nullptr) {
+      return;
+    }
+
+    try {
+      ds::Vec<CompletionWord, ConcurrentMemory> words{memory_};
+
+      words.reserve(found.size());
+      for (const auto& word : found) {
+        words.push({.text = word.text.view(), .description = word.description.view()});
+      }
+
+      client->connection.send(CompletionWords{.request_id = request_id, .truncated = truncated, .words = words.view()});
+    } catch (...) {
+      if (!client->connection.trySend(RequestFailed{.request_id = request_id, .code = FailureCode::resource_limit, .message = "Runtime memory or capacity limit reached"})) {
+        dropClient(client_id);
+      }
+    }
+  }
+
+  template <EventLoop Poller, typename Background>
+    requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::followMoves(std::uint64_t client_id, ClientTag request_tag, std::span<const Byte> payload) noexcept {
     std::size_t count = 0;
 
@@ -3541,10 +3724,6 @@ namespace telar::runtime {
   template <EventLoop Poller, typename Background>
     requires BackgroundExecutor<Background, ConcurrentMemory>
   void Runtime<Poller, Background>::deliverBackgroundReply(std::uint64_t client_id, ClientTag request_tag, std::span<const Byte> payload) {
-    if (request_tag == ClientTag::import_history) {
-      return;
-    }
-
     // Before the client is looked for: the files moved whether or not it is still here.
     if ((request_tag == ClientTag::change_files || request_tag == ClientTag::undo_file_changes) && file_moves_.waiting()) {
       followMoves(client_id, request_tag, payload);
@@ -3568,13 +3747,15 @@ namespace telar::runtime {
         deliverEditorReply(model_.panes, *client, payload);
       } else {
         const auto tag = static_cast<ServerTag>(payload.front());
-        if (tag == ServerTag::history_results || tag == ServerTag::history_output || tag == ServerTag::history_stats_result || tag == ServerTag::history_workspaces || tag == ServerTag::command_suggestion) {
+        if (tag == ServerTag::history_results || tag == ServerTag::history_output || tag == ServerTag::history_stats_result || tag == ServerTag::history_command_stats || tag == ServerTag::history_workspaces || tag == ServerTag::command_suggestion) {
           client->connection.trySendPayload(payload);
         } else {
           client->connection.sendPayload(payload);
         }
 
-        if (client->role == ClientRole::control && isHistoryRequest(request_tag)) {
+        // An import sends its batches one after another on one connection, each once the last
+        // is answered; any other history request is a control client's last.
+        if (client->role == ClientRole::control && isHistoryRequest(request_tag) && request_tag != ClientTag::import_history) {
           client->connection.flagsMut().closing = true;
         }
 

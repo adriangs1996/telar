@@ -94,12 +94,14 @@ namespace telar::gui::qt {
       options.scope = HistoryScope::workspace;
     } else if (scope == u"cwd"_s) {
       options.scope = HistoryScope::cwd;
-    } else if (scope == u"pane"_s) {
+    } else if (scope == u"pane"_s || scope == u"session"_s) {
       options.scope = HistoryScope::pane;
     }
 
-    if (state.value(u"author"_s).toString() == u"all"_s) {
+    if (const auto author = state.value(u"author"_s).toString(); author == u"all"_s) {
       options.author = HistoryAuthorFilter::all;
+    } else if (author == u"agent"_s) {
+      options.author = HistoryAuthorFilter::agent;
     }
 
     content_ = application::history::HistoryEmpty::derive(options);

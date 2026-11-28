@@ -113,6 +113,15 @@ namespace {
     return directory.empty() ? QString{} : QString::fromUtf8(directory.data(), static_cast<qsizetype>(directory.size())) + QStringLiteral("/telar/theme");
   }
 
+  // Where the history panel keeps the commands pinned to its top: `telar/history-pins` under
+  // XDG_STATE_HOME, else ~/.local/state; empty without either.
+  QString historyPinsPath() {
+    telar::SystemAllocator memory;
+    const auto directory = telar::runtime::cli::xdgDirectory(memory, telar::runtime::process_environment, "XDG_STATE_HOME", "/.local/state");
+
+    return directory.empty() ? QString{} : QString::fromUtf8(directory.data(), static_cast<qsizetype>(directory.size())) + QStringLiteral("/telar/history-pins");
+  }
+
   QString runtimeEndpoint(const QCommandLineParser& parser, telar::gui::ApplicationAllocator& memory) {
     auto endpoint = parser.value(QStringLiteral("socket"));
     if (endpoint.isEmpty()) {
@@ -241,6 +250,7 @@ int main(int argc, char** argv) {
     }
 
     client.loadConfiguration(configurationPath(parser), parser.value(QStringLiteral("profile")), parser.value(QStringLiteral("theme")), trustStorePath(), themeChoicePath());
+    client.history()->setPinsPath(historyPinsPath());
     QQmlApplicationEngine engine;
 
     engine.rootContext()->setContextProperty(QStringLiteral("telar"), &client);

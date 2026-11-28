@@ -60,9 +60,18 @@ export {
       // DeleteHistoryCommand; cqp00013 adds PaneFacts, the command, directory and repository of
       // every pane the pane list names, and lets ReportAgent say a turn failed or was interrupted;
       // cqp00014 gives MonitorSnapshot the processor's history, the agents, the processes the runtime
-      // may not read with the CPU no process it read accounts for, and the runtime's user.
-      // Peers without them reject the messages.
-      inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '1', '4'};
+      // may not read with the CPU no process it read accounts for, and the runtime's user;
+      // cqp00015 adds PaneTypeahead, the line a shell's editor held when a PaneCommand cleared it,
+      // gives each CommandBlock where and when its command started, adds CompleteWords' shell
+      // provider, which the pane's own shell answers, and the files and shell words of a pane `ssh`
+      // reached, gives QueryHistory its search modes, order, filters, output search and raw listing,
+      // HistoryEntry its match ranges, machine, branch, shell, runs and excerpt, PruneHistory the
+      // runs it keeps, gives ImportHistoryEntry the directory, exit status and duration its source knew, adds
+      // WatchHistory, HistoryChanged, ChooseHistoryEntry and RewriteHistory, which passes stored
+      // entries through today's filters, adds QueryHistoryCommandStats and HistoryCommandStats,
+      // how one command's runs went, and adds RunPaneCommand, a PaneCommand the runtime
+      // answers. Peers without them reject the messages.
+      inline constexpr SchemaId schema_id{'c', 'q', 'p', '0', '0', '0', '1', '5'};
 
       // The schemas a client of this build can speak with a runtime, oldest first. Each added
       // messages to the one before it and left the layouts of the others alone, so a client that
@@ -83,9 +92,10 @@ export {
         cqp00012,
         cqp00013,
         cqp00014,
+        cqp00015,
       };
 
-      inline constexpr Dialect current_dialect = Dialect::cqp00014;
+      inline constexpr Dialect current_dialect = Dialect::cqp00015;
 
       // The first dialect whose runtime completes from one directory, CompleteWords' path,
       // directory and executable providers; an older one is asked with FindPaths.
@@ -95,7 +105,15 @@ export {
       // older one is asked for branches.
       inline constexpr Dialect reference_words = Dialect::cqp00012;
 
-      inline constexpr ds::Array<SchemaId, 14> dialect_schemas{
+      // The first dialect whose runtime asks the pane's own shell, CompleteWords' shell provider.
+      inline constexpr Dialect shell_words = Dialect::cqp00015;
+
+      // The first dialect whose runtime completes a pane `ssh` reached on its host, through the
+      // connection the session shares: CompleteWords' path, directory, executable and shell
+      // providers there. An older one answers them with no words.
+      inline constexpr Dialect remote_words = Dialect::cqp00015;
+
+      inline constexpr ds::Array<SchemaId, 15> dialect_schemas{
           SchemaId{'8', '7', '6', 'b', '4', '8', '0', 'd'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '2'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '0', '3'},
@@ -109,6 +127,7 @@ export {
           SchemaId{'c', 'q', 'p', '0', '0', '0', '1', '1'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '1', '2'},
           SchemaId{'c', 'q', 'p', '0', '0', '0', '1', '3'},
+          SchemaId{'c', 'q', 'p', '0', '0', '0', '1', '4'},
           schema_id,
       };
 
@@ -182,6 +201,16 @@ export {
           Addition{.tag = ClientTag::create_explorer_pane, .dialect = Dialect::cqp00011},
           Addition{.tag = ClientTag::keep_explorer, .dialect = Dialect::cqp00011},
           Addition{.tag = ClientTag::delete_history_command, .dialect = Dialect::cqp00012},
+          // Their layouts gained the search's modes, order and filters and the runs a prune keeps.
+          Addition{.tag = ClientTag::query_history, .dialect = Dialect::cqp00015},
+          Addition{.tag = ClientTag::prune_history, .dialect = Dialect::cqp00015},
+          Addition{.tag = ClientTag::watch_history, .dialect = Dialect::cqp00015},
+          Addition{.tag = ClientTag::choose_history_entry, .dialect = Dialect::cqp00015},
+          Addition{.tag = ClientTag::run_pane_command, .dialect = Dialect::cqp00015},
+          // Its entries gained the directory, exit status and duration.
+          Addition{.tag = ClientTag::import_history, .dialect = Dialect::cqp00015},
+          Addition{.tag = ClientTag::rewrite_history, .dialect = Dialect::cqp00015},
+          Addition{.tag = ClientTag::query_history_command_stats, .dialect = Dialect::cqp00015},
       };
 
       // The first dialect whose runtime understands `tag`.

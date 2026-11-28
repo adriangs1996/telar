@@ -1,15 +1,27 @@
 telar history prune: Remove every entry matching the filters, after a preview and a confirmation
 
-Usage: telar history prune [filters] [--match TEXT] [--before DATE] [--dry-run] [--yes] [--socket PATH]
+Usage: telar history prune [filters] [--match TEXT] [--before DATE] [--keep N | --filters] [--dry-run] [--yes] [--socket PATH]
 
 Arguments:
   --match TEXT     Only commands containing TEXT.
   --before DATE    Only entries before `YYYY-MM-DD` (UTC) or a Unix time in seconds.
+                   A day the month does not have is refused.
+  --keep N         Keep the N newest runs of each command in each directory on
+                   each machine, and remove only the older ones (as
+                   `atuin history dedup --dupkeep N`).
+  --filters        Pass the matching entries through the runtime.history
+                   filters the runtime has today: remove what they would not
+                   record (a command or directory filter, a trivial command,
+                   a leading space, a key) and redact the secrets they would
+                   redact, in commands and in captured output.
   --dry-run        Preview only, even with --yes.
-  --yes            Skip the confirmation.
+  --yes            Skip the preview and the confirmation.
 
-Effects: previews `would remove N entries` (counting the newest 1000; --before is
-applied on top and not previewed), asks `prune permanently? type yes to
-continue:` and removes on `yes`. --author is not applied to prune.
+Effects: previews `would remove N entries`, counting exactly what the prune
+removes, asks `prune permanently? type yes to continue:` and removes on `yes`.
+--author is not applied to prune.
+
+With --filters the preview is `would remove N entries and redact M` and the
+result `removed N entries and redacted M`.
 
 Results: `removed N entries`, or `aborted`. Exit 0.

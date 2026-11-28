@@ -1,6 +1,7 @@
 telar_add_qml_sources(gui-quick
   SOURCES
     history_controller.cpp
+    history_pins.cpp
     history_pointer.cpp
   QML_FILES
     HistoryEmpty.qml

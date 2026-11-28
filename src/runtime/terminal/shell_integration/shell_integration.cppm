@@ -186,6 +186,12 @@ namespace telar::runtime::shell_files {
 
 export namespace telar::runtime {
 
+  // The key telar types before a command its editor runs at an integrated shell's prompt, CSI
+  // 6973 ~, which no terminal sends for a key. Each shell's integration binds it to report the
+  // line its line editor holds, typed while telar's editor was not up, and to clear it, so the
+  // command runs alone (_telar_flush in telar.zsh, telar.bash and telar.fish).
+  inline constexpr std::string_view typeahead_flush_key = "\x1b[6973~";
+
   // The shell `program` names, when telar can integrate with it.
   ds::Option<IntegratedShell> integrableShellProgram(std::string_view program) noexcept;
 
@@ -218,8 +224,10 @@ export namespace telar::runtime {
   class ShellIntegration {
   public:
     // `directory` holds the installed scripts; an empty one turns the integration off. With
-    // `ssh`, an integrated shell's `ssh` brings the integration to the hosts it reaches.
-    ShellIntegration(Memory& memory, std::string_view directory, bool ssh = false);
+    // `ssh`, an integrated shell's `ssh` brings the integration to the hosts it reaches, and
+    // shares each connection through a socket in `control`, the runtime's private directory for
+    // them, when it is not empty.
+    ShellIntegration(Memory& memory, std::string_view directory, bool ssh = false, std::string_view control = {});
 
     // Writes the scripts beneath `data_home` and returns their directory. It is named after
     // their content, so runtimes of different versions never overwrite each other's.
@@ -240,6 +248,7 @@ export namespace telar::runtime {
     ds::String<Memory> directory_;
     ds::String<Memory> sentinel_;
     ds::String<Memory> ssh_;
+    ds::String<Memory> control_;
     Memory& memory_;
   };
 

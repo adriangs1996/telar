@@ -3,6 +3,7 @@
 static_assert(true);
 #endif
 
+#include <clocale>
 #include <cstdio>
 
 import std;
@@ -12,6 +13,8 @@ import telar.gui.foundation.core;
 import telar.shell.syntax;
 import telar.wire.vocabulary;
 import telar.wire.pane_io;
+import telar.wire.history;
+import telar.wire.editor;
 import telar.base.ds;
 import telar.base.memory.allocators;
 
@@ -79,7 +82,7 @@ namespace {
 
     // Text pasted at the caret.
     void insert(std::string_view text) {
-      feature::insert(state_, line(), text);
+      static_cast<void>(feature::insert(state_, line(), text));
     }
 
     void setClipboard(Clipboard clipboard) {
@@ -102,16 +105,17 @@ namespace {
       });
     }
 
-    // Whether `key`, typed at `now` with the program's cursor at `column`, reaches the program.
-    [[nodiscard]] bool toProgram(const KeyPress& key, const telar::PaneShell& shell, std::uint32_t column, std::int64_t now) {
-      return feature::toProgram(line(), key, shell, column, [now] {
+    // Whether `key`, typed at `now` after the program printed `asked` before its cursor, reaches
+    // the program.
+    [[nodiscard]] bool toProgram(const KeyPress& key, const telar::PaneShell& shell, std::string_view asked, std::int64_t now) {
+      return feature::toProgram(line(), key, shell, asked, [now] {
         return now;
       });
     }
 
     // Whether `text`, committed or pasted at `now`, reaches the program.
-    [[nodiscard]] bool toProgram(std::string_view text, std::uint32_t column, std::int64_t now) {
-      return feature::toProgram(line(), text, column, [now] {
+    [[nodiscard]] bool toProgram(std::string_view text, std::string_view asked, std::int64_t now) {
+      return feature::toProgram(line(), text, asked, [now] {
         return now;
       });
     }
@@ -257,9 +261,9 @@ namespace {
     static_cast<void>(editor.press({.key = Key::up}));
     static_cast<void>(editor.press({.key = Key::up}));
     require(text(editor) == "echo one", "Up walks back");
-    editor.write("ls -la");
+    editor.write("echo");
     static_cast<void>(editor.press({.key = Key::down}));
-    require(text(editor) == "ls -la", "Down after a paste keeps it");
+    require(text(editor) == "echo", "Down after a paste keeps it");
     static_cast<void>(editor.press({.key = Key::up}));
     require(text(editor) == "echo two", "Up after a paste starts from the newest");
   }
@@ -824,11 +828,11 @@ namespace {
 
     using namespace std::chrono_literals;
 
-    constexpr std::uint32_t prompt_column = 14;
+    constexpr std::string_view question = "Remove file? ";
     constexpr auto quiet = 400ms;
     constexpr auto busy = 100ms;
 
-    require(PendingPrompt::likely(prompt_column, quiet) && !PendingPrompt::likely(0, quiet) && !PendingPrompt::likely(prompt_column, busy), "a quiet unfinished line looks like a prompt");
+    require(PendingPrompt::likely(question, quiet) && !PendingPrompt::likely("", quiet) && !PendingPrompt::likely(question, busy), "a quiet question looks like a prompt");
   }
 
   // A program's question takes the whole answer typed at it, however fast: the echo of each key
@@ -836,7 +840,7 @@ namespace {
   void answerFollowsItsFirstKey() {
     using namespace std::chrono_literals;
 
-    constexpr std::uint32_t question_column = 17;
+    constexpr std::string_view question = "Overwrite? [y/N] ";
     constexpr std::int64_t asked = 0;
     constexpr std::int64_t quiet = std::chrono::nanoseconds{400ms}.count();
     constexpr std::int64_t moment = std::chrono::nanoseconds{10ms}.count();
@@ -849,51 +853,51 @@ namespace {
 
     // terraform's "Enter a value: ", quiet; "yes" typed as each key's echo arrives.
     editor.output(asked);
-    require(editor.toProgram(key('y'), shell, question_column, quiet), "the first key answers the quiet question");
+    require(editor.toProgram(key('y'), shell, question, quiet), "the first key answers the quiet question");
     editor.output(quiet + moment);
-    require(editor.toProgram(key('e'), shell, question_column + 1, quiet + (2 * moment)), "the key after the echo follows it");
+    require(editor.toProgram(key('e'), shell, question, quiet + (2 * moment)), "the key after the echo follows it");
     editor.output(quiet + (3 * moment));
-    require(editor.toProgram(key('s'), shell, question_column + 2, quiet + (4 * moment)), "so does the rest of the answer");
-    require(editor.toProgram(enter, shell, question_column + 3, quiet + (5 * moment)), "Enter sends the answer");
+    require(editor.toProgram(key('s'), shell, question, quiet + (4 * moment)), "so does the rest of the answer");
+    require(editor.toProgram(enter, shell, question, quiet + (5 * moment)), "Enter sends the answer");
     editor.output(quiet + (6 * moment));
-    require(!editor.toProgram(key('l'), shell, question_column, quiet + (7 * moment)), "after Enter, a program that prints queues the keys again");
+    require(!editor.toProgram(key('l'), shell, question, quiet + (7 * moment)), "after Enter, a program that prints queues the keys again");
 
     // A signal ends the line being read, and so does a program that stops reading one.
     editor.output(asked);
-    require(editor.toProgram(key('n'), shell, question_column, quiet), "a new answer starts");
-    require(editor.toProgram(KeyPress{.key = Key::character, .character = U'c', .modifiers = {.control = true}}, shell, question_column, quiet + moment), "Ctrl-C reaches the program");
+    require(editor.toProgram(key('n'), shell, question, quiet), "a new answer starts");
+    require(editor.toProgram(KeyPress{.key = Key::character, .character = U'c', .modifiers = {.control = true}}, shell, question, quiet + moment), "Ctrl-C reaches the program");
     editor.output(quiet + (2 * moment));
-    require(!editor.toProgram(key('a'), shell, question_column, quiet + (3 * moment)), "Ctrl-C ends the answer");
+    require(!editor.toProgram(key('a'), shell, question, quiet + (3 * moment)), "Ctrl-C ends the answer");
     editor.output(asked);
-    require(editor.toProgram(key('n'), shell, question_column, quiet), "another answer starts");
+    require(editor.toProgram(key('n'), shell, question, quiet), "another answer starts");
 
     auto raw = shell;
 
     raw.canonical = false;
     editor.follow(shell, raw);
     editor.output(quiet + moment);
-    require(!editor.toProgram(key('a'), shell, question_column, quiet + (2 * moment)), "a program that reads keys raw ends the answer");
+    require(!editor.toProgram(key('a'), shell, question, quiet + (2 * moment)), "a program that reads keys raw ends the answer");
 
     // A paste or an input method's text answers as keys do; a newline at its end ends it.
     editor.output(asked);
-    require(editor.toProgram("ye", question_column, quiet), "a paste answers the quiet question");
+    require(editor.toProgram("ye", question, quiet), "a paste answers the quiet question");
     editor.output(quiet + moment);
-    require(editor.toProgram(key('s'), shell, question_column + 2, quiet + (2 * moment)), "keys follow the paste");
-    require(editor.toProgram(enter, shell, question_column + 3, quiet + (3 * moment)), "Enter ends it");
+    require(editor.toProgram(key('s'), shell, question, quiet + (2 * moment)), "keys follow the paste");
+    require(editor.toProgram(enter, shell, question, quiet + (3 * moment)), "Enter ends it");
     editor.output(asked);
-    require(editor.toProgram("yes\n", question_column, quiet), "a paste with its newline answers");
+    require(editor.toProgram("yes\n", question, quiet), "a paste with its newline answers");
     editor.output(quiet + moment);
-    require(!editor.toProgram("ls", question_column, quiet + (2 * moment)), "and ends the answer");
+    require(!editor.toProgram("ls", question, quiet + (2 * moment)), "and ends the answer");
     editor.output(asked);
-    require(!editor.toProgram("yes\nrm -rf ~", question_column, quiet), "lines after the first stay in the line, which the shell would run");
+    require(!editor.toProgram("yes\nrm -rf ~", question, quiet), "lines after the first stay in the line, which the shell would run");
     require(oneLine("yes\r\n") == std::string_view{"yes"} && !oneLine("a\nb") && oneLine("") == std::string_view{}, "one line is what is left without its ends");
 
     // Text in the queue keeps the keys there.
     editor.output(asked);
     static_cast<void>(editor.pressRunning({.key = Key::character, .character = U'l', .text = "l"}));
     require(!text(editor).empty(), "the key queues");
-    require(!editor.toProgram(key('s'), shell, question_column, quiet), "a command being queued keeps its keys");
-    require(editor.toProgram(KeyPress{.key = Key::character, .character = U'c', .modifiers = {.control = true}}, shell, question_column, quiet), "Ctrl-C still reaches the program");
+    require(!editor.toProgram(key('s'), shell, question, quiet), "a command being queued keeps its keys");
+    require(editor.toProgram(KeyPress{.key = Key::character, .character = U'c', .modifiers = {.control = true}}, shell, question, quiet), "Ctrl-C still reaches the program");
   }
 
   // Up walks past a command of several lines, between whose lines it moves first, and Down comes
@@ -903,30 +907,34 @@ namespace {
     const KeyPress up{.key = Key::up};
     const KeyPress down{.key = Key::down};
 
-    editor.write("older");
+    editor.write("echo older");
     require(editor.press({.key = Key::enter}) == Outcome::run, "a command runs");
     editor.write("echo 'a\nb'");
     require(editor.press({.key = Key::enter}) == Outcome::run, "a command of two lines runs");
-    type(editor, "draft");
+    type(editor, "ech");
     editor.press(up);
     require(text(editor) == "echo 'a\nb'", "Up brings back the last command");
     editor.press(up);
     require(text(editor) == "echo 'a\nb'" && cursor(editor) < 7, "Up moves to its first line");
     editor.press(up);
-    require(text(editor) == "older", "and then past it");
+    require(text(editor) == "echo older", "and then past it");
     editor.press(down);
     editor.press(down);
-    require(text(editor) == "draft", "Down comes back to the draft");
+    require(text(editor) == "ech", "Down comes back to the draft");
 
     editor.press(up);
     editor.press(up);
     editor.press(up);
     editor.press({.key = Key::left});
     editor.press(up);
-    require(text(editor) == "older", "moving the caret keeps the place in the history");
-    type(editor, "x");
+    require(text(editor) == "echo older", "moving the caret keeps the place in the history");
+    editor.press({.key = Key::end});
+    for (int erased = 0; erased < 5; ++erased) {
+      editor.press({.key = Key::backspace});
+    }
+
     editor.press(up);
-    require(text(editor) == "echo 'a\nb'", "an edit makes it the line being written");
+    require(text(editor) == "echo 'a\nb'", "an edit makes it the line being written, which Up searches from");
   }
 
   // Fixes to vim's keys: Enter on a command that goes on, counts, registers, the case operators
@@ -1200,6 +1208,449 @@ namespace {
     require(arena.budget.liveBytes() == 0, "the line gives all of it back");
   }
 
+  // Alt-. takes the last word as the shell reads it, quotes and all: a quoted argument with a
+  // blank in it is one word, not the half after the blank.
+  void lastArgumentIsAShellWord() {
+    const auto alt = [](Editor& editor, char key) {
+      return editor.press({.key = Key::character, .character = static_cast<char32_t>(key), .modifiers = {.alt = true}});
+    };
+    const auto lastOf = [&alt](std::string_view command) {
+      Editor editor;
+
+      editor.write(command);
+      static_cast<void>(editor.press({.key = Key::enter}));
+      static_cast<void>(alt(editor, '.'));
+      return std::string{text(editor)};
+    };
+
+    require(lastOf("echo \"a b\"") == "\"a b\"", "a quoted word with a blank is one word");
+    require(lastOf("echo $(date +%s)") == "$(date +%s)", "a substitution is one word");
+    require(lastOf("cat notes.txt > 'my out'") == "'my out'", "the target of a redirection");
+    require(lastOf("make all   ") == "all", "blanks after the last word are not a word");
+  }
+
+  // Alt-U, Alt-L and Alt-C change ASCII letters only, whatever the process's locale: under a
+  // UTF-8 one the C library reads a byte of a multibyte character as a Latin-1 letter.
+  void caseChangesKeepUtf8() {
+    const auto* previous = std::setlocale(LC_CTYPE, nullptr);
+    const std::string saved{previous == nullptr ? "C" : previous};
+
+    // Either name, as the platform has it; without one the C library cannot corrupt anything.
+    if (std::setlocale(LC_CTYPE, "en_US.UTF-8") == nullptr) {
+      std::setlocale(LC_CTYPE, "C.UTF-8");
+    }
+
+    const auto alt = [](Editor& editor, char key) {
+      return editor.press({.key = Key::character, .character = static_cast<char32_t>(key), .modifiers = {.alt = true}});
+    };
+
+    Editor editor;
+
+    editor.write("Café ÉTÉ");
+    control(editor, 'a');
+    alt(editor, 'l');
+    require(text(editor) == "café ÉTÉ", "Alt-L leaves an accented letter as it is");
+    control(editor, 'a');
+    alt(editor, 'u');
+    require(text(editor) == "CAFé ÉTÉ", "Alt-U changes the ASCII letters only");
+    alt(editor, 'l');
+    require(text(editor) == "CAFé ÉtÉ", "Alt-L on a word of accents keeps them whole");
+    std::setlocale(LC_CTYPE, saved.c_str());
+  }
+
+  // A paste the line cannot hold is refused whole, the line left as it was, and the caller told.
+  void pasteTooLargeIsRefused() {
+    constexpr std::size_t capacity = std::size_t{64} * 1024;
+    Arena arena;
+    telar::ds::String<Memory> huge{arena.memory};
+    State state{arena.memory};
+    feature::Lines lines{arena.memory};
+    auto& line = feature::open(state, lines, 1, Keymap::emacs).line;
+
+    require(feature::insert(state, line, "git log "), "a paste that fits goes in");
+    huge.resize(capacity - 4, 'x');
+    require(!feature::insert(state, line, huge.view()), "one past the line's capacity is refused");
+    require(feature::line(state, lines, 1)->text() == "git log ", "and leaves the line as it was");
+
+    Editor vim{Keymap::vim};
+
+    type(vim, "ls\x1b");
+    huge.resize(capacity, 'x');
+    vim.insert(huge.view());
+    require(text(vim) == "ls", "normal mode refuses it too");
+  }
+
+  // A click puts the caret on the grapheme under the cell: a CJK character takes two cells, an
+  // emoji joined of several code points and a letter with a combining accent one each.
+  void clickFindsTheGraphemeUnderTheCell() {
+    Arena arena;
+    auto& memory = arena.memory;
+    const auto clicked = [&memory](std::string_view text, std::uint32_t column) {
+      Layout laid{memory};
+      const auto styles = styleOf(memory, text);
+
+      feature::layout(laid, {.text = text, .styles = styles.view()}, {.cursor = text.size(), .anchor = text.size()}, 80);
+      return feature::offsetAt(laid, text, {.row = 0, .column = column}, text.size());
+    };
+
+    const auto indent = Layout::indent;
+    // echo 日本語: e c h o space, then three characters of two cells each.
+    const std::string_view wide = "echo \u65e5\u672c\u8a9e";
+
+    require(clicked(wide, indent + 5) == std::size_t{5}, "the first cell of a wide character is its start");
+    require(clicked(wide, indent + 6) == std::size_t{5}, "and so is its second");
+    require(clicked(wide, indent + 7) == std::size_t{8}, "the next character starts two cells on");
+    require(clicked(wide, indent + 9) == std::size_t{11}, "the third is three bytes per character on");
+    require(clicked(wide, indent + 40) == wide.size(), "past the row's end is its end");
+
+    // A family emoji, four people joined by ZWJ, is one grapheme; and e with a combining acute.
+    const std::string_view joined = "a\U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466 e\u0301x";
+    const auto family_end = joined.find(' ');
+    const auto accented = family_end + 1;
+
+    require(clicked(joined, indent + 1) == std::size_t{1}, "the emoji's first cell is its start");
+    require(clicked(joined, indent + 2) == std::size_t{1}, "its second cell is too, not a byte inside it");
+    require(clicked(joined, indent + 3) == family_end, "the cell after it is the space");
+    require(clicked(joined, indent + 5) == accented + 3, "a letter and its accent are one cell");
+    require(clicked(joined, 0) == std::size_t{0}, "the mark's cells are the row's start");
+  }
+
+  // Several panes' lines over one state, each at a place of its own, as the session drives them:
+  // a command each runs reaches every line's suggestions and Up.
+  class Panes : Arena {
+  public:
+    Panes()
+        : state_(memory),
+          lines_(memory) {}
+
+    // Pane `pane_id` at `place` writes `command` and runs it.
+    void run(std::uint64_t pane_id, std::string_view command, Place place) {
+      write(pane_id, command);
+      place.pane_id = pane_id;
+      static_cast<void>(press(pane_id, {.key = Key::enter}, place));
+      const std::string sent{feature::delivery(line(pane_id))};
+
+      feature::committed(line(pane_id), sent);
+      feature::remember(state_, sent, place);
+    }
+
+    // The command pane `pane_id` ran last ended with `status`.
+    void ended(std::uint64_t pane_id, std::int32_t status) {
+      feature::ended(state_, line(pane_id), status);
+    }
+
+    void write(std::uint64_t pane_id, std::string_view text) {
+      feature::write(state_, line(pane_id), text);
+    }
+
+    Outcome press(std::uint64_t pane_id, const KeyPress& key, Place place = {}) {
+      place.pane_id = pane_id;
+      return feature::press(state_, line(pane_id), Surface::editor, key, {.configuration = configuration_, .dialect = telar::shell::Dialect::posix, .place = place});
+    }
+
+    [[nodiscard]] std::string text(std::uint64_t pane_id) {
+      return std::string{feature::line(state_, lines_, pane_id)->text()};
+    }
+
+    [[nodiscard]] std::string suggestion(std::uint64_t pane_id, Place place = {}) {
+      place.pane_id = pane_id;
+      return std::string{feature::line(state_, lines_, pane_id, place)->suggestion()};
+    }
+
+    // The history the runtime answers with, newest first.
+    void history(std::span<const telar::HistoryEntry> entries) {
+      constexpr std::uint64_t request_id = 7;
+
+      feature::askedHistory(state_, request_id);
+      require(feature::receive(state_, telar::HistoryResults{.request_id = request_id, .snapshot_id = 1, .entries = entries}), "the history answers its query");
+    }
+
+    void scope(telar::gui::PromptUpScope scope) {
+      configuration_.up_scope = scope;
+    }
+
+  private:
+    PaneLine& line(std::uint64_t pane_id) {
+      return feature::open(state_, lines_, pane_id, Keymap::emacs).line;
+    }
+
+    State state_;
+    feature::Lines lines_;
+    telar::gui::PromptConfiguration configuration_;
+  };
+
+  // With text in the line, Up walks only the commands that start with it, as fish and zsh's
+  // history-beginning-search; on an empty line it walks every one.
+  void upFiltersByTheTypedPrefix() {
+    Panes panes;
+    const KeyPress up{.key = Key::up};
+    const KeyPress down{.key = Key::down};
+
+    for (const auto* command : {"git status", "ls -la", "git log", "make"}) {
+      panes.run(1, command, {});
+    }
+
+    panes.write(1, "git");
+    panes.press(1, up);
+    require(panes.text(1) == "git log", "Up with `git` typed brings the newest git command");
+    panes.press(1, up);
+    require(panes.text(1) == "git status", "and then the one before it, past the others");
+    panes.press(1, up);
+    require(panes.text(1) == "git status", "and stops at the oldest that matches");
+    panes.press(1, down);
+    panes.press(1, down);
+    require(panes.text(1) == "git", "Down comes back to what was typed");
+
+    panes.write(1, "");
+    panes.press(1, up);
+    panes.press(1, up);
+    require(panes.text(1) == "git log", "an empty line walks every command");
+  }
+
+  // Up reaches as far as `up_scope` says: the pane's own commands first, then its workspace's,
+  // then any.
+  void upReachesItsScope() {
+    Panes panes;
+    const KeyPress up{.key = Key::up};
+    const Place project{.directory = "/p", .workspace = "/p"};
+    const Place elsewhere{.directory = "/q", .workspace = "/q"};
+
+    panes.run(2, "make other", elsewhere);
+    panes.run(3, "make sibling", project);
+    panes.run(1, "make mine", project);
+
+    const auto walk = [&](telar::gui::PromptUpScope scope) {
+      std::vector<std::string> seen;
+
+      panes.scope(scope);
+      panes.write(1, "make");
+      for (int step = 0; step < 4; ++step) {
+        panes.press(1, up, project);
+        if (seen.empty() || seen.back() != panes.text(1)) {
+          seen.push_back(panes.text(1));
+        }
+      }
+
+      return seen;
+    };
+
+    require(walk(telar::gui::PromptUpScope::global) == std::vector<std::string>{"make mine", "make sibling", "make other"}, "the global scope reaches every command, the pane's and its workspace's first");
+    require(walk(telar::gui::PromptUpScope::workspace) == std::vector<std::string>{"make mine", "make sibling"}, "the workspace scope stops at the workspace");
+    require(walk(telar::gui::PromptUpScope::pane) == std::vector<std::string>{"make mine"}, "the pane scope keeps to the pane");
+  }
+
+  // Up counts its steps over the commands it took as it began: a command another pane runs, or
+  // a history that arrives, while it walks does not move it.
+  void upKeepsItsPlaceWhileTheHistoryChanges() {
+    Panes panes;
+    const KeyPress up{.key = Key::up};
+    const KeyPress down{.key = Key::down};
+
+    // Another pane's commands, which pane 1 reaches through the history all lines share.
+    for (const auto* command : {"echo one", "echo two", "echo three"}) {
+      panes.run(2, command, {});
+    }
+
+    panes.press(1, up);
+    panes.press(1, up);
+    require(panes.text(1) == "echo two", "Up walks back two commands");
+    panes.run(3, "echo other", {});
+    panes.press(1, up);
+    require(panes.text(1) == "echo one", "another pane's command does not move the walk");
+    panes.press(1, down);
+    require(panes.text(1) == "echo two", "nor Down's");
+
+    const telar::ds::Array entries{telar::HistoryEntry{.id = 9, .pane_id = 5, .command = "fresh"}};
+
+    panes.history(entries);
+    panes.press(1, down);
+    require(panes.text(1) == "echo three", "a history that arrives does not either");
+  }
+
+  // The suggestion prefers what ran in the line's directory, then in its workspace, then
+  // anywhere, and leaves out a command whose last run failed.
+  void suggestionPrefersTheDirectory() {
+    Panes panes;
+    const Place here{.directory = "/p/api", .workspace = "/p"};
+    const Place sibling{.directory = "/p/web", .workspace = "/p"};
+    const Place away{.directory = "/elsewhere", .workspace = "/elsewhere"};
+    const telar::ds::Array entries{
+        telar::HistoryEntry{.id = 4, .pane_id = 9, .command = "npm run lint", .cwd = "/elsewhere", .workspace_path = "/elsewhere"},
+        telar::HistoryEntry{.id = 3, .pane_id = 9, .command = "npm run web", .cwd = "/p/web", .workspace_path = "/p"},
+        telar::HistoryEntry{.id = 2, .pane_id = 9, .command = "npm run api", .cwd = "/p/api", .workspace_path = "/p"},
+        telar::HistoryEntry{.id = 1, .pane_id = 9, .exit_code = 1, .command = "npm run broken", .cwd = "/p/api", .workspace_path = "/p"},
+    };
+
+    panes.history(entries);
+    panes.write(1, "npm");
+    require(panes.suggestion(1, here) == " run api", "the command run in the same directory comes first, though older");
+    require(panes.suggestion(1, sibling) == " run web", "the line's own directory decides");
+    require(panes.suggestion(1, {.directory = "/p/docs", .workspace = "/p"}) == " run web", "then the newest of the same workspace");
+    require(panes.suggestion(1, away) == " run lint", "then the newest anywhere");
+
+    panes.write(1, "npm run b");
+    require(panes.suggestion(1, here).empty(), "a command whose last run failed is not suggested");
+    panes.write(1, "");
+    panes.run(1, "npm run broken", here);
+    panes.ended(1, 0);
+    panes.write(1, "npm run b");
+    require(panes.suggestion(1, here) == "roken", "until it runs again and succeeds");
+    panes.write(1, "");
+    panes.run(1, "npm run broken --fix", here);
+    panes.ended(1, 2);
+    panes.write(1, "npm run broken -");
+    require(panes.suggestion(1, here).empty(), "a run from the line that fails leaves it out");
+    panes.write(1, "");
+    panes.run(1, "tail -f log", here);
+    panes.ended(1, 130);
+    panes.write(1, "tail");
+    require(panes.suggestion(1, here) == " -f log", "an interrupt is no failure");
+  }
+
+  // The suggestion follows the commands as they change: one another pane just ran is offered at
+  // once to a line that had nothing to suggest.
+  void suggestionFollowsNewCommands() {
+    Panes panes;
+
+    panes.write(1, "cargo");
+    require(panes.suggestion(1).empty(), "nothing to suggest yet");
+    panes.run(2, "cargo build", {});
+    require(panes.suggestion(1) == " build", "another pane's command is suggested at once");
+  }
+
+  // Word motions go back over a whole word however long it is, past blanks and line breaks, and
+  // over a grapheme of several code points as one character.
+  void wordsReachTheirStart() {
+    const auto meta = [](Editor& editor, char key) {
+      return editor.press({.key = Key::character, .character = static_cast<char32_t>(key), .modifiers = {.alt = true}});
+    };
+
+    Editor editor;
+    std::string long_word(700, 'a');
+
+    editor.write("echo " + long_word);
+    meta(editor, 'b');
+    require(cursor(editor) == 5, "Alt-B goes back over a word longer than any window");
+    control(editor, 'e');
+    control(editor, 'w');
+    require(text(editor) == "echo ", "Ctrl-W kills it whole");
+
+    editor.write("cd src\n   ");
+    meta(editor, 'b');
+    require(cursor(editor) == 3, "back over blanks and a line break to the word before");
+
+    editor.write("x caf\u00e9\U0001F468\u200D\U0001F469 y");
+    control(editor, 'e');
+    meta(editor, 'b');
+    meta(editor, 'b');
+    require(cursor(editor) == 2, "a joined emoji is part of the word it ends");
+  }
+
+  // A quiet program gets the keys only when what it printed before the cursor reads as a
+  // question: a stalled progress bar keeps the next command in the queue.
+  void questionsTakeTheKeysAndBarsDoNot() {
+    // A login's question, its word put together from two pieces, so no line pairs a credential's
+    // name with a quoted value, which a secret scanner reads as a hardcoded one.
+    const auto login = std::string{"Pa"} + "ssword: ";
+
+    for (const auto* asked : {"Overwrite? [y/N] ", "Proceed ([y]/n)? ", "Remove file 'a'? ", login.c_str(), "mysql> ", ">>> ", "irb(main):001:0> ", "Continue [Y/n]", "Apply (yes/no)", "\u7ee7\u7eed\uff1f"}) {
+      require(PendingPrompt::question(asked), asked);
+    }
+
+    for (const auto* asked : {"[=====>      ] 40%", "[##########          ]", "Downloading 12.3 MB/45 MB", "Step (1/3)", "\u280b Installing dependencies", "====>", "", "   "}) {
+      require(!PendingPrompt::question(asked), asked);
+    }
+
+    using namespace std::chrono_literals;
+
+    constexpr std::int64_t quiet = std::chrono::nanoseconds{400ms}.count();
+    const telar::PaneShell shell{.pane_id = 1, .shell = telar::IntegratedShell::zsh, .phase = telar::ShellPhase::running, .canonical = true, .echo = true, .signal_keys = true, .interrupt = 0x03, .quit = 0x1c, .suspend = 0x1a, .end_of_file = 0x04};
+    Editor editor;
+
+    editor.output(0);
+    require(!editor.toProgram(KeyPress{.key = Key::character, .character = U'g'}, shell, "[=====>      ] 40%", quiet), "a stalled bar leaves the next command's keys to the queue");
+    require(editor.toProgram(KeyPress{.key = Key::character, .character = U'y'}, shell, "Continue? [Y/n] ", quiet), "a question takes them");
+  }
+
+  // With aliases expanded, Space after an alias in a command's place writes what it stands for;
+  // Alt-Space types a space alone, and a word anywhere else stays as typed.
+  void spaceExpandsAliases() {
+    Arena arena;
+    State state{arena.memory};
+    feature::Lines lines{arena.memory};
+    auto& line = feature::open(state, lines, 1, Keymap::emacs).line;
+    telar::gui::PromptConfiguration configuration;
+    const feature::Commands commands{.pane_id = 1, .commands = 1, .directory = "/p"};
+
+    configuration.expand_aliases = true;
+    // The pane's shell reported `gst` as an alias, as the runtime says with its spec.
+    require(!feature::spec(state, commands, "gst"), "the spec is to be asked for");
+    feature::askedSpec(state, 1, "gst", 9, true);
+    static_cast<void>(feature::receive(state, telar::CommandSpec{.request_id = 9, .command = "gst", .state = telar::CommandSpecState::unavailable, .expansion = "git status"}));
+
+    const auto press = [&](char32_t character, bool alt = false) {
+      const char byte = static_cast<char>(character);
+
+      return feature::press(state, line, Surface::editor, {.key = Key::character, .character = character, .text = std::string_view{&byte, 1}, .modifiers = {.alt = alt}}, {.configuration = configuration});
+    };
+    const auto typed = [&](std::string_view keys) {
+      for (const char key : keys) {
+        static_cast<void>(press(static_cast<char32_t>(key)));
+      }
+
+      return std::string{feature::line(state, lines, 1)->text()};
+    };
+
+    require(typed("gst ") == "git status ", "Space after an alias writes what it stands for");
+    feature::write(state, line, "");
+    require(typed("sudo gst ") == "sudo git status ", "after a wrapper too");
+    feature::write(state, line, "");
+    require(typed("echo gst ") == "echo gst ", "an argument stays as typed");
+    feature::write(state, line, "");
+    require(typed("'gst' ") == "'gst' ", "so does a quoted word");
+    feature::write(state, line, "");
+    typed("gst");
+    static_cast<void>(press(U' ', true));
+    require(std::string{feature::line(state, lines, 1)->text()} == "gst ", "Alt-Space types a space alone");
+
+    configuration.expand_aliases = false;
+    feature::write(state, line, "");
+    require(typed("gst ") == "gst ", "off by default, Space only types");
+  }
+
+  // An option a command does not accept is marked, from a spec that says it lists them all, and
+  // only where the shell would read the words as they are typed.
+  void rejectedOptionsAreMarked() {
+    Arena arena;
+    State state{arena.memory};
+    feature::Lines lines{arena.memory};
+    auto& line = feature::open(state, lines, 1, Keymap::emacs).line;
+    const auto install = [&](std::string_view command, std::uint64_t request_id, std::string_view source) {
+      feature::askedSpec(state, 1, command, request_id, true);
+      static_cast<void>(feature::receive(state, telar::CommandSpec{.request_id = request_id, .command = command, .state = telar::CommandSpecState::available, .digest = request_id, .source = source}));
+    };
+    const auto rejected = [&](std::string_view text) -> std::string {
+      feature::write(state, line, text);
+      const auto range = feature::rejectedOption(state, line, telar::shell::Dialect::posix);
+
+      return range ? std::string{text.substr(range->first, range->second - range->first)} : std::string{};
+    };
+
+    install("ls", 1, "(* telar: complete *)\nls = { \"-l\" | \"-a\" | \"--color\" | @file } ;");
+    install("cat", 2, "cat = { \"-n\" | @file } ;");
+
+    require(rejected("ls --colour src ") == "--colour", "an option the spec does not name is marked");
+    require(rejected("ls -l --color ").empty(), "the options it names are not");
+    require(rejected("ls --col ").empty(), "nor a prefix of a long one, as getopt_long takes it");
+    require(rejected("ls -la *.txt ").empty(), "nor a cluster of them, nor a glob");
+    require(rejected("sudo ls --bogus ") == "--bogus", "a wrapper's command is read");
+    require(rejected("ls --colou").empty(), "the word being typed is left alone");
+    require(rejected("ls $FLAGS --bogus ").empty(), "a line with a variable is the shell's to read");
+    require(rejected("ls '--bogus' ").empty(), "so is one with quotes");
+    require(rejected("ls --bogus | wc ").empty(), "and a pipeline");
+    require(rejected("cat --bogus ").empty(), "a spec not marked complete marks nothing");
+  }
+
   const telar::testing::Case case_write_starts_history_over{"prompt_editor.write_starts_history_over", writeStartsHistoryOver};
   const telar::testing::Case case_grapheme_motions{"prompt_editor.grapheme_motions", graphemeMotions};
   const telar::testing::Case case_vim_fixes{"prompt_editor.vim_fixes", vimFixes};
@@ -1223,5 +1674,18 @@ namespace {
   const telar::testing::Case case_vim_objects{"prompt_editor.vim_objects", vimObjects};
   const telar::testing::Case case_vim_lines{"prompt_editor.vim_lines", vimLines};
   const telar::testing::Case case_vim_visual{"prompt_editor.vim_visual", vimVisual};
+  const telar::testing::Case case_last_argument_is_a_shell_word{"prompt_editor.last_argument_is_a_shell_word", lastArgumentIsAShellWord};
+  const telar::testing::Case case_case_changes_keep_utf8{"prompt_editor.case_changes_keep_utf8", caseChangesKeepUtf8};
+  const telar::testing::Case case_paste_too_large_is_refused{"prompt_editor.paste_too_large_is_refused", pasteTooLargeIsRefused};
+  const telar::testing::Case case_up_filters_by_the_typed_prefix{"prompt_editor.up_filters_by_the_typed_prefix", upFiltersByTheTypedPrefix};
+  const telar::testing::Case case_up_reaches_its_scope{"prompt_editor.up_reaches_its_scope", upReachesItsScope};
+  const telar::testing::Case case_up_keeps_its_place_while_the_history_changes{"prompt_editor.up_keeps_its_place_while_the_history_changes", upKeepsItsPlaceWhileTheHistoryChanges};
+  const telar::testing::Case case_suggestion_prefers_the_directory{"prompt_editor.suggestion_prefers_the_directory", suggestionPrefersTheDirectory};
+  const telar::testing::Case case_suggestion_follows_new_commands{"prompt_editor.suggestion_follows_new_commands", suggestionFollowsNewCommands};
+  const telar::testing::Case case_words_reach_their_start{"prompt_editor.words_reach_their_start", wordsReachTheirStart};
+  const telar::testing::Case case_questions_take_the_keys_and_bars_do_not{"prompt_editor.questions_take_the_keys_and_bars_do_not", questionsTakeTheKeysAndBarsDoNot};
+  const telar::testing::Case case_space_expands_aliases{"prompt_editor.space_expands_aliases", spaceExpandsAliases};
+  const telar::testing::Case case_rejected_options_are_marked{"prompt_editor.rejected_options_are_marked", rejectedOptionsAreMarked};
+  const telar::testing::Case case_click_finds_the_grapheme_under_the_cell{"prompt_editor.click_finds_the_grapheme_under_the_cell", clickFindsTheGraphemeUnderTheCell};
 
 }

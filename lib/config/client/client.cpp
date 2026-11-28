@@ -2150,7 +2150,7 @@ namespace telar::runtime::config {
   }
 
   tbc::val_a<lua::Value> PromptReader::begin(const lua::Value& table, PromptSettings& settings) {
-    table.onlyFields({"mode", "skin", "motion", "ghost", "macos_option_as_alt", "keymap", "max_lines", "bindings"});
+    table.onlyFields({"mode", "skin", "motion", "ghost", "macos_option_as_alt", "keymap", "max_lines", "up_scope", "expand_aliases", "bindings"});
     settings.mode = optionalChoice<PromptMode>(table.field("mode"), prompt_mode_names);
     return table.field("bindings");
   }
@@ -2189,6 +2189,8 @@ namespace telar::runtime::config {
     settings.keymap = optionalChoice<PromptKeymap>(table.field("keymap"), prompt_keymap_names);
     settings.ghost = optionalBoolean(table.field("ghost"));
     settings.macos_option_as_alt = optionalBoolean(table.field("macos_option_as_alt"));
+    settings.up_scope = optionalChoice<PromptUpScope>(table.field("up_scope"), prompt_up_scope_names);
+    settings.expand_aliases = optionalBoolean(table.field("expand_aliases"));
     if (const auto lines = table.field("max_lines"); lines.present()) {
       settings.max_lines = static_cast<std::uint8_t>(boundedWhole(lines, PromptBounds::max_lines.minimum, PromptBounds::max_lines));
     }
@@ -2313,17 +2315,36 @@ namespace telar::runtime::config {
 
   void ClientReader::notifications(const lua::Value& table, ClientSettings& settings) {
     if (table.present()) {
-      table.onlyFields({"delivery"});
+      table.onlyFields({"delivery", "long_commands"});
       settings.delivery = optionalChoice<ClientSettings::Delivery>(table.field("delivery"), ds::Array<std::string_view, 3>{"telar", "system", "terminal"});
+
+      const auto commands = table.field("long_commands");
+      if (commands.present()) {
+        constexpr auto bounds = ClientSettings::LongCommands::after_ms_bounds;
+
+        commands.onlyFields({"enabled", "after_ms"});
+        settings.long_commands.enabled = optionalBoolean(commands.field("enabled"));
+        if (const auto after = commands.field("after_ms"); after.present()) {
+          settings.long_commands.after_ms = static_cast<std::uint32_t>(boundedWhole(after, bounds.minimum, bounds));
+        }
+      }
     }
   }
 
   void ClientReader::history(const lua::Value& table, ClientSettings::History& history) {
     if (table.present()) {
-      table.onlyFields({"show_agent_commands", "enter", "match"});
+      table.onlyFields({"show_agent_commands", "enter", "match", "columns", "time"});
       history.show_agent_commands = optionalBoolean(table.field("show_agent_commands"));
       history.enter = optionalChoice<ClientSettings::HistoryEnter>(table.field("enter"), ds::Array<std::string_view, 2>{"paste", "run"});
       history.match = optionalChoice<ClientSettings::HistoryMatch>(table.field("match"), ds::Array<std::string_view, 2>{"fuzzy", "fts"});
+      history.time = optionalChoice<ClientSettings::HistoryTime>(table.field("time"), ds::Array<std::string_view, 2>{"clock", "relative"});
+      if (const auto columns = table.field("columns"); columns.present()) {
+        columns.onlyFields({"duration", "exit", "directory", "host"});
+        history.duration = optionalBoolean(columns.field("duration"));
+        history.exit = optionalBoolean(columns.field("exit"));
+        history.directory = optionalBoolean(columns.field("directory"));
+        history.host = optionalBoolean(columns.field("host"));
+      }
     }
   }
 

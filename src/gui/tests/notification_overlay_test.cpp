@@ -45,6 +45,7 @@ import telar.gui.ui.app;
 import telar.gui.ui.app.overlays.notifications;
 import telar.gui.ui.kit.fonts;
 import telar.gui.ui.kit.models;
+import telar.gui.tests.shots_fixture;
 import telar.gui.tests.qml_fixture;
 import telar.gui.qt;
 import telar.gui.ui.kit.input;
@@ -166,6 +167,43 @@ namespace {
       QCOMPARE(lines.size(), 3);
       QCOMPARE(lines.back().toMap().value(QStringLiteral("text")).toString(), QStringLiteral("third…"));
       QVERIFY(newest.value(QStringLiteral("accessible")).toString().contains(QStringLiteral("opens example.com")));
+    }
+
+    // A long command's notice says how it ended, what it was and how long it ran, and takes the
+    // pane it ran in one click away.
+    [[qt::slot]] static void aLongCommandsNoticeOpensItsPane() {
+      ApplicationMemory application_memory;
+      ApplicationAllocator& memory = application_memory.memory();
+      ApplicationController client{memory};
+      QQuickWindow window;
+      QQmlEngine engine;
+      constexpr std::uint32_t ran_ms = 95'000;
+      constexpr std::int32_t status = 101;
+
+      window.resize(window_width, window_height);
+      // Over the workbench's background, as the window draws the card.
+      window.setColor(themeColors(Configuration{}).value(QStringLiteral("workbenchBackground")).value<QColor>());
+      client.setWindow(window);
+      const auto overlay = createChrome(engine, QStringLiteral("NotificationOverlay"), properties(client));
+
+      overlay->setParentItem(window.contentItem());
+      window.show();
+      QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
+      CommandAlerts::Message message;
+
+      client.notifications()->publish(CommandAlerts::input({.pane_id = 7, .command = "cargo test --workspace", .failed = true, .status = status, .duration_ms = ran_ms}, message));
+      auto* layout = qobject_cast<NotificationLayout*>(overlay.get());
+
+      QVERIFY(layout != nullptr);
+      QTRY_COMPARE_WITH_TIMEOUT(layout->cards()->rowCount(), 1, wait_ms);
+      const auto card = layout->cards()->data(layout->cards()->index(0, 0), ListModel::record_role).toMap();
+
+      QCOMPARE(card.value(QStringLiteral("title")).toString(), QStringLiteral("Command failed"));
+      QCOMPARE(card.value(QStringLiteral("body")).toList().front().toMap().value(QStringLiteral("text")).toString(), QStringLiteral("cargo test --workspace · 1m 35s · exit 101"));
+      QCOMPARE(card.value(QStringLiteral("action")).toString(), QStringLiteral("Open pane →"));
+      QTRY_COMPARE_WITH_TIMEOUT(client.notifications()->center().items().front().phase, NotificationItem::Phase::visible, wait_ms);
+      QTest::qWait(idle_observation_ms);
+      shoot(window, QStringLiteral("07-long-command-notification"));
     }
 
     [[qt::slot]] static void anEmptyOverlayParksTheWindowAnimationTimer() {

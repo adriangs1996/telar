@@ -51,9 +51,13 @@ namespace {
 
     check(rows.size() == 3 && rows[0].target == 3 && rows[1].target == 1 && rows[2].target == 2, "fuzzy subsequences must rank by score and preserve input order among ties");
 
+    // The set is full; a candidate whose match starts a word ranks above the weakest one, which
+    // leaves it.
     matches.add(4, "aaaab", "ab");
-    matches.add(1, "zzab", "ab");
-    check(matches.rows().size() == 4 && matches.rows().back().target == 1, "a full result set must retain the highest ranked candidates");
+    matches.add(5, "zz ab", "ab");
+    const auto kept = matches.rows();
+
+    check(kept.size() == 4 && std::ranges::contains(kept, std::uint16_t{5}, &RankedMatches<std::uint16_t, 4>::Match::target) && !std::ranges::contains(kept, std::uint16_t{4}, &RankedMatches<std::uint16_t, 4>::Match::target), "a full result set must retain the highest ranked candidates");
     matches.clear();
     matches.add(2, "second", "");
     matches.add(1, "first", "");

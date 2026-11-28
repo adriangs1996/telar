@@ -72,6 +72,22 @@ export namespace telar::runtime {
   // The completion specs telar ships, by the command they describe.
   std::span<const std::pair<std::string_view, std::string_view>> shippedSpecs() noexcept;
 
+  // What a host `ssh` reached printed for a provider, where its files and programs are: the
+  // file the provider reads (the makefile, or the nearest justfile, package.json or compose
+  // file), the references or remotes git lists, the count of stashes, the processes ps lists,
+  // or, for commands, the programs on its PATH a line each.
+  struct HostSource {
+    CompletionProvider provider = CompletionProvider::command;
+    std::string_view prefix;
+    // The remote shell, whose builtins are commands too.
+    IntegratedShell shell = IntegratedShell::none;
+    std::string_view text;
+  };
+
+  // Adds the words `source` offers that start with its prefix, read as this host's own are, and
+  // sorted, bounded and each once as the reader's; false when some were left out.
+  bool hostWords(tbc::mut_a<ConcurrentMemory> memory, const HostSource& source, tbc::mut_a<ds::Vec<Word, ConcurrentMemory>> words);
+
   class WordReader {
   public:
     using Request = WordRequest;

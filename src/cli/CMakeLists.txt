@@ -10,7 +10,8 @@ include(cmake/machines.cmake)
 
 # What every domain of the CLI compiles and links with. `hook` runs on every agent event,
 # so the CLI links only libcrypto beside the system libraries: no libssl, frameworks,
-# SQLite, pcap or the runtime's terminal engine. What the runtime stores, the CLI asks it for.
+# pcap or the runtime's terminal engine. What the runtime stores, the CLI asks it for; the one
+# exception is SQLite, which commands/history links to read other history tools' databases.
 target_include_directories(cli-settings INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(cli-settings INTERFACE telar::config telar::tls telar::machines telar::render telar::git-checkout Threads::Threads)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")

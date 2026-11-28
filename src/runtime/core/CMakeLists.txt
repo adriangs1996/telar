@@ -8,7 +8,7 @@ telar_add_domain(runtime core
     media_service/media_service.cpp
     runtime/runtime.cpp
     runtime_telemetry/runtime_telemetry.cpp
-  DEPS diagnostics transport suggestions host workers paths files terminal/shell_integration workspaces workspaces/worktrees
+  DEPS diagnostics transport suggestions host workers paths files terminal/shell_integration terminal/shell_completion workspaces workspaces/worktrees
        metrics terminal history terminal/graphics agents traffic/tap agents/observation core/model traffic/exchange_capture
        traffic/proxy plugins workspaces/editors core/persistence nvim)
 

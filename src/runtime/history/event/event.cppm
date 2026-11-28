@@ -60,6 +60,8 @@ export {
       session_finished,
       session_title,
       launch_failed,
+      // A command began: the history keeps it running until it finishes or its session ends.
+      command_started,
     };
 
     struct HistorySessionTitle {
@@ -90,6 +92,8 @@ export {
       ds::String<ConcurrentMemory> shell_;
       ds::String<ConcurrentMemory> command_;
       ds::String<ConcurrentMemory> directory_;
+      ds::String<ConcurrentMemory> host_;
+      ds::String<ConcurrentMemory> branch_;
       ds::Vec<Byte, ConcurrentMemory> output_;
       ds::String<ConcurrentMemory> cause_;
     };
@@ -116,8 +120,14 @@ export {
     // set no implementation unit can instantiate ahead.
     template <typename Message, Allocator Memory>
     [[tbc::generic]] void replyHistoryFailure(const Message& request, EncodedReply<Memory>& reply, bool available) {
-      if constexpr (std::same_as<Message, ImportHistory> || std::same_as<Message, ReportAgentCommand>) {
+      if constexpr (std::same_as<Message, ReportAgentCommand>) {
         reply.send(RequestCompleted{.request_id = request.request_id});
+      } else if constexpr (std::same_as<Message, ImportHistory>) {
+        // The importer waits for each batch's answer, so a batch the store did not write fails
+        // the import rather than counting as imported.
+        reply.send(RequestFailed{.request_id = request.request_id, .code = FailureCode::internal, .message = available ? "history import failed" : "history database is unavailable"});
+      } else if constexpr (std::same_as<Message, RewriteHistory>) {
+        reply.send(RequestFailed{.request_id = request.request_id, .code = FailureCode::internal, .message = available ? "history rewrite failed" : "history database is unavailable"});
       } else if constexpr (std::same_as<Message, DeleteHistory> || std::same_as<Message, DeleteHistoryCommand> || std::same_as<Message, PruneHistory>) {
         reply.send(HistoryPruned{.request_id = request.request_id, .removed = 0});
       } else if constexpr (std::same_as<Message, QueryHistoryWorkspaces>) {

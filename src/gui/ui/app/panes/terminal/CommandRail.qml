@@ -11,6 +11,8 @@ Item {
 
     required property var view
     required property var colors
+    // For the hint a segment shows under the pointer.
+    property var typography: ({small: 11 * root.ratio, body: 12 * root.ratio})
     property real ratio: 1
     property bool moving: true
     readonly property var segments: root.view ? root.view.railSegments : []
@@ -64,7 +66,7 @@ Item {
 
             required property var modelData
             readonly property string outcome: segment.modelData.state
-            readonly property color tone: segment.outcome === "failed" ? root.colors.red : segment.outcome === "succeeded" ? root.colors.green : segment.outcome === "running" ? root.colors.accent : segment.outcome === "session" ? root.colors.mauve : root.colors.overlay1
+            readonly property color tone: segment.outcome === "failed" ? root.colors.red : segment.outcome === "succeeded" ? root.colors.green : segment.outcome === "running" ? root.colors.accent : segment.outcome === "session" ? root.colors.mauve : segment.outcome === "background" ? root.colors.overlay0 : root.colors.overlay1
 
             x: 1 * root.ratio
             y: segment.modelData.top * root.height
@@ -77,10 +79,40 @@ Item {
             border.color: root.colors.accent
 
             MouseArea {
+                id: segmentArea
                 anchors.fill: parent
+                hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: root.view.selectBlock(segment.modelData.index)
             }
+
+            // The command, and where and when it ran.
+            ChromeToolTip {
+                x: -implicitWidth - 8 * root.ratio
+                visible: segmentArea.containsMouse && (segment.modelData.tip ?? "").length > 0
+                text: segment.modelData.tip ?? ""
+                colors: root.colors
+                typography: root.typography
+                ratio: root.ratio
+            }
+        }
+    }
+
+    // The vim marks, their letters beside the segments of the blocks they name.
+    Repeater {
+        model: root.segments
+
+        delegate: ChromeText {
+            required property var modelData
+            visible: (modelData.marks ?? "").length > 0
+            x: -implicitWidth - 3 * root.ratio
+            y: modelData.top * root.height
+            width: implicitWidth
+            height: implicitHeight
+            pixelSize: 11 * root.ratio
+            emphasized: true
+            text: modelData.marks ?? ""
+            color: root.colors.peach
         }
     }
 

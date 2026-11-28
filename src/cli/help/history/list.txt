@@ -1,7 +1,25 @@
 telar history list: Show recent commands
 
-Usage: telar history list [--cwd | --workspace PATH | --pane ID] [--failed] [--author all|human|agent] [--limit N] [--socket PATH]
+Usage: telar history list [--cwd | --workspace PATH | --pane ID] [--failed] [--author all|human|agent] [--limit N] [--after ID | --offset N] [--fuzzy] [--distinct] [--json | --format TEMPLATE] [--socket PATH]
+
+Arguments:
+  --after ID       The next page: the entries older than entry ID, the last one
+                   the previous page showed. Entries deleted or recorded since
+                   neither skip nor repeat any. Lists by time, --distinct
+                   too; not with --offset or a ranked order.
+  --offset N       Skip the N newest entries first, as for the next page of a
+                   ranked listing.
+  --fuzzy          Match `search`'s text as a fuzzy subsequence, ranked by fit.
+  --distinct       Each command once, at its newest run.
+  --json           One JSON object per line: id, pane_id, started_at_ms,
+                   duration_ms, exit_code, status, author, origin, provider, cwd,
+                   workspace, command, command_truncated.
+  --format T       Each line as the template T: {id} {time} {timestamp} {duration}
+                   {exit} {status} {author} {provider} {cwd} {workspace}
+                   {command}, and \t and \n. {timestamp} is milliseconds since
+                   the epoch and {duration} milliseconds.
 
 Results: one line per entry: `#ID  DATE TIMEZ  STATUS  DURATIONms  CWD  [provider]
 COMMAND`, newest first; STATUS is `RUN`, `INT`, the exit code or `?`; `[provider]`
-marks an agent's command. Exit 0.
+marks an agent's command. Control characters print escaped, except in --json,
+which escapes them as JSON does. Exit 0.

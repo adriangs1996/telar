@@ -482,9 +482,40 @@ Item {
                         z: 3
                     }
 
+                    // The commands an earlier runtime kept, at the pane's top unless the filter
+                    // stands there.
+                    RestoredBlocks {
+                        view: terminal
+                        colors: root.colors
+                        typography: root.typography
+                        ratio: root.ratio
+                        anchors.right: parent.right
+                        anchors.rightMargin: 22 * root.ratio
+                        anchors.top: parent.top
+                        anchors.topMargin: 4 * root.ratio
+                        visible: blocks.length > 0 && !(terminal.blockFilter.open ?? false)
+                        z: 3
+                    }
+
+                    // The filter of a block's output, at the pane's top while it is open.
+                    BlockFilter {
+                        view: terminal
+                        colors: root.colors
+                        typography: root.typography
+                        ratio: root.ratio
+                        anchors.right: parent.right
+                        anchors.rightMargin: 22 * root.ratio
+                        anchors.top: parent.top
+                        anchors.topMargin: 4 * root.ratio
+                        width: Math.min(parent.width - 44 * root.ratio, 560 * root.ratio)
+                        z: 3
+                        onFinished: terminal.forceActiveFocus()
+                    }
+
                     CommandRail {
                         view: terminal
                         colors: root.colors
+                        typography: root.typography
                         ratio: root.ratio
                         moving: promptLine.moving
                         anchors.right: parent.right

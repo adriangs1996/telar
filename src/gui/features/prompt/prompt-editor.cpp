@@ -4,6 +4,7 @@ import std;
 import telar.base.ds;
 import telar.tbc;
 import telar.base.memory.allocators;
+import telar.gui.foundation.text;
 
 namespace telar::gui::features::prompt {
 
@@ -110,16 +111,20 @@ namespace telar::gui::features::prompt {
     }
   }
 
-  void Editor::insertText(std::string_view text) {
+  bool Editor::insertText(std::string_view text) {
     if (keymap_ != Keymap::vim || mode_ == Mode::insert) {
-      text_.insert(text, true);
-      return;
+      return text_.insert(text, true);
     }
 
     // Outside insert mode, a paste or a character an input method composed goes in after the
     // cursor, as `p` puts a register: the editor stays in normal mode, on the last one put.
     if (text.empty()) {
-      return;
+      return true;
+    }
+
+    // Put after the cursor, it replaces nothing.
+    if (text_.size() + text.size() > Text::capacity) {
+      return false;
     }
 
     reset();
@@ -132,6 +137,7 @@ namespace telar::gui::features::prompt {
     text_.insert(text, true);
     text_.moveTo(text_.previous(text_.cursor()));
     clampNormal();
+    return true;
   }
 
   Request Editor::perform(Action action) {
@@ -504,15 +510,27 @@ namespace telar::gui::features::prompt {
     ds::String<Memory> word{memory(), text_.view().substr(cursor, end - cursor)};
     bool first = true;
 
-    // ASCII letters change; any other character stays as it is.
+    // ASCII letters change; any other character stays as it is. Not std::toupper: under the
+    // process's UTF-8 locale it reads each byte past ASCII as a Latin-1 letter, and would
+    // rewrite the bytes of a multibyte character into others. The first letter or digit is the
+    // one Alt-C capitalises, as readline's.
+    constexpr unsigned char case_bit = 0x20;
+
     for (auto& byte : word.viewMut()) {
-      if (std::isalnum(static_cast<unsigned char>(byte)) == 0) {
+      const bool upper_letter = byte >= 'A' && byte <= 'Z';
+      const bool lower_letter = byte >= 'a' && byte <= 'z';
+      if (!upper_letter && !lower_letter && (byte < '0' || byte > '9')) {
         continue;
       }
 
       const bool upper = how == 'u' || (how == 'c' && first);
 
-      byte = static_cast<char>(upper ? std::toupper(static_cast<unsigned char>(byte)) : std::tolower(static_cast<unsigned char>(byte)));
+      if (upper && lower_letter) {
+        byte = static_cast<char>(static_cast<unsigned char>(byte) & static_cast<unsigned char>(~case_bit));
+      } else if (!upper && upper_letter) {
+        byte = static_cast<char>(static_cast<unsigned char>(byte) | case_bit);
+      }
+
       first = false;
     }
 
@@ -597,24 +615,60 @@ namespace telar::gui::features::prompt {
     return big && value != CharacterClass::blank ? CharacterClass::word : value;
   }
 
-  std::size_t Editor::wordStart(std::size_t offset, bool big) const noexcept {
-    auto position = offset;
+  namespace {
 
-    while (position > 0 && blank(text_.previous(position))) {
-      position = text_.previous(position);
+    // Where each grapheme of `text` starts, into `starts` while it has room; how many it wrote.
+    std::size_t graphemeStarts(std::string_view text, std::span<std::uint32_t> starts) noexcept {
+      GraphemeCursor graphemes{text};
+      std::size_t count = 0;
+      std::size_t previous = 0;
+
+      while (count < starts.size() && graphemes.nextReplacingInvalid()) {
+        starts[count++] = static_cast<std::uint32_t>(previous);
+        previous = graphemes.position();
+      }
+
+      return count;
     }
 
-    if (position == 0) {
-      return 0;
+  }
+
+  std::size_t Editor::wordStart(std::size_t offset, bool big) const noexcept { // NOLINT(bugprone-exception-escape): substr is given offsets within the text, which cannot throw
+    // Back over the blanks, then over the run of one class before them. Each step back with
+    // Text::previous reads the graphemes of a window of its own, so a word cost its length
+    // times the window: the graphemes of each window are read once, forward, then walked back.
+    constexpr std::size_t window = 256;
+    // A window grows back to its first code point's lead byte, at most three more.
+    constexpr std::size_t most_graphemes = window + 3;
+    const auto view = text_.view();
+    ds::Array<std::uint32_t, most_graphemes> starts{};
+    ds::Option<CharacterClass> run;
+    auto end = std::min(offset, view.size());
+
+    while (end > 0) {
+      auto from = end > window ? end - window : 0;
+
+      while (from > 0 && Text::continuation(view[from])) {
+        --from;
+      }
+
+      const auto count = graphemeStarts(view.substr(from, end - from), starts.viewMut());
+
+      for (auto index = count; index-- > 0;) {
+        const auto value = kind(from + starts[index], big);
+
+        // Past the blanks, the run starts; at a character of another class, it ends.
+        if (!run && value != CharacterClass::blank) {
+          run = value;
+        } else if (run && value != *run) {
+          return index + 1 < count ? from + starts[index + 1] : end;
+        }
+      }
+
+      end = from;
     }
 
-    const auto run = kind(text_.previous(position), big);
-
-    while (position > 0 && kind(text_.previous(position), big) == run) {
-      position = text_.previous(position);
-    }
-
-    return position;
+    return 0;
   }
 
   std::size_t Editor::bigWordStart(std::size_t offset) const noexcept {

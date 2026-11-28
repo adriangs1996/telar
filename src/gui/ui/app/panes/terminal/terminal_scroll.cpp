@@ -31,6 +31,8 @@ namespace telar::gui::qt {
         return u"failed"_s;
       case CommandBlockState::session:
         return u"session"_s;
+      case CommandBlockState::background:
+        return u"background"_s;
       case CommandBlockState::interrupted:
         break;
       }
@@ -837,6 +839,8 @@ namespace telar::gui::qt {
           {u"height"_s, static_cast<qreal>(end > first ? end - first : 0) / static_cast<qreal>(shown)},
           {u"selected"_s, selected == index},
           {u"folded"_s, session.folded({.pane_id = pane_id_, .index = index})},
+          {u"marks"_s, markLetters(*current, index)},
+          {u"tip"_s, blockPlace(blocks[index]).value(u"tip"_s)},
       });
     }
 
@@ -870,6 +874,12 @@ namespace telar::gui::qt {
     const auto index = *found;
     const auto& block = blocks[index];
     const auto [output_first, output_end] = GuiSession::blockRows(*current, index);
+
+    // Output no command printed is no command's to pin.
+    if (block.state == CommandBlockState::background) {
+      return {};
+    }
+
     if (index + 1 == blocks.size() && row >= output_end) {
       return {};
     }
@@ -887,7 +897,7 @@ namespace telar::gui::qt {
 
     const auto selected = controller_->prompt().selectedBlock(pane_id_);
 
-    return QVariantMap{
+    QVariantMap pinned{
         {u"index"_s, static_cast<int>(index)},
         {u"key"_s, static_cast<qulonglong>(GuiSession::blockKey(*current, index))},
         {u"command"_s, QString::fromUtf8(block.command.data(), static_cast<qsizetype>(block.command.size()))},
@@ -902,7 +912,11 @@ namespace telar::gui::qt {
         {u"push"_s, push},
         {u"remote"_s, block.nest == CommandBlockNest::inside},
         {u"host"_s, index >= liveSession(*current) ? QString::fromUtf8(current->shell.host.data(), static_cast<qsizetype>(current->shell.host.size())) : QString{}},
+        {u"marks"_s, markLetters(*current, index)},
     };
+
+    pinned.insert(blockPlace(block));
+    return pinned;
   }
 
   // What arrived since the view left the live end: rows of output, and how the commands that
@@ -968,9 +982,61 @@ namespace telar::gui::qt {
       }
     }
 
+    markFilterMatches();
     if (rail != rail_matches_) {
       rail_matches_ = std::move(rail);
       matchesChanged();
+    }
+  }
+
+  void TerminalItem::markFilterMatches() {
+    const auto* current = pane();
+    if (controller_ == nullptr || current == nullptr) {
+      return;
+    }
+
+    const auto block = application::terminal::filter::block(controller_->session(), pane_id_);
+    if (!block) {
+      return;
+    }
+
+    const auto [first, end] = GuiSession::blockRows(*current, *block);
+    const auto& screen = current->screen;
+    constexpr std::size_t row_marks = 32;
+    ds::Array<application::terminal::filter::Mark, row_marks> marks{};
+    auto& session = controller_->sessionMut();
+    const auto mark = [&](std::size_t drawn, std::span<const CellValue> cells) {
+      const auto count = application::terminal::filter::highlight(session, pane_id_, cells, marks.viewMut());
+
+      for (const auto& found : marks.view().first(count)) {
+        match_marks_.push({.row = drawn, .column = found.column, .length = found.length});
+      }
+    };
+
+    // The rows a mapped view draws come from the screen or the rows kept apart from it.
+    if (!view_rows_.empty()) {
+      for (std::size_t drawn = 0; drawn < view_rows_.size(); ++drawn) {
+        const auto& view = view_rows_[drawn];
+        if (!view.exists || view.row < first || view.row >= end) {
+          continue;
+        }
+
+        if (view.screen_row >= 0 && std::cmp_less(view.screen_row, screen.rows())) {
+          mark(drawn, screen.row(static_cast<std::size_t>(view.screen_row)));
+        } else if (const auto kept = current->rows.find(current->scrollback_trimmed + view.row)) {
+          mark(drawn, kept->cells);
+        }
+      }
+
+      return;
+    }
+
+    const auto offset = static_cast<std::uint64_t>(screen.cellsOffset());
+
+    for (std::size_t row = 0; row < screen.rows(); ++row) {
+      if (offset + row >= first && offset + row < end) {
+        mark(row, screen.row(row));
+      }
     }
   }
 

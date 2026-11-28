@@ -5,6 +5,9 @@ import telar.gui.qt;
 import telar.gui.foundation.core;
 import telar.gui.foundation.forms;
 import telar.gui.application;
+import telar.base.ds;
+import telar.shell.syntax;
+import telar.base.memory.allocators;
 
 export namespace telar::gui::qt {
 
@@ -26,11 +29,11 @@ export namespace telar::gui::qt {
     [[nodiscard]] QVariantMap layout() const;
     [[nodiscard]] QVariantMap geometryLayout() const;
 
-    [[tbc::hot_path]] [[nodiscard]] inline QString query() const {
-      return query_;
+    [[tbc::hot_path]] [[nodiscard]] inline QVariantList ranges() const {
+      return ranges_;
     }
 
-    void setQuery(const QString& query);
+    void setRanges(const QVariantList& ranges);
     [[nodiscard]] Rect physicalFrame() const noexcept;
 
     [[tbc::hot_path]] [[nodiscard]] inline int historyIndex() const noexcept {
@@ -44,7 +47,7 @@ export namespace telar::gui::qt {
     [[qt::signal]] void layoutChanged();
     [[qt::signal]] void geometryLayoutChanged();
     [[qt::signal]] void lineLayoutChanged();
-    [[qt::signal]] void queryChanged();
+    [[qt::signal]] void rangesChanged();
 
   protected:
     void updatePolish() override;
@@ -69,15 +72,27 @@ export namespace telar::gui::qt {
     [[nodiscard]] GeometryState geometryState() const noexcept;
     [[nodiscard]] QRectF logical(Rect area) const noexcept;
     [[nodiscard]] QVariantList commandLines() const;
-    [[nodiscard]] QVariantMap commandLine(std::string_view text, Rect bounds, bool continues, HistoryMatchHighlight& highlight) const;
+    [[nodiscard]] QVariantMap commandLine(std::string_view text, std::size_t offset, Rect bounds, bool continues, HistoryMatchHighlight& highlight) const;
     void prepareCommand();
+    // What the runtime matched in the command, read once per command and ranges.
+    void prepareMatches();
+    // How the shell reads the command, once the card shows it whole.
+    void prepareStyles();
+    // The runs of line `text`, at byte `offset` of the command, in the shell's colours.
+    [[nodiscard]] QVariantList styledRuns(std::string_view text, std::size_t offset, Rect bounds) const;
     void publishLines();
 
     QVariantMap measurements_;
     QString command_text_;
-    QString query_;
-    QByteArray query_bytes_;
+    QVariantList ranges_;
     QByteArray command_bytes_;
+    HistoryMatchRanges matches_;
+    // QML makes the item, so it owns the memory its buffers live in.
+    SystemAllocator memory_;
+    MemoryAdapter<SystemAllocator> adapter_{memory_};
+    ds::Vec<application::prompt::Style, Memory> styles_{adapter_};
+    ds::Vec<shell::Token, Memory> tokens_{adapter_};
+    bool styled_ = false;
     application::history::HistoryRowGeometry geometry_;
     application::history::HistoryCard card_;
     qreal density_ = 1;
@@ -97,7 +112,7 @@ export namespace telar::gui::qt {
         telar::qt::property("layout", &HistoryRowLayout::layout).withNotify(&HistoryRowLayout::layoutChanged),
         telar::qt::property("geometryLayout", &HistoryRowLayout::geometryLayout).withNotify(&HistoryRowLayout::geometryLayoutChanged),
         telar::qt::property("lineLayout", &HistoryRowLayout::commandLines).withNotify(&HistoryRowLayout::lineLayoutChanged),
-        telar::qt::property("query", &HistoryRowLayout::query).withWrite(&HistoryRowLayout::setQuery).withNotify(&HistoryRowLayout::queryChanged),
+        telar::qt::property("ranges", &HistoryRowLayout::ranges).withWrite(&HistoryRowLayout::setRanges).withNotify(&HistoryRowLayout::rangesChanged),
         telar::qt::property("historyIndex", &HistoryRowLayout::historyIndex).withWrite(&HistoryRowLayout::setHistoryIndex).withNotify(&HistoryRowLayout::historyIndexChanged)
     );
   };

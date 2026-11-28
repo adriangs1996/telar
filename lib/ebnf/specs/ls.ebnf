@@ -1,6 +1,7 @@
 (* ls: the union of GNU ls (coreutils 9.12, `ls --help` on Arch Linux) and BSD ls
    (`man ls` on macOS 26). Where a short option differs between them, its
    description names both meanings. Long options are GNU only. *)
+(* telar: complete *)
 
 ls = { option | @file } , [ "--" , { @file } ] ;
 

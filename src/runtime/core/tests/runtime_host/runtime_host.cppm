@@ -23,6 +23,7 @@ import telar.runtime.core.delivery.client_delivery;
 import telar.runtime.core.media_service;
 import telar.runtime.core.runtime;
 import telar.runtime.suggestions.engine;
+import telar.runtime.terminal.shell_integration;
 import telar.testing;
 import telar.base.ds;
 
@@ -31,7 +32,7 @@ using telar::testing::check;
 namespace {
 
   // The child half: argv is `--runtime-host DIRECTORY GUARD [--session] [--resume] [--suggest ENGINE]
-  // [--clipboard-write POLICY]`. The runtime listens on
+  // [--clipboard-write POLICY] [--shell-integration]`. The runtime listens on
   // DIRECTORY/runtime.sock and, with --session, keeps its session in DIRECTORY/session.ckpt. GUARD is
   // the read end of a pipe whose write end only the test holds: when the test ends, however it ends,
   // the pipe reads end of file and the runtime stops as on SIGTERM, so no runtime outlives its test,
@@ -49,6 +50,8 @@ namespace {
     bool session = false;
     bool resume = false;
     bool data = false;
+    bool shell = false;
+    bool capture = false;
     std::string_view engine;
     std::string_view clipboard_write = "allow";
 
@@ -58,6 +61,8 @@ namespace {
       session |= flag == "--session";
       resume |= flag == "--resume";
       data |= flag == "--data";
+      shell |= flag == "--shell-integration";
+      capture |= flag == "--capture-output";
       if (flag == "--suggest" && index + 1 < argc) {
         engine = argv[++index];
       }
@@ -112,6 +117,11 @@ namespace {
     options.control_policy.clipboard_write = clipboard_write == "deny" ? control::Access::deny : clipboard_write == "ask" ? control::Access::ask
                                                                                                                           : control::Access::allow;
 
+    // The shells it starts mark their prompts with telar's scripts, installed in the directory.
+    const auto scripts = shell ? ShellIntegration<ConcurrentMemory>::install(memory, directory + "/scripts") : ds::String<ConcurrentMemory>{memory};
+
+    options.shell_integration = scripts;
+    options.capture_output = capture;
     Runtime runtime{memory, poller, background, options};
 
     runtime.run();
@@ -136,6 +146,10 @@ export {
     bool data_home = false;
     // What the runtime lets programs do to the clipboard: allow, ask or deny.
     std::string clipboard_write = "allow";
+    // Integrates the shells its panes start, with the scripts telar ships.
+    bool shell_integration = false;
+    // Keeps a bounded tail of each command's output in the history.
+    bool capture_output = false;
   };
 
   class RuntimeHost {
@@ -194,8 +208,16 @@ export {
         arguments.push_back("--data");
       }
 
+      if (options_.shell_integration) {
+        arguments.push_back("--shell-integration");
+      }
+
       if (options_.resume_agents) {
         arguments.push_back("--resume");
+      }
+
+      if (options_.capture_output) {
+        arguments.push_back("--capture-output");
       }
 
       arguments.push_back("--clipboard-write");

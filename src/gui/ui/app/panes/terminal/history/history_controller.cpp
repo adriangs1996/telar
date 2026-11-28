@@ -10,26 +10,13 @@ import telar.gui.application;
 import telar.base.ds;
 import telar.gui.foundation.system;
 import telar.wire.vocabulary;
+import telar.gui.foundation.core;
+import telar.gui.foundation.forms;
 
 namespace telar::gui::qt {
   using Qt::StringLiterals::operator""_s;
 
   namespace {
-
-    // The query without the ! that leads it and the blanks after, which ask for failed commands.
-    QString withoutFailedMark(const QString& query) {
-      if (!query.startsWith(QLatin1Char('!'))) {
-        return query;
-      }
-
-      qsizetype start = 1;
-
-      while (start < query.size() && query[start] == QLatin1Char(' ')) {
-        ++start;
-      }
-
-      return query.mid(start);
-    }
 
     QString scopeName(HistoryScope scope) {
       switch (scope) {
@@ -61,14 +48,67 @@ namespace telar::gui::qt {
       return u"all"_s;
     }
 
-    HistoryScope parseScope(const QString& scope) {
+    // The pane's commands with those from before it started read as a scope of their own.
+    QString scopeName(HistoryScope scope, bool preload) {
+      return scope == HistoryScope::pane && preload ? u"session"_s : scopeName(scope);
+    }
+
+    void parseScope(const QString& scope, application::history::HistoryFilters& filters) {
+      filters.preload = scope == u"session"_s;
+      if (filters.preload) {
+        filters.scope = HistoryScope::pane;
+        return;
+      }
+
       for (const auto candidate : {HistoryScope::global, HistoryScope::cwd, HistoryScope::workspace, HistoryScope::pane}) {
         if (scopeName(candidate) == scope) {
-          return candidate;
+          filters.scope = candidate;
+          return;
         }
       }
 
       throw EncodingError{"Unknown history scope"};
+    }
+
+    // `text` on one line in runs of what `matches` marks and what it does not, from byte `from`,
+    // `shown` characters at most.
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): where the line starts and how long it is, in the order a substring names them
+    QVariantList markedRuns(std::string_view text, const HistoryMatchRanges& matches, std::size_t from, std::size_t shown) {
+      QVariantList runs;
+      QString run;
+      bool run_marked = false;
+      std::size_t offset = from;
+
+      for (std::size_t count = 0; offset < text.size() && count < shown; ++count) {
+        // A byte that starts no character is one of its own, as the search reads it.
+        auto length = std::min(Utf8Scalar::sequenceLength(static_cast<unsigned char>(text[offset])), text.size() - offset);
+        if (!Utf8Scalar::tryDecode(text.substr(offset, length))) {
+          length = 1;
+        }
+
+        const bool marks = matches.covers(offset, length);
+        if (marks != run_marked && !run.isEmpty()) {
+          runs.append(QVariantMap{{u"text"_s, run}, {u"marked"_s, run_marked}});
+          run.clear();
+        }
+
+        run_marked = marks;
+        if (text[offset] == '\n') {
+          run.append(u" ↵ "_s);
+        } else {
+          const auto character = text.substr(offset, length);
+
+          run.append(QString::fromUtf8(character.data(), static_cast<qsizetype>(character.size())));
+        }
+
+        offset += length;
+      }
+
+      if (!run.isEmpty() || runs.isEmpty()) {
+        runs.append(QVariantMap{{u"text"_s, run}, {u"marked"_s, run_marked}});
+      }
+
+      return runs;
     }
 
     HistoryAuthorFilter parseAuthor(const QString& author) {
@@ -93,6 +133,18 @@ namespace telar::gui::qt {
       return value;
     }
 
+    // Whether the page holds runs of more than one machine, when the machine tells them apart.
+    template <typename Rows>
+    bool spansHosts(const Rows& rows) {
+      const auto first = std::ranges::find_if(rows, [](const auto& row) {
+        return !row.host.empty();
+      });
+
+      return first != rows.end() && std::ranges::any_of(rows, [&first](const auto& row) {
+        return !row.host.empty() && std::string_view{row.host} != std::string_view{first->host};
+      });
+    }
+
     QString phaseName(application::history::HistoryPhase phase) {
       switch (phase) {
       case application::history::HistoryPhase::loading:
@@ -111,10 +163,41 @@ namespace telar::gui::qt {
 
   }
 
+  QVariantList HistoryController::marked(const QString& command, const QVariantList& ranges) const { // NOLINT(readability-convert-member-functions-to-static): QML calls it on the instance, and moc has no static invokables
+    constexpr std::size_t shown_characters = 240;
+    const auto bytes = command.toUtf8();
+    const std::string_view text{bytes.constData(), static_cast<std::size_t>(bytes.size())};
+
+    return markedRuns(text, historyMatches(ranges, text.size()), 0, shown_characters);
+  }
+
+  QVariantList HistoryController::excerpt(const QString& text, const QVariantList& ranges) const { // NOLINT(readability-convert-member-functions-to-static): QML calls it on the instance, and moc has no static invokables
+    // A few words before the match, and enough after it to read it.
+    constexpr std::size_t lead_bytes = 24;
+    constexpr std::size_t shown_characters = 72;
+    const auto bytes = text.toUtf8();
+    const std::string_view piece{bytes.constData(), static_cast<std::size_t>(bytes.size())};
+    const auto matches = historyMatches(ranges, piece.size());
+    auto from = matches.view().empty() ? 0 : matches.view().front().offset - std::min<std::size_t>(matches.view().front().offset, lead_bytes);
+
+    // From the start of a character: a UTF-8 continuation byte is 10xxxxxx.
+    constexpr unsigned continuation_mask = 0xC0U;
+    constexpr unsigned continuation = 0x80U;
+
+    while (from > 0 && (static_cast<unsigned char>(piece[from]) & continuation_mask) == continuation) {
+      --from;
+    }
+
+    return markedRuns(piece, matches, from, shown_characters);
+  }
+
   HistoryController::HistoryController(Store& store, QObject* parent)
       : QObject(parent),
         store_(store) {
-    constexpr int debounce_ms = 60;
+    // At most one search is in flight and the newest typed waits for it, so typing never queues
+    // work and never waits: the runtime's index answers a keystroke at once. The keys of one
+    // event batch still go as one search.
+    constexpr int debounce_ms = 0;
 
     constexpr int age_ms = 30'000;
 
@@ -123,6 +206,12 @@ namespace telar::gui::qt {
     connect(&search_timer_, &QTimer::timeout, this, &HistoryController::query);
     age_timer_.setInterval(age_ms);
     connect(&age_timer_, &QTimer::timeout, this, &HistoryController::age);
+    // Long enough to read the notice and reach the key, as mail clients give.
+    constexpr int undo_ms = 5'000;
+
+    undo_timer_.setSingleShot(true);
+    undo_timer_.setInterval(undo_ms);
+    connect(&undo_timer_, &QTimer::timeout, this, &HistoryController::commitRemoval);
   }
 
   void HistoryController::open() {
@@ -130,6 +219,7 @@ namespace telar::gui::qt {
 
     filters_ = {.author = session.configuration.history.show_agent_commands ? HistoryAuthorFilter::all : HistoryAuthorFilter::human};
     application::history::inspect(session, false);
+    application::history::clearMarks(session);
     // At the prompt line, the search starts from the command being written.
     QString seed;
 
@@ -143,11 +233,39 @@ namespace telar::gui::qt {
     age_timer_.start();
   }
 
+  void HistoryController::sendQueued() {
+    if (search_queued_ && application::history::view(store_.session()).state().load != application::history::HistoryLoad::search) {
+      query();
+    }
+  }
+
+  void HistoryController::commitRemoval() {
+    undo_timer_.stop();
+    if (application::history::view(store_.session()).hidden() == 0) {
+      return;
+    }
+
+    interact([&] {
+      application::history::commit(store_.sessionMut());
+    });
+  }
+
   void HistoryController::forget() {
+    // The delete waiting goes to the session it was asked of, before it is forgotten, and the
+    // runtime no longer tells the closed panel of changes.
+    // Stopping the watch is a flag of this session, not an interaction: committing one here, while
+    // the dialog that closes the panel is still being shown, would refresh every controller
+    // before that dialog changed, and one that asks to close it would ask again.
+    commitRemoval();
+    application::history::watch(store_.sessionMut(), false);
+
     search_timer_.stop();
     age_timer_.stop();
     pending_submit_.reset();
+    pending_moves_ = 0;
+    search_queued_ = false;
     rows_.reconcile({});
+    records_.clear();
     synchronized_.reset();
     rows_version_ = 0;
     directory_source_.clear();
@@ -179,24 +297,61 @@ namespace telar::gui::qt {
     return synchronized_ ? synchronized_->loading : busy();
   }
 
+  bool HistoryController::queryPending() const {
+    return search_timer_.isActive() || search_queued_ || application::history::view(store_.session()).state().load == application::history::HistoryLoad::search;
+  }
+
   bool HistoryController::busy() const {
-    return search_timer_.isActive() || application::history::loading(store_.session());
+    return search_timer_.isActive() || search_queued_ || application::history::loading(store_.session());
   }
 
   bool HistoryController::isOpen() const noexcept {
     return store_.dialog().kind == Store::Dialog::history;
   }
 
-  void HistoryController::synchronize() {
-    if (pending_submit_ && !busy()) {
-      const bool alternate = *pending_submit_;
-      const auto& rows = application::history::view(store_.session()).rows();
+  void HistoryController::settlePending() {
+    if (!isOpen() || busy()) {
+      return;
+    }
 
-      pending_submit_.reset();
-      if (!rows.empty()) {
-        submit(rows.front().id, alternate);
-        return;
-      }
+    if (pending_moves_ != 0) {
+      const auto moves = std::exchange(pending_moves_, 0);
+
+      interact([&] {
+        step(moves);
+      });
+    }
+
+    // A move that loads another page waits for it too.
+    if (!pending_submit_ || busy()) {
+      return;
+    }
+
+    const bool alternate = *pending_submit_;
+    const auto browser = application::history::view(store_.session());
+    const auto& rows = browser.rows();
+
+    pending_submit_.reset();
+    if (browser.state().selection < rows.size()) {
+      submit(rows[browser.state().selection].id, alternate);
+    }
+  }
+
+  void HistoryController::synchronize() {
+    // What waited for the rows runs once this flush is done, so that none of it reenters the
+    // flush: closing the panel ends the time to take a delete back, a query typed while the one
+    // before was in flight goes, and the moves and Enter made while the rows loaded apply.
+    if (!isOpen() && undo_timer_.isActive()) {
+      undo_timer_.stop();
+      QMetaObject::invokeMethod(this, &HistoryController::commitRemoval, Qt::QueuedConnection);
+    }
+
+    if (search_queued_ && application::history::view(store_.session()).state().load != application::history::HistoryLoad::search) {
+      QMetaObject::invokeMethod(this, &HistoryController::sendQueued, Qt::QueuedConnection);
+    }
+
+    if ((pending_submit_ || pending_moves_ != 0) && !busy()) {
+      QMetaObject::invokeMethod(this, &HistoryController::settlePending, Qt::QueuedConnection);
     }
 
     auto next = inputs();
@@ -241,24 +396,59 @@ namespace telar::gui::qt {
   }
 
   void HistoryController::buildRows() {
+    using Labels = application::history::HistoryLabels;
     const auto& rows = application::history::view(store_.session()).rows();
     const auto sampled = system::WallClock::sample();
+    const auto today = Labels::localDay(sampled.now_ms, sampled.utc_offset_min);
+
+    // A record of the command a row showed before is the same while its outcome and the words
+    // its age is told in stay: keystrokes and refreshes rebuild only the rows that changed, and
+    // the model announces only those.
+    if (sampled.utc_offset_min != calendar_.utc_offset_min) {
+      records_.clear();
+    }
 
     calendar_ = sampled;
+    QHash<std::uint64_t, CachedRecord> next;
     QList<QVariantMap> records;
+    std::size_t kept = 0;
 
+    next.reserve(static_cast<qsizetype>(rows.size()));
     records.reserve(static_cast<qsizetype>(rows.size()));
     for (std::size_t index = 0; index < rows.size(); ++index) {
       const auto& entry = rows[index];
-      auto record = historyRecord(entry, sampled);
-      const auto day = application::history::HistoryLabels::localDay(entry.started_at_ms, sampled.utc_offset_min);
-      const auto group_ends = index + 1 == rows.size() || day != application::history::HistoryLabels::localDay(rows[index + 1].started_at_ms, sampled.utc_offset_min);
+      const auto day = Labels::localDay(entry.started_at_ms, sampled.utc_offset_min);
+      const auto group_ends = index + 1 == rows.size() || day != Labels::localDay(rows[index + 1].started_at_ms, sampled.utc_offset_min);
+      CachedRecord cached{.status = entry.status, .duration_ns = entry.duration_ns, .exit_code = entry.exit_code, .age = Labels::ageAt(entry.started_at_ms, sampled), .date = entry.started_at_ms >= 0 ? Labels::dateLabel(entry.started_at_ms, sampled) : Labels::Text{}, .today = today, .ranges = entry.ranges, .excerpt_ranges = entry.excerpt_ranges, .excerpt = std::hash<std::string_view>{}(entry.excerpt), .neighbour = entry.neighbour};
+      const auto found = records_.constFind(entry.id);
 
-      record.insert(u"groupEnds"_s, group_ends);
-      records.append(std::move(record));
+      kept += found != records_.cend() ? 1 : 0;
+      if (found != records_.cend() && found->same(cached)) {
+        cached.record = found->record;
+      } else {
+        cached.record = historyRecord(entry, sampled);
+      }
+
+      if (cached.record.value(u"groupEnds"_s).toBool() != group_ends || !cached.record.contains(u"groupEnds"_s)) {
+        cached.record.insert(u"groupEnds"_s, group_ends);
+      }
+
+      records.append(cached.record);
+      next.insert(entry.id, std::move(cached));
     }
 
-    rows_.replaceRows(std::move(records));
+    const auto shown = static_cast<std::size_t>(records_.size());
+
+    records_ = std::move(next);
+    // Rows that show mostly the commands shown before, as a refresh does, follow their commands:
+    // one arriving on top is inserted, one leaving is removed, and every other row keeps its
+    // delegate, its selection and its place on screen. Rows of another search show other
+    // commands: they take the delegates in place, which rebinds them instead of making new ones.
+    if (2 * kept >= std::max(shown, rows.size()) && kept != 0) {
+      rows_.reconcile(std::move(records));
+    } else {
+      rows_.replaceRows(std::move(records));
+    }
   }
 
   std::string_view HistoryController::tabName(const application::Pane<Memory>* pane) const {
@@ -278,6 +468,10 @@ namespace telar::gui::qt {
   QString HistoryController::scopeValue() {
     const auto& session = store_.session();
     if (application::history::view(session).scope() == HistoryScope::workspace) {
+      if (const auto typed = filters_.chips.value(application::history::HistoryFilterKey::workspace)) {
+        return toQString(*typed);
+      }
+
       const auto* active = session.activeTab();
       if (active == nullptr || active->location.workspace.kind != WorkspaceLocation::Kind::workspace) {
         return {};
@@ -292,6 +486,11 @@ namespace telar::gui::qt {
 
     if (application::history::view(session).scope() != HistoryScope::cwd) {
       return {};
+    }
+
+    // A typed directory is the scope's, as typed.
+    if (const auto typed = filters_.chips.value(application::history::HistoryFilterKey::cwd)) {
+      return toQString(*typed);
     }
 
     const auto* pane = session.focusedPane();
@@ -335,8 +534,24 @@ namespace telar::gui::qt {
     const auto& state = browser.state();
     const auto& rows = browser.rows();
     const bool selected_detail = state.selection < rows.size() && rows[state.selection].id == state.command_id;
-    const auto query = query_.toUtf8();
-    const auto parsed = application::history::HistorySearch::parse({query.constData(), static_cast<std::size_t>(query.size())}, filters_.failed_only);
+    QVariantList chips;
+    QVariantList marks;
+
+    for (const auto& chip : filters_.chips.view()) {
+      auto label = toQString(application::history::HistoryFilterKeys::name(chip.key));
+
+      label.append(QLatin1Char(':'));
+      label.append(toQString(chip.value.view()));
+      chips.append(QVariantMap{
+          {u"label"_s, label},
+          {u"applied"_s, application::history::HistoryFilterKeys::applied(chip)},
+          {u"key"_s, toQString(application::history::HistoryFilterKeys::name(chip.key))},
+      });
+    }
+
+    for (std::size_t index = 0; index < browser.markCount(); ++index) {
+      marks.append(QString::number(browser.markedId(index)));
+    }
 
     return {
         {u"generation"_s, QString::number(store_.dialog().generation)},
@@ -344,15 +559,25 @@ namespace telar::gui::qt {
         {u"phase"_s, phaseName(state.phase)},
         {u"hasPage"_s, state.has_page},
         {u"revision"_s, QString::number(browser.revision())},
-        {u"scope"_s, scopeName(filters_.scope)},
-        {u"effectiveScope"_s, scopeName(browser.scope())},
+        {u"scope"_s, scopeName(filters_.scope, filters_.preload)},
+        {u"effectiveScope"_s, scopeName(browser.scope(), browser.preloads())},
         {u"scopeValue"_s, synchronized_ ? synchronized_->scope_value : QString{}},
         {u"author"_s, authorName(filters_.author)},
-        {u"scopeLabel"_s, filterLabel(application::history::HistoryFilterLabels::scopes, scopeName(browser.scope()))},
+        {u"scopeLabel"_s, filterLabel(application::history::HistoryFilterLabels::scopes, scopeName(browser.scope(), browser.preloads()))},
+        {u"searchesOutput"_s, browser.searchesOutput()},
+        {u"raw"_s, filters_.chips.value(application::history::HistoryFilterKey::raw).hasValue()},
+        {u"showHost"_s, session.configuration.history.show_host && spansHosts(rows)},
         {u"authorLabel"_s, filterLabel(application::history::HistoryFilterLabels::authors, authorName(filters_.author))},
-        {u"failedOnly"_s, parsed.failed_only},
-        {u"grouped"_s, parsed.query.empty()},
-        {u"query"_s, toQString(parsed.query)},
+        {u"failedOnly"_s, filters_.failed_only},
+        {u"grouped"_s, query_.isEmpty()},
+        {u"query"_s, query_},
+        {u"chips"_s, chips},
+        {u"pins"_s, shownPins()},
+
+        {u"marks"_s, marks},
+        {u"hidden"_s, browser.hidden() != 0},
+        {u"hiddenCommand"_s, toQString(browser.hiddenCommand())},
+        {u"undoKey"_s, platform::usesCommandKey() ? u"⌘Z"_s : u"Ctrl+Z"_s},
         {u"editorText"_s, query_},
         {u"maximumQueryBytes"_s, static_cast<int>(application::history::HistorySearch::maximum_query_bytes)},
         {u"inspectionKey"_s, platform::usesCommandKey() ? u"⌃O"_s : u"Ctrl+O"_s},
@@ -361,7 +586,7 @@ namespace telar::gui::qt {
         {u"commandLoaded"_s, state.selection < rows.size() && (rows[state.selection].command_complete || (selected_detail && state.command_phase == application::history::HistoryPhase::ready))},
         {u"canOlder"_s, browser.canPage(application::history::HistoryPage::older)},
         {u"hasMore"_s, state.has_more},
-        {u"matchFuzzy"_s, browser.match() == HistoryMatch::fuzzy},
+        {u"match"_s, toQString(application::history::HistoryModes::name(browser.match()))},
         {u"canNewer"_s, browser.canPage(application::history::HistoryPage::newer)},
         {u"offset"_s, static_cast<qulonglong>(state.page_offset)},
         {u"selection"_s, static_cast<int>(state.selection)},
@@ -369,6 +594,10 @@ namespace telar::gui::qt {
         {u"canSubmit"_s, browser.canSubmit()},
         {u"commandPhase"_s, phaseName(selected_detail ? state.command_phase : application::history::HistoryPhase::idle)},
         {u"enterRuns"_s, session.configuration.history.enter_runs},
+        {u"showDuration"_s, session.configuration.history.show_duration},
+        {u"showExit"_s, session.configuration.history.show_exit},
+        {u"showDirectory"_s, session.configuration.history.show_directory},
+        {u"relativeTime"_s, session.configuration.history.relative_time},
         {u"inspecting"_s, state.inspecting},
         {u"outputPhase"_s, phaseName(state.output_phase)},
         {u"outputTruncated"_s, state.output_truncated},
@@ -391,14 +620,36 @@ namespace telar::gui::qt {
 
     const auto details = application::history::HistoryInspectionFacts::derive({.directory = entry.cwd, .provider = entry.provider, .tab = tab_name, .id = entry.id, .pane_id = entry.pane_id, .started_at_ms = entry.started_at_ms, .duration_ns = entry.duration_ns, .exit_code = entry.exit_code, .status = entry.status, .author = entry.author, .origin = entry.origin, .pane_open = pane != nullptr}, calendar_);
     QVariantList facts;
-
-    for (const auto& fact : details.lines()) {
+    const auto append = [&facts](const application::history::HistoryInspectionLine& fact) {
       facts.append(QVariantMap{
           {u"label"_s, toQString(fact.label)},
           {u"text"_s, toQString(fact.text)},
           {u"color"_s, QString::fromLatin1(palette_names[static_cast<std::size_t>(fact.color)])},
           {u"mono"_s, fact.mono},
       });
+    };
+
+    for (const auto& fact : details.lines()) {
+      append(fact);
+    }
+
+    // The command's runs, its exact text read anywhere, and the commands run around this one in
+    // its pane, once the runtime answered.
+    if (state.runs_phase == application::history::HistoryPhase::ready) {
+      const auto runs = application::history::HistoryRunFacts::derive(browser.runStats(), calendar_);
+
+      for (const auto& fact : runs.lines()) {
+        if (!fact.text.empty()) {
+          append(fact);
+        }
+      }
+    }
+
+    // In the order they ran: the listing reads newest first.
+    for (auto index = browser.contextCount(); index-- > 0;) {
+      const auto around = browser.contextAt(index);
+
+      append({.kind = application::history::HistoryInspectionLine::Kind::fact, .text = around.command, .label = around.newer ? "Then" : "Before", .color = PaletteRole::subtext0, .mono = true});
     }
 
     return {
@@ -416,8 +667,17 @@ namespace telar::gui::qt {
       query_ = QString::fromUtf8(query_.toUtf8());
     }
 
-    // Typing again takes back an Enter that waited for the search.
+    // A filter typed as a word, `cwd:src `, leaves the query for a chip.
+    const auto typed = query_.toUtf8();
+    application::history::HistoryTyping::Query rest;
+
+    if (application::history::HistoryTyping::absorb({typed.constData(), static_cast<std::size_t>(typed.size())}, filters_, rest)) {
+      query_ = toQString(rest.view());
+    }
+
+    // Typing again takes back an Enter and the moves that waited for the search.
     pending_submit_.reset();
+    pending_moves_ = 0;
     search_timer_.start();
     ++search_version_;
     synchronize();
@@ -437,37 +697,181 @@ namespace telar::gui::qt {
       return;
     }
 
-    // A row still running is read again, which brings its duration and end; the others only need
-    // their ages told anew.
-    const auto& rows = application::history::view(store_.session()).rows();
-    const bool running = std::ranges::any_of(rows, [](const auto& row) {
-      return row.status == HistoryStatus::running;
-    });
-
-    if (running) {
-      interact([&] {
-        application::history::refresh(store_.sessionMut());
-      });
-
-      return;
-    }
-
+    // Ages are told anew at once. A runtime that tells of each change brings what changed; for
+    // one that does not, the newest page is read again too, which brings the commands recorded
+    // since it loaded, and on a later page a row still running is, which brings its duration and
+    // end. The rows stay usable while they are read.
     buildRows();
     state_ = buildState();
     inspection_ = buildInspection();
     changed();
+
+    const auto browser = application::history::view(store_.session());
+    if (browser.watching()) {
+      return;
+    }
+
+    const bool running = std::ranges::any_of(browser.rows(), [](const auto& row) {
+      return row.status == HistoryStatus::running;
+    });
+
+    if (running || browser.state().page_offset == 0) {
+      interact([&] {
+        application::history::refresh(store_.sessionMut());
+      });
+    }
   }
 
   void HistoryController::query() {
+    // The search in flight answers first; the newest query typed replaces any that waited.
+    if (application::history::view(store_.session()).state().load == application::history::HistoryLoad::search) {
+      search_queued_ = true;
+      return;
+    }
+
+    search_queued_ = false;
     try {
       const auto query = query_.toUtf8();
 
-      application::history::search(store_.sessionMut(), std::string_view{query.constData(), static_cast<std::size_t>(query.size())}, filters_);
+      application::history::search(store_.sessionMut(), std::string_view{query.constData(), static_cast<std::size_t>(query.size())}, filters_, system::WallClock::sample());
     } catch (const std::exception& error) {
       fail(error);
     }
 
     synchronize();
+  }
+
+  void HistoryController::applyFilter(const QString& word) {
+    const auto typed = (word + QLatin1Char(' ')).toUtf8();
+    auto next = filters_;
+    application::history::HistoryTyping::Query rest;
+
+    if (application::history::HistoryTyping::absorb({typed.constData(), static_cast<std::size_t>(typed.size())}, next, rest) && rest.view().empty()) {
+      filters_ = next;
+
+      // search() replaces the query it is given.
+      const auto query = query_;
+
+      search(query);
+    }
+  }
+
+  void HistoryController::toggle(const QString& name) {
+    using Key = application::history::HistoryFilterKey;
+
+    if (name != u"sort"_s && name != u"output"_s && name != u"raw"_s && name != u"mode"_s) {
+      return;
+    }
+
+    auto key = Key::raw;
+
+    if (name == u"sort"_s) {
+      key = Key::sort;
+    } else if (name == u"output"_s) {
+      key = Key::output;
+    } else if (name == u"mode"_s) {
+      key = Key::mode;
+    }
+
+    const auto chips = filters_.chips.view();
+    std::size_t index = 0;
+
+    while (index < chips.size() && chips[index].key != key) {
+      ++index;
+    }
+
+    auto next = filters_;
+
+    if (key == Key::sort) {
+      // Without a chip the runtime ranks a query typed and lists by time without one.
+      const bool ranked = index < chips.size() ? chips[index].value.view() == "rank" : !query_.isEmpty();
+
+      static_cast<void>(next.chips.set(key, ranked ? "time" : "rank"));
+    } else if (key == Key::mode) {
+      // From the mode the search matches with now: the chip's, else the configuration's.
+      const auto mode = application::history::HistoryModes::next(application::history::view(store_.session()).match());
+
+      static_cast<void>(next.chips.set(key, application::history::HistoryModes::name(mode)));
+    } else if (index < chips.size()) {
+      static_cast<void>(next.chips.remove(index));
+    } else {
+      static_cast<void>(next.chips.set(key, key == Key::output ? std::string_view{"output"} : application::history::HistoryFilterKeys::raw_neighbours));
+    }
+
+    filters_ = next;
+
+    // search() replaces the query it is given.
+    const auto query = query_;
+
+    search(query);
+  }
+
+  void HistoryController::removeChip(int index) {
+    const auto count = filters_.chips.view().size();
+    if (count == 0) {
+      return;
+    }
+
+    if (filters_.chips.remove(index < 0 ? count - 1 : static_cast<std::size_t>(index))) {
+      // search() replaces the query it is given.
+      const auto query = query_;
+
+      search(query);
+    }
+  }
+
+  QString HistoryController::completeFilter(const QString& text) const { // NOLINT(readability-convert-member-functions-to-static): QML calls it on the instance, and moc has no static invokables
+    const auto typed = text.toUtf8();
+    const auto completed = application::history::HistoryTyping::complete({typed.constData(), static_cast<std::size_t>(typed.size())});
+
+    return completed ? toQString(completed->view()) : QString{};
+  }
+
+  QVariantList HistoryController::shownPins() const {
+    constexpr std::size_t reach = 9;
+    const auto query = query_.toUtf8();
+    const std::string_view wanted{query.constData(), static_cast<std::size_t>(query.size())};
+    QVariantList shown;
+
+    for (std::size_t index = 0; index < pins_.count() && std::cmp_less(shown.size(), reach); ++index) {
+      const auto command = pins_.at(index);
+      if (!wanted.empty() && HistoryMatchRanges::find(command, wanted).view().empty()) {
+        continue;
+      }
+
+      auto line = toQString(command);
+
+      line.replace(QLatin1Char('\n'), u" ↵ "_s);
+      shown.append(QVariantMap{{u"text"_s, line}, {u"index"_s, static_cast<int>(index)}});
+    }
+
+    return shown;
+  }
+
+  void HistoryController::usePin(int index, bool alternate) {
+    const auto shown = shownPins();
+    if (!isOpen() || index < 0 || index >= shown.size()) {
+      return;
+    }
+
+    const auto pin = static_cast<std::size_t>(shown[index].toMap().value(u"index"_s).toInt());
+
+    interact([&] {
+      application::history::pasteCommand(store_.sessionMut(), pins_.at(pin), alternate);
+      submitted();
+      closeRequested();
+    });
+  }
+
+  void HistoryController::quickUse(int row) {
+    if (!isOpen() || busy()) {
+      return;
+    }
+
+    const auto& entries = application::history::view(store_.session()).rows();
+    if (row >= 0 && std::cmp_less(row, entries.size())) {
+      submit(entries[static_cast<std::size_t>(row)].id, false);
+    }
   }
 
   void HistoryController::reportQueryLimit(qulonglong requested_bytes) {
@@ -484,24 +888,22 @@ namespace telar::gui::qt {
       auto next = filters_;
 
       if (filters.contains(u"scope"_s)) {
-        next.scope = parseScope(filters.value(u"scope"_s).toString());
+        parseScope(filters.value(u"scope"_s).toString(), next);
       }
 
       if (filters.contains(u"author"_s)) {
         next.author = parseAuthor(filters.value(u"author"_s).toString());
       }
 
-      auto query = query_;
-
       if (filters.contains(u"failedOnly"_s)) {
         next.failed_only = filters.value(u"failedOnly"_s).toBool();
-        // The chip turns off what a leading ! turned on too: the ! leaves the search.
-        if (!next.failed_only) {
-          query = withoutFailedMark(query);
-        }
       }
 
       filters_ = next;
+
+      // search() replaces the query it is given.
+      const auto query = query_;
+
       search(query);
     });
   }
@@ -538,7 +940,9 @@ namespace telar::gui::qt {
       pending_submit_.reset();
     }
 
-    if (!isOpen() || (busy() && action != Action::inspect)) {
+    // The rows shown stay usable while others load: copying, deleting or visiting acts on the
+    // command the person sees; a page waits for the one loading.
+    if (!isOpen() || (busy() && (action == Action::older || action == Action::newer))) {
       return;
     }
 
@@ -547,24 +951,62 @@ namespace telar::gui::qt {
 
       if (action == Action::older || action == Action::newer) {
         application::history::page(session, action == Action::older ? application::history::HistoryPage::older : application::history::HistoryPage::newer);
+      } else if (action == Action::undo) {
+        undo_timer_.stop();
+        application::history::undo(session);
       } else if (action == Action::inspect) {
         application::history::inspect(session, !application::history::view(session).state().inspecting);
       } else {
         const auto browser = application::history::view(session);
         const auto& rows = browser.rows();
-        const auto identity = entry_id.isEmpty() && !rows.empty() ? rows[browser.state().selection].id : entry_id.toULongLong();
-
-        if (action == Action::copy) {
-          application::history::copy(session, identity);
-          QGuiApplication::clipboard()->setText(toQString(session.clipboard()));
-        } else if (action == Action::erase) {
-          application::history::remove(session, identity);
-        } else if (action == Action::visit) {
-          application::history::visit(session, identity);
-          closeRequested();
+        const auto identity = entry_id.isEmpty() && browser.state().selection < rows.size() ? rows[browser.state().selection].id : entry_id.toULongLong();
+        if (identity != 0) {
+          act(action, identity);
         }
       }
     });
+  }
+
+  void HistoryController::act(Action action, std::uint64_t identity) {
+    auto& session = store_.sessionMut();
+
+    switch (action) {
+    case Action::copy:
+      application::history::copy(session, identity);
+      QGuiApplication::clipboard()->setText(toQString(session.clipboard()));
+      break;
+    case Action::erase:
+      // The row leaves now and its delete waits for the undo the notice offers.
+      application::history::hide(session, identity);
+      undo_timer_.start();
+      break;
+    case Action::visit:
+      application::history::visit(session, identity);
+      closeRequested();
+      break;
+    case Action::mark:
+      application::history::mark(session, identity);
+      break;
+    case Action::enter:
+      application::history::enter(session, identity);
+      submitted();
+      closeRequested();
+      break;
+    case Action::open:
+      application::history::open(session, identity);
+      closeRequested();
+      break;
+    case Action::pin:
+      static_cast<void>(pins_.toggle(application::history::view(session).command(identity)));
+      savePins();
+      ++search_version_;
+      break;
+    case Action::inspect:
+    case Action::older:
+    case Action::newer:
+    case Action::undo:
+      break;
+    }
   }
 
   void HistoryController::submit(std::uint64_t entry_id, bool alternate) {
@@ -573,11 +1015,19 @@ namespace telar::gui::qt {
     }
 
     interact([&] {
-      if (busy()) {
+      if (queryPending()) {
         throw EncodingError{"History search is still loading"};
       }
 
-      application::history::paste(store_.sessionMut(), entry_id, alternate);
+      auto& session = store_.sessionMut();
+
+      // Commands marked go together, in place of the one selected.
+      if (application::history::view(session).markCount() != 0) {
+        application::history::pasteMarked(session, alternate);
+      } else {
+        application::history::paste(session, entry_id, alternate);
+      }
+
       submitted();
       closeRequested();
     });
@@ -588,8 +1038,9 @@ namespace telar::gui::qt {
       return;
     }
 
-    // The rows shown are of an older query: the search runs now, and its first row once it
-    // arrives, as fzf runs its best match.
+    // The rows shown are of an older query, or a page replaces them: the search runs now, and
+    // the row selected once its page arrives, as fzf runs its best match. A refresh reads the
+    // rows shown anew, so Enter runs the row selected at once.
     if (busy()) {
       pending_submit_ = alternate;
       if (search_timer_.isActive()) {

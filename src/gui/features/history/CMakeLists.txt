@@ -8,6 +8,8 @@ telar_add_domain(gui features/history
     history-inspection.cpp
     history-motion.cpp
     history-pointer.cpp
+    history-typing.cpp
+    history-pins.cpp
   DEPS foundation/core foundation/text foundation/drawing foundation/forms)
 
 if(BUILD_TESTING)

@@ -317,6 +317,69 @@ namespace telar::gui::features::prompt {
     result.width = std::max(result.width, std::min(columns, result.caret_column + 1));
   }
 
+  Surrounding surrounding(std::string_view text, std::size_t cursor, std::size_t limit) noexcept {
+    const auto lead = [text](std::size_t offset) {
+      while (offset > 0 && offset < text.size() && Text::continuation(text[offset])) {
+        --offset;
+      }
+
+      return offset;
+    };
+
+    cursor = lead(std::min(cursor, text.size()));
+    const auto line_start = cursor == 0 ? std::string_view::npos : text.rfind('\n', cursor - 1);
+    const auto line_end = text.find('\n', cursor);
+    const auto first = line_start == std::string_view::npos ? 0 : line_start + 1;
+    const auto last = line_end == std::string_view::npos ? text.size() : line_end;
+
+    return {.begin = lead(std::max(first, cursor > limit ? cursor - limit : 0)), .end = lead(std::min(last, cursor + limit))};
+  }
+
+  ds::Option<std::size_t> offsetAt(const Layout& laid, std::string_view text, CellRange cell, std::size_t typed) noexcept { // NOLINT(bugprone-exception-escape): substr is given offsets within the text, which cannot throw
+    ds::Option<std::size_t> offset;
+
+    for (const auto& run : laid.runs) {
+      if (run.row != cell.row || run.start >= typed || run.end > text.size()) {
+        continue;
+      }
+
+      if (cell.column < run.column) {
+        offset = offset.valueOr(run.start);
+        break;
+      }
+
+      // The run's graphemes, each the cells the layout gave it: a hidden one its mark's.
+      const auto bytes = text.substr(run.start, run.end - run.start);
+      GraphemeCursor graphemes{bytes};
+      auto byte = run.start;
+      auto column = run.column;
+
+      while (column <= cell.column && byte < run.end) {
+        const auto start = graphemes.position();
+        const auto grapheme = graphemes.nextReplacingInvalid();
+        if (!grapheme) {
+          break;
+        }
+
+        const auto width = run.style == Style::hidden ? hidden_mark_columns : std::uint32_t{graphemes.columns()};
+        if (column + width > cell.column) {
+          byte = run.start + start;
+          break;
+        }
+
+        column += width;
+        byte = run.start + graphemes.position();
+      }
+
+      offset = std::min(byte, typed);
+      if (cell.column < run.column + run.columns) {
+        break;
+      }
+    }
+
+    return offset;
+  }
+
   void hiddenMarks(std::string_view text, ds::String<Memory>& out) {
     GraphemeCursor graphemes{text};
     std::size_t offset = 0;

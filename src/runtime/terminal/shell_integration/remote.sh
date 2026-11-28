@@ -60,7 +60,7 @@ _telar_start() {
       exec "$_telar_shell" -l
       ;;
   esac
-  printf '\033]6973;nest=%s;token=%s;shell=%s\007' "$1" "$_telar_token" "$_telar_name"
+  printf '\033]6973;nest=%s;token=%s;shell=%s;user=%s\007' "$1" "$_telar_token" "$_telar_name" "$(id -un 2>/dev/null)"
   shift
   export TELAR_SHELL_TOKEN="$_telar_token"
   if [ "$_telar_prompt" = telar ]; then

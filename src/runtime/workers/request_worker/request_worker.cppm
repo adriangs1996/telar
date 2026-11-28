@@ -402,6 +402,7 @@ export {
             service_(service),
             requests_(memory),
             batch_(memory),
+            overflow_(memory),
             completions_(memory),
             thread_(startThread("start request worker", [this] {
               run();
@@ -452,6 +453,16 @@ export {
 
           if (replaceQueued(client, message)) {
             return;
+          }
+        }
+
+        if constexpr (std::same_as<Message, QueryHistory>) {
+          // A newer search of the same kind ends the one running for the client: its answer
+          // would only be replaced.
+          const HistoryQueryOrder newer{message, context.persistent_client};
+
+          if (active_client_ == client && active_history_ && active_request_ != message.request_id && active_history_->supersededBy(newer)) {
+            active_cancelled_ = true;
           }
         }
 
@@ -538,9 +549,28 @@ export {
 
         const std::scoped_lock lock{mutex_};
 
-        if (admissionFull() || stopping_) {
+        // A history event is a write the history never drops: past the queue it waits in order
+        // behind it, up to a bound no history keeping pace with its panes reaches.
+        const bool overflowing = history_queue && !stopping_ && (requests_.full() || !overflow_.empty());
+        if ((admissionFull() && !overflowing) || stopping_ || overflow_.size() >= maximum_overflow) {
           TELAR_DIAGNOSTIC(++queue_metrics_.dropped);
           throw RequestError{FailureCode::resource_limit, queue_full_message};
+        }
+
+        if (overflowing) {
+          auto& job = overflow_.emplace(memory_, JobOrigin{});
+
+          try {
+            job.internal.emplace(memory_, event);
+          } catch (...) {
+            static_cast<void>(overflow_.pop());
+            TELAR_DIAGNOSTIC(++queue_metrics_.dropped);
+            throw;
+          }
+
+          ++outstanding_;
+          ready_.notify_one();
+          return;
         }
 
         auto& job = requests_.emplace(memory_, JobOrigin{});
@@ -599,6 +629,7 @@ export {
       static constexpr std::size_t request_capacity = history_queue ? 64 : 32;
       static constexpr std::size_t completion_capacity = history_queue ? 4 : 32;
       static constexpr const char* queue_full_message = history_queue ? "history queue is full" : "Background request queue is full";
+      static constexpr std::size_t maximum_overflow = std::size_t{1} << 16U;
 
       // The client a job answers and the request it carries; zero for the worker's own jobs.
       struct JobOrigin {
@@ -739,6 +770,7 @@ export {
           if (step == Step::run) {
             execute(job.getMut());
             complete(job.getMut());
+            tellDrained();
           }
         }
       }
@@ -764,6 +796,7 @@ export {
         }
 
         job.emplace(batch_.take());
+        refill();
         if (job->cancelled) {
           --outstanding_;
           return Step::skip;
@@ -771,17 +804,59 @@ export {
 
         job.getMut().superseded = historySuperseded(*job);
         active_client_ = job->client;
+        active_request_ = job->request_id;
+        active_history_ = job->history_query;
         active_tag_ = job->request.empty() ? ds::Option<ClientTag>{} : ds::Option<ClientTag>{static_cast<ClientTag>(job->request.front())};
         active_cancelled_ = job->hurried;
         return Step::run;
+      }
+
+      // Tells a service that gathers its writes that the queue it works through is empty.
+      inline void tellDrained() noexcept {
+        if constexpr (requires { service_.drained(); }) {
+          bool drained = false;
+
+          {
+            const std::scoped_lock lock{mutex_};
+
+            drained = batch_.empty() && requests_.empty() && overflow_.empty();
+          }
+
+          if (drained) {
+            service_.drained();
+          }
+        }
+      }
+
+      // Moves the history events that waited past the queue into the room it has again.
+      inline void refill() noexcept {
+        std::size_t moved = 0;
+
+        while (moved < overflow_.size() && !requests_.full()) {
+          requests_.emplace(std::move(overflow_.atMut(moved)));
+          ++moved;
+        }
+
+        if (moved == 0) {
+          return;
+        }
+
+        for (std::size_t index = moved; index < overflow_.size(); ++index) {
+          overflow_.atMut(index - moved) = std::move(overflow_.atMut(index));
+        }
+
+        overflow_.truncate(overflow_.size() - moved);
       }
 
       inline void complete(Job& job) noexcept {
         std::unique_lock lock{mutex_};
 
         active_client_ = 0;
-        const bool acknowledged_import = history_queue && !job.request.empty() && job.request.front() == static_cast<Byte>(ClientTag::import_history);
-        if (job.internal || acknowledged_import) {
+        active_request_ = 0;
+        active_history_.reset();
+        // An import's answer goes back like any other's: the importer waits for it before it
+        // sends its next batch.
+        if (job.internal) {
           --outstanding_;
           return;
         }
@@ -870,10 +945,13 @@ export {
       std::condition_variable completion_available_;
       RequestQueue<Job, request_capacity, Memory> requests_;
       RequestQueue<Job, request_capacity, Memory> batch_;
+      ds::Vec<Job, Memory> overflow_;
       RequestQueue<Completion, completion_capacity, Memory> completions_;
       std::size_t outstanding_ = 0;
       bool stopping_ = false;
       std::uint64_t active_client_ = 0;
+      std::uint64_t active_request_ = 0;
+      ds::Option<HistoryQueryOrder> active_history_;
       ds::Option<ClientTag> active_tag_;
       std::atomic<bool> active_cancelled_{false};
       std::atomic<std::uint64_t> internal_failures_{0};

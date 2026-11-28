@@ -28,7 +28,7 @@ Item {
     property real pinnedOffset: 0
     readonly property bool pinning: root.view !== null && root.view.stickyBlock.index !== undefined
     // What the pinned separator shows while no command is pinned.
-    readonly property var unpinned: ({index: -1, key: -1, row: 0, command: "", lines: 0, state: "succeeded", status: 0, duration: 0, selected: false, folded: false, foldable: false, rows: 0, push: 0})
+    readonly property var unpinned: ({index: -1, key: -1, row: 0, command: "", lines: 0, state: "succeeded", status: 0, duration: 0, selected: false, folded: false, foldable: false, rows: 0, push: 0, marks: "", place: "", started: ""})
     // How each command was last drawn, so a separator built again does not replay its entrance,
     // and when each running one was first seen, for its time. Commands are known by their stable
     // key, which stays as older commands drop from the scrollback; what was kept for a command
@@ -207,6 +207,51 @@ Item {
                 width: 3 * root.ratio
                 height: parent.height
                 color: root.colors.mauve
+            }
+        }
+    }
+
+    // Output no command printed, while the shell waited: an edge down its rows, lit while its
+    // block is selected, and what it is under the pointer.
+    Repeater {
+        model: root.view.backgroundRows
+
+        delegate: Item {
+            id: background
+            required property var modelData
+            y: modelData.row * root.view.cell.height
+            width: root.view.cell.width
+            height: modelData.rows * root.view.cell.height
+
+            Rectangle {
+                visible: background.modelData.selected
+                width: root.width
+                height: parent.height
+                color: Qt.alpha(root.colors.accent, 0.08)
+            }
+
+            Rectangle {
+                width: 3 * root.ratio
+                height: parent.height
+                color: background.modelData.selected ? root.colors.accent : Qt.alpha(root.colors.overlay1, 0.7)
+            }
+
+            HoverHandler {
+                id: backgroundHover
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.view.selectBlock(background.modelData.index)
+            }
+
+            CellText {
+                x: root.view.cell.width
+                visible: backgroundHover.hovered
+                text: "output no command printed"
+                grid: root.grid
+                color: root.colors.subtext0
             }
         }
     }
@@ -506,7 +551,7 @@ Item {
                 // need the room.
                 Item {
                     id: command
-                    readonly property real room: Math.max(0, trail.x - x - (place.visible ? place.implicitWidth + separator.cell : 0) - (more.visible ? more.implicitWidth + separator.cell : 0) - separator.cell * 6)
+                    readonly property real room: Math.max(0, trail.x - x - (details.kept > 0 ? details.kept + separator.cell : 0) - separator.cell * 6)
                     readonly property bool cut: commandText.implicitWidth > command.room
                     x: pill.x + pill.width + separator.cell
                     height: parent.height
@@ -537,33 +582,64 @@ Item {
                     }
                 }
 
-                // The host the session reached, or the one the command ran on.
-                CellText {
-                    id: place
+                // What follows the command: the host a session reached or the command ran on,
+                // the marks set on it, where it ran, and its lines past the first or the rows a
+                // fold hides.
+                Row {
+                    id: details
+                    // Its width without the place, which gives way to the command.
+                    readonly property real kept: [place, marked, more].reduce((width, item) => width + (item.visible ? item.implicitWidth + details.spacing : 0), 0)
                     x: command.x + command.width + separator.cell
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: separator.host.length > 0 && (separator.session || separator.modelData.remote === true)
-                    text: separator.session ? "→ " + separator.host : "@" + separator.host
-                    grid: root.grid
-                    color: separator.session ? root.colors.subtext0 : Qt.alpha(root.colors.mauve, 0.8)
-                }
+                    height: parent.height
+                    spacing: separator.cell
 
-                // Its command's lines past the first, or, folded, the rows of output it hides.
-                CellText {
-                    id: more
-                    readonly property int hidden: separator.modelData.folded ? (separator.modelData.rows ?? 0) : 0
-                    x: (place.visible ? place.x + place.implicitWidth : command.x + command.width) + separator.cell
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: more.hidden > 0 || separator.modelData.lines > 0
-                    text: more.hidden > 0 ? "… " + more.hidden + (more.hidden === 1 ? " row folded" : " rows folded") : "+" + separator.modelData.lines + (separator.modelData.lines === 1 ? " line" : " lines")
-                    grid: root.grid
-                    color: more.hidden > 0 ? root.colors.peach : root.colors.subtext0
+                    CellText {
+                        id: place
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: separator.host.length > 0 && (separator.session || separator.modelData.remote === true)
+                        text: separator.session ? "→ " + separator.host : "@" + separator.host
+                        grid: root.grid
+                        color: separator.session ? root.colors.subtext0 : Qt.alpha(root.colors.mauve, 0.8)
+                    }
+
+                    // The vim marks set on it, as ' and their letters.
+                    CellText {
+                        id: marked
+                        readonly property string letters: separator.modelData.marks ?? ""
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: marked.letters.length > 0
+                        text: "'" + marked.letters
+                        grid: root.grid
+                        color: root.colors.peach
+                    }
+
+                    // The directory it ran in and its branch, while the command has its room.
+                    CellText {
+                        id: context
+                        readonly property string where: separator.modelData.place ?? ""
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: context.where.length > 0 && command.x + commandText.implicitWidth + details.kept + context.implicitWidth + separator.cell * 10 < trail.x
+                        text: context.where
+                        grid: root.grid
+                        color: Qt.alpha(root.colors.subtext0, 0.75)
+                    }
+
+                    // Its command's lines past the first, or, folded, the rows of output it hides.
+                    CellText {
+                        id: more
+                        readonly property int hidden: separator.modelData.folded ? (separator.modelData.rows ?? 0) : 0
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: more.hidden > 0 || separator.modelData.lines > 0
+                        text: more.hidden > 0 ? "… " + more.hidden + (more.hidden === 1 ? " row folded" : " rows folded") : "+" + separator.modelData.lines + (separator.modelData.lines === 1 ? " line" : " lines")
+                        grid: root.grid
+                        color: more.hidden > 0 ? root.colors.peach : root.colors.subtext0
+                    }
                 }
 
                 // The rule, and while the command runs a light that travels along it.
                 Item {
                     id: rule
-                    x: (more.visible ? more.x + more.implicitWidth : place.visible ? place.x + place.implicitWidth : command.x + command.width) + separator.cell
+                    x: (details.implicitWidth > 0 ? details.x + details.implicitWidth : command.x + command.width) + separator.cell
                     anchors.verticalCenter: parent.verticalCenter
                     width: Math.max(0, trail.x - x - separator.cell)
                     height: Math.max(3, 3 * root.ratio)
@@ -645,6 +721,49 @@ Item {
                         line: separator.line
                         text: "copy output"
                         onActivated: root.view.copyBlock(separator.modelData.index, false)
+                    }
+
+                    // Only the lines of its output that match a query.
+                    Action {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: (hover.hovered || separator.modelData.selected) && !separator.copiedHere && (separator.modelData.rows ?? 0) > 0
+                        line: separator.line
+                        text: "filter"
+                        onActivated: root.view.filterBlock(separator.modelData.index)
+                    }
+
+                    // Its command back in the editor, as it was or with sudo, or run again.
+                    Action {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: (hover.hovered || separator.modelData.selected) && !separator.copiedHere && !separator.session
+                        line: separator.line
+                        text: "edit"
+                        onActivated: root.view.reuseBlock(separator.modelData.index, "edit")
+                    }
+
+                    Action {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: (hover.hovered || separator.modelData.selected) && !separator.copiedHere && !separator.session
+                        line: separator.line
+                        text: "sudo"
+                        onActivated: root.view.reuseBlock(separator.modelData.index, "root")
+                    }
+
+                    Action {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: (hover.hovered || separator.modelData.selected) && !separator.copiedHere && !separator.going
+                        line: separator.line
+                        text: "rerun"
+                        onActivated: root.view.reuseBlock(separator.modelData.index, "run")
+                    }
+
+                    // Pinned over its output, when it started.
+                    CellText {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: separator.pinned && (separator.modelData.started ?? "").length > 0 && !hover.hovered && !separator.modelData.selected
+                        text: "started " + (separator.modelData.started ?? "")
+                        grid: root.grid
+                        color: root.colors.subtext0
                     }
 
                     // How long it ran, once that is long enough to matter.

@@ -18,6 +18,7 @@ module;
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QCursor>
+#include <QDate>
 #include <QDateTime>
 #include <QDebug>
 #include <QDesktopServices>
@@ -193,6 +194,7 @@ export {
   using ::QCoreApplication;
   using ::QCryptographicHash;
   using ::QCursor;
+  using ::QDate;
   using ::QDateTime;
   using ::QDebug;
   using ::QDesktopServices;

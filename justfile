@@ -80,6 +80,13 @@ domain-test label *args: (configure "dev")
     "{{ cpp }}" build dev -- --target {{ replace(replace_regex(label, '^lib\.', 'telar.'), ".", "-") }}-tests
     "{{ cpp }}" test dev -- -L '^{{ replace(label, ".", "\\.") }}$' {{ args }}
 
+# Build the history's benchmark optimized and fail when a workload of a fresh 100,000-run history is
+# over its p99 budget: `just bench-check`. A gate run by hand or by CI, never by the test suites.
+bench-check: tbc-plugin
+    "{{ cpp }}" configure release -B "{{ build_dir }}/bench" --headless -- -DBUILD_TESTING=ON -DTELAR_BUILD_GUI=OFF
+    "{{ cpp }}" build release -B "{{ build_dir }}/bench" -- --target history-store-bench
+    "{{ build_dir }}/bench/src/runtime/history-store-bench" --check
+
 # Run cases of the window test alone, each in a couple of seconds: `just gui-case tabsCloseInOrder`.
 # Without a case it runs them all; `just gui-case -functions` lists them.
 gui-case *args: dev-bin

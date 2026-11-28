@@ -207,4 +207,112 @@ namespace telar::gui::features::prompt {
     return text.size() >= start.size() && std::ranges::equal(std::string_view{text.data(), start.size()}, start, {}, fold, fold);
   }
 
+  namespace {
+
+    using OptionRange = std::pair<std::size_t, std::size_t>;
+
+    // A line longer than this is no command to check as it is typed.
+    constexpr std::size_t longest_checked_command = 4096;
+
+    // Which of `arguments` the spec refuses first, when it is an option; none when they hold
+    // nothing it refuses, or what it refuses is no option, or a long option's prefix that
+    // getopt_long takes.
+    ds::Option<std::size_t> refusedArgument(const ebnf::command_spec& spec, std::span<const std::string_view> arguments, ebnf::match_scratch& scratch) noexcept { // NOLINT(bugprone-exception-escape): substr is given an offset within the option, which cannot throw
+      const auto result = spec.check(arguments, scratch);
+      if (result.status != ebnf::match_status::invalid || result.word >= arguments.size() || !arguments[result.word].starts_with('-')) {
+        return ds::none;
+      }
+
+      // getopt_long takes a long option by any prefix that names it alone (`--col` for
+      // `--color`), which a spec does not model: a word that starts an option offered there is
+      // one the command may take.
+      const auto option = arguments[result.word];
+      if (option.starts_with("--")) {
+        ds::Array<ebnf::candidate, 1> offered{};
+        const auto before = arguments.first(result.word);
+        const auto named = option.substr(0, option.find('='));
+
+        if (spec.complete(before, named, scratch, offered.viewMut()).count != 0) {
+          return ds::none;
+        }
+      }
+
+      return std::size_t{result.word};
+    }
+
+    // The bytes of the first option `text`'s command refuses, as rejectedOption reads it.
+    ds::Option<OptionRange> findRejected(State& state, std::uint64_t pane_id, std::string_view text, shell::Dialect dialect) {
+      using Range = OptionRange;
+
+      if (text.size() > longest_checked_command || text.find_first_of("$|;&`'\"\\()<>{}#\n") != std::string_view::npos) {
+        return ds::none;
+      }
+
+      auto& memory = state.memory;
+      const shell::Syntax syntax{.dialect = dialect};
+      ds::Vec<shell::Token, Memory> tokens{memory};
+
+      tokens.resize(text.size() + 1);
+      const auto lexed = shell::lex(text, syntax, tokens.viewMut(), text.size());
+      if (!lexed.cursor_completable || lexed.commands != 1 || lexed.completeness != shell::Completeness::complete) {
+        return ds::none;
+      }
+
+      ds::Vec<shell::Word, Memory> words{memory};
+      ds::Vec<char, Memory> unquoted{memory};
+
+      words.resize(text.size() + 1);
+      unquoted.resize((2 * text.size()) + 2);
+      const auto located = shell::commandAt(text, syntax, tokens.view().first(lexed.tokens), lexed, words.viewMut(), unquoted.viewMut());
+      if (located.overflow || located.command_word == shell::no_word) {
+        return ds::none;
+      }
+
+      const auto command_word = wrappedCommand(words.view(), located.command_word, located.words);
+      if (command_word >= located.words) {
+        return ds::none;
+      }
+
+      const auto name = words[command_word].text;
+      const auto* checks = state.command_checks.find(pane_id);
+      const auto* spec = state.specs.find(name);
+      // An alias reads as the command it stands for, which may take what the name does not.
+      if (spec == nullptr || !state.specs.complete(name) || (checks != nullptr && checks->aliases.contains(name))) {
+        return ds::none;
+      }
+
+      // The word at the line's end is still being typed, until a blank ends it.
+      const bool ended = text.ends_with(' ') || text.ends_with('\t');
+      const auto last = ended ? located.words : located.words - 1;
+      ds::Vec<std::string_view, Memory> arguments{memory};
+
+      for (auto index = command_word + 1; index < last; ++index) {
+        arguments.push(words[index].text);
+      }
+
+      const auto refused = refusedArgument(*spec, arguments.view(), state.scratch.lend());
+      if (!refused) {
+        return ds::none;
+      }
+
+      const auto source = words[command_word + 1 + *refused].source;
+
+      return Range{source.begin, source.end};
+    }
+
+  }
+
+  ds::Option<std::pair<std::size_t, std::size_t>> rejectedOption(State& state, PaneLine& line, shell::Dialect dialect) {
+    const auto revision = line.line.revision();
+    const auto specs_revision = state.specs.revision();
+    if (line.rejected && line.rejected->line == revision && line.rejected->specs == specs_revision) {
+      return line.rejected->option;
+    }
+
+    const auto found = findRejected(state, line.pane_id, line.line.editor().text().view(), dialect);
+
+    line.rejected = PaneLine::Rejected{.line = revision, .specs = specs_revision, .option = found};
+    return found;
+  }
+
 }

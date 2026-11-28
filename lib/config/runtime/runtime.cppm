@@ -6,6 +6,7 @@ import telar.config.core;
 import telar.plugins;
 import telar.platform.events;
 import telar.base.text;
+import telar.base.text.pattern;
 import telar.wire.vocabulary;
 import telar.sys.posix;
 import telar.base.memory.allocators;
@@ -206,38 +207,102 @@ export {
 export {
   namespace telar::runtime {
 
+    // The patterns of one filter list: texts a command or directory contains, and regular
+    // expressions it matches, compiled once when the configuration is read.
     class HistoryPatternList {
     public:
+      static constexpr std::size_t maximum_patterns = 64;
+      static constexpr std::size_t maximum_expressions = 16;
+      static constexpr std::size_t pattern_bytes = 256;
+
       void append(std::string_view pattern);
+      // Throws std::invalid_argument, naming the fault, for an expression that does not compile.
+      void appendExpression(std::string_view pattern);
       [[nodiscard]] bool matches(std::string_view text) const noexcept;
 
     private:
-      static constexpr std::size_t maximum_patterns = 64;
-      static constexpr std::size_t pattern_bytes = 256;
+      void reserve();
 
       ds::Array<FixedText<pattern_bytes>, maximum_patterns> patterns_;
+      ds::Array<Pattern, maximum_expressions> expressions_;
+      std::size_t count_ = 0;
+      std::size_t expression_count_ = 0;
+    };
+
+    // Commands the history does not record when they are the whole command line, as `ls`.
+    class HistoryCommandList {
+    public:
+      static constexpr std::size_t maximum_commands = 64;
+
+      void append(std::string_view command);
+      // Whether `command`, without the blanks around it, is one of the list.
+      [[nodiscard]] bool contains(std::string_view command) const noexcept;
+
+    private:
+      ds::Array<FixedText<HistoryPatternList::pattern_bytes>, maximum_commands> commands_;
       std::size_t count_ = 0;
     };
 
+    // How much history is kept: the most runs, the oldest in days, the bytes of captured output,
+    // and the runs of each command in each directory on each machine; 0 keeps any. Past a bound
+    // the oldest go first; a running command never does.
+    struct HistoryRetention {
+      static constexpr std::uint64_t default_rows = 1'000'000;
+      static constexpr std::uint64_t default_output_bytes = std::uint64_t{256} << 20U;
+
+      std::uint64_t max_rows = default_rows;
+      std::uint32_t max_age_days = 0;
+      std::uint64_t max_output_bytes = default_output_bytes;
+      std::uint32_t keep_runs = 0;
+    };
+
+    // What the history does with a command it is given.
+    enum class HistoryVerdict : std::uint8_t {
+      keep,
+      // Kept with its secrets replaced by `[redacted]`.
+      redact,
+      drop,
+    };
+
+    struct FilteredCommand {
+      HistoryVerdict verdict = HistoryVerdict::keep;
+      // What to keep: the command itself, or its redacted copy in the caller's buffer.
+      std::string_view text;
+    };
+
+    // What the history keeps: a command, the directory it ran in and the output it printed pass
+    // these filters before they are written, whether a pane, an agent or an import gives them.
     class HistoryFilters {
     public:
+      // A shell's command: one that starts with a space is not kept, as shells do.
+      [[nodiscard]] tbc::val_a<FilteredCommand> filterPane(tbc::val_a<std::string_view> command, std::string_view directory, tbc::val_a<std::span<char>> scratch) const noexcept;
+      [[nodiscard]] tbc::val_a<FilteredCommand> filterAgent(tbc::val_a<std::string_view> command, std::string_view directory, tbc::val_a<std::span<char>> scratch) const noexcept;
+      // The output with its secrets redacted into `scratch`, never longer than `limit`: what a
+      // redaction adds past it is cut from the front, where a tail of output starts anyway.
+      [[nodiscard]] tbc::val_a<std::string_view> filterOutput(tbc::val_a<std::string_view> output, tbc::val_a<std::span<char>> scratch, std::size_t limit) const noexcept;
+
+      // Whether the history records the command in some form: as it is written, or redacted.
+      [[nodiscard]] bool recordsPane(std::string_view command, std::string_view directory) const noexcept;
+      [[nodiscard]] bool recordsAgent(std::string_view command, std::string_view directory) const noexcept;
+      // Whether it keeps the command as it is written: no filter refuses it and it holds no secret.
+      // What would be kept only redacted is not offered back as written, as a suggestion.
       [[nodiscard]] bool allowsPane(std::string_view command, std::string_view directory) const noexcept;
       [[nodiscard]] bool allowsAgent(std::string_view command, std::string_view directory, bool redact = true) const noexcept;
       static bool looksLikeSecret(std::string_view command) noexcept;
+      // A command recorded nowhere when it is the whole command line, as `ls` or `clear`.
+      void addTrivial(std::string_view command);
 
       bool secrets = true;
       HistoryPatternList commands;
       HistoryPatternList directories;
+      HistoryCommandList trivial_commands;
+      // Whether a command that failed, with a status other than 0 and not interrupted, is kept.
+      bool store_failed = true;
+      HistoryRetention retention;
 
     private:
-      struct TokenRule {
-        std::string_view marker;
-        std::size_t minimum_length;
-      };
-
-      static bool tokenByte(unsigned char byte) noexcept;
-      static bool matchesToken(std::string_view command, const TokenRule& rule) noexcept;
-      static bool matchesAssignment(std::string_view command, std::string_view marker) noexcept;
+      [[nodiscard]] HistoryVerdict verdict(std::string_view command, std::string_view directory, bool redact) const noexcept;
+      [[nodiscard]] tbc::val_a<FilteredCommand> filter(tbc::val_a<std::string_view> command, std::string_view directory, tbc::val_a<std::span<char>> scratch, bool redact) const noexcept;
     };
 
     // The filters a history keeps when the configuration names none, built on first use.
@@ -403,6 +468,10 @@ export {
       bool ssh_integration = true;
       // Turns on the plan tools an agent keeps off by default, so its card shows its plan.
       bool agent_plans = true;
+      // Completion asks the pane's own shell for a command no spec describes; that shell reads
+      // the user's configuration only when shell_completion_rc says so.
+      bool shell_completion = true;
+      bool shell_completion_rc = false;
     };
 
     template <Allocator Memory>

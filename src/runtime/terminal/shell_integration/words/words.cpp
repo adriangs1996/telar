@@ -390,12 +390,14 @@ namespace telar::runtime {
       add(trimText(rest.substr(0, assign), " \t"), alias.view());
     }
 
-    // The public recipes of the nearest justfile, each with the comment above it, and its
-    // aliases.
+    // The files just, npm and compose read, the nearest one first.
+    constexpr ds::Array<std::string_view, 3> justfiles{"justfile", "Justfile", ".justfile"};
+    constexpr ds::Array<std::string_view, 1> package_files{"package.json"};
+    constexpr ds::Array<std::string_view, 4> compose_files{"compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"};
+
+    // The public recipes of a justfile, each with the comment above it, and its aliases.
     template <typename Add>
-    void justRecipes(ConcurrentMemory& memory, std::string_view directory, Add& add) {
-      static constexpr ds::Array<std::string_view, 3> names{"justfile", "Justfile", ".justfile"};
-      const auto source = nearest(memory, directory, names);
+    void justRecipes(ConcurrentMemory& memory, std::string_view source, Add& add) {
       Text alias{memory};
       RecipeNotes notes;
 
@@ -419,11 +421,9 @@ namespace telar::runtime {
       });
     }
 
-    // The scripts of the nearest package.json, each with the command it runs.
+    // The scripts of a package.json, each with the command it runs.
     template <typename Add>
-    void packageScripts(ConcurrentMemory& memory, std::string_view directory, Add& add) {
-      static constexpr ds::Array<std::string_view, 1> names{"package.json"};
-      const auto source = nearest(memory, directory, names);
+    void packageScripts(ConcurrentMemory& memory, std::string_view source, Add& add) {
       if (source.empty()) {
         return;
       }
@@ -449,11 +449,9 @@ namespace telar::runtime {
       });
     }
 
-    // The services of the compose file in the nearest directory that has one.
+    // The services of a compose file.
     template <typename Add>
-    void composeServices(ConcurrentMemory& memory, std::string_view directory, Add& add) {
-      static constexpr ds::Array<std::string_view, 4> names{"compose.yaml", "compose.yml", "docker-compose.yaml", "docker-compose.yml"};
-      const auto source = nearest(memory, directory, names);
+    void composeServices(std::string_view source, Add& add) {
       bool services = false;
       std::size_t indent = 0;
 
@@ -662,20 +660,20 @@ namespace telar::runtime {
       }
     }
 
-    // The explicit targets of the makefile make would read in `directory`.
-    template <typename Add>
-    void makeTargets(ConcurrentMemory& memory, std::string_view directory_path, Add& add) {
+    // The makefile make would read in `directory_path`, read whole; empty when there is none.
+    tbc::val_a<Text> makefile(tbc::mut_a<ConcurrentMemory> memory, std::string_view directory_path) {
+      Text text{memory};
+
       if (directory_path.empty() || directory_path.front() != '/') {
-        return;
+        return text;
       }
 
       const Text directory_name{memory, directory_path};
       const FileDescriptor directory{::open(directory_name.data(), combineFlags(O_RDONLY, O_DIRECTORY, O_CLOEXEC))}; // NOLINT(cppcoreguidelines-pro-type-vararg): open's C signature is variadic
-      if (!directory) {
-        return;
-      }
 
-      Text text{memory};
+      if (!directory) {
+        return text;
+      }
 
       for (const auto* name : {"GNUmakefile", "makefile", "Makefile"}) {
         text = readSmall(memory, directory.get(), name);
@@ -684,6 +682,12 @@ namespace telar::runtime {
         }
       }
 
+      return text;
+    }
+
+    // The explicit targets of a makefile.
+    template <typename Add>
+    void makeTargets(std::string_view text, Add& add) {
       lines(text, [&](std::string_view line) {
         if (line.empty() || line.front() == '\t' || line.front() == ' ' || line.front() == '#' || line.front() == '.') {
           return;
@@ -704,6 +708,19 @@ namespace telar::runtime {
           targets.remove_prefix(end == std::string_view::npos ? targets.size() : end);
         }
       });
+    }
+
+    // Each process by its id, the newest first, with its name.
+    template <typename Add>
+    void newestFirst(ds::Vec<std::pair<int, Text>, ConcurrentMemory>& found, Add& add) {
+      std::ranges::sort(found.viewMut(), std::greater{}, &std::pair<int, Text>::first);
+      for (const auto& [pid, name] : found) {
+        constexpr std::size_t pid_digits = 16;
+        ds::Array<char, pid_digits> digits{};
+        auto* const end = std::to_chars(digits.dataMut(), std::to_address(digits.viewMut().end()), pid).ptr;
+
+        add(std::string_view{digits.data(), end}, name.view());
+      }
     }
 
     // The user's processes, newest first, each with its name.
@@ -763,14 +780,52 @@ namespace telar::runtime {
         found.push({pid, Text{memory, text}});
       }
 #endif
-      std::ranges::sort(found.viewMut(), std::greater{}, &std::pair<int, Text>::first);
-      for (const auto& [pid, name] : found) {
-        constexpr std::size_t pid_digits = 16;
-        ds::Array<char, pid_digits> digits{};
-        auto* const end = std::to_chars(digits.dataMut(), std::to_address(digits.viewMut().end()), pid).ptr;
+      newestFirst(found, add);
+    }
 
-        add(std::string_view{digits.data(), end}, name.view());
-      }
+    // The branches, remote-tracking branches and, with `tags`, the tags of the references git
+    // listed, a full name a line. A branch only a remote has checks out by its own name too, as
+    // git checkout does.
+    template <typename Add>
+    void listedReferences(std::string_view listing, bool tags, Add& add) {
+      constexpr std::string_view heads = "refs/heads/";
+      constexpr std::string_view remotes = "refs/remotes/";
+      constexpr std::string_view tagged = "refs/tags/";
+
+      lines(listing, [&](std::string_view name) {
+        if (name.starts_with(heads)) {
+          add(name.substr(heads.size()));
+        } else if (name.starts_with(remotes)) {
+          const auto branch = name.substr(remotes.size());
+
+          add(branch);
+          add(branch.substr(branch.find('/') + 1));
+        } else if (tags && name.starts_with(tagged)) {
+          add(name.substr(tagged.size()));
+        }
+      });
+    }
+
+    // The processes of a listing ps printed, a process a line: its id, then its name, or the
+    // path of its program, whose last part names it.
+    template <typename Add>
+    void listedProcesses(ConcurrentMemory& memory, std::string_view listing, Add& add) {
+      ds::Vec<std::pair<int, Text>, ConcurrentMemory> found{memory};
+
+      lines(listing, [&](std::string_view line) {
+        line = trimText(line, " \t");
+        const auto blank = line.find_first_of(" \t");
+        const auto pid = parseExact<int>(line.substr(0, blank)).valueOr(0);
+        if (pid <= 0 || blank == std::string_view::npos || std::cmp_greater_equal(found.size(), WordReader::maximum_entries)) {
+          return;
+        }
+
+        const auto program = trimText(line.substr(blank), " \t");
+
+        found.push({pid, Text{memory, program.substr(program.rfind('/') + 1)}});
+      });
+
+      newestFirst(found, add);
     }
 
     // The directory a typed path's directory part names, NUL-terminated in `resolved`: `~` or
@@ -894,6 +949,52 @@ namespace telar::runtime {
         source(memory),
         expansion(memory) {}
 
+  namespace {
+
+    // A word a provider offers, and the beginning it must have.
+    struct Offered {
+      std::string_view prefix;
+      std::string_view word;
+      std::string_view description;
+    };
+
+    // Keeps the word when it starts with the prefix and the wire carries it, its description cut
+    // to what a reply holds. False when there is no room: a bound on memory only, as the reply
+    // is cut once everything is sorted.
+    bool keep(tbc::mut_a<ConcurrentMemory> memory, tbc::mut_a<ds::Vec<Word, ConcurrentMemory>> words, const Offered& offered) {
+      const auto [prefix, word, description] = offered;
+      if (word.empty() || !word.starts_with(prefix) || word.size() > maximum_text_bytes || !printable(word)) {
+        return true;
+      }
+
+      if (words.size() >= WordReader::maximum_entries) {
+        return false;
+      }
+
+      words.push(Word{.text = Text{memory, word}, .description = Text{memory, printable(description) ? utf8Prefix(description, maximum_text_bytes) : std::string_view{}}});
+      return true;
+    }
+
+    // Sorted, but for processes, which keep the newest first; each word once and at most what a
+    // reply carries. False when words were left out.
+    bool settle(ds::Vec<Word, ConcurrentMemory>& words, CompletionProvider provider) {
+      if (provider != CompletionProvider::process) {
+        std::ranges::sort(words.viewMut());
+      }
+
+      const auto duplicates = std::ranges::unique(words.viewMut(), {}, &Word::text);
+
+      words.truncate(words.size() - duplicates.size());
+      if (words.size() > WordReader::maximum_words) {
+        words.truncate(WordReader::maximum_words);
+        return false;
+      }
+
+      return true;
+    }
+
+  }
+
   WordReader::WordReader(tbc::mut_a<ConcurrentMemory> memory, std::string_view configuration_directory)
       : memory_(memory),
         completions_(memory),
@@ -936,17 +1037,7 @@ namespace telar::runtime {
   void WordReader::collect(const Request& request, tbc::mut_a<Result> result) {
     const auto prefix = request.prefix.view();
     const auto add = [&](std::string_view word, std::string_view description = {}) {
-      if (word.empty() || !word.starts_with(prefix) || word.size() > maximum_text_bytes || !printable(word)) {
-        return;
-      }
-
-      // A bound on memory only: the reply is cut once everything is sorted.
-      if (result.words.size() >= maximum_entries) {
-        result.truncated = true;
-        return;
-      }
-
-      result.words.push(Word{.text = Text{memory_, word}, .description = Text{memory_, printable(description) ? utf8Prefix(description, maximum_text_bytes) : std::string_view{}}});
+      result.truncated = !keep(memory_, result.words, {.prefix = prefix, .word = word, .description = description}) || result.truncated;
     };
 
     const auto add_word = [&](std::string_view word) {
@@ -997,36 +1088,88 @@ namespace telar::runtime {
       sshHosts(memory_, request.home.view(), add);
       break;
     case CompletionProvider::make_target:
-      makeTargets(memory_, request.directory.view(), add);
+      makeTargets(makefile(memory_, request.directory.view()), add);
       break;
     case CompletionProvider::just_recipe:
-      justRecipes(memory_, request.directory.view(), add);
+      justRecipes(memory_, nearest(memory_, request.directory.view(), justfiles), add);
       break;
     case CompletionProvider::package_script:
-      packageScripts(memory_, request.directory.view(), add);
+      packageScripts(memory_, nearest(memory_, request.directory.view(), package_files), add);
       break;
     case CompletionProvider::compose_service:
-      composeServices(memory_, request.directory.view(), add);
+      composeServices(nearest(memory_, request.directory.view(), compose_files), add);
       break;
     case CompletionProvider::path:
     case CompletionProvider::directory:
     case CompletionProvider::executable:
       directoryEntries(memory_, request, add);
       break;
+    case CompletionProvider::shell:
+      // The pane's own shell answers these, in a service of its own: a reader has no words of it.
+      break;
     }
 
-    // Processes keep the newest first; everything else reads best sorted.
-    if (request.provider != CompletionProvider::process) {
-      std::ranges::sort(result.words.viewMut());
+    result.truncated = !settle(result.words, request.provider) || result.truncated;
+  }
+
+  bool hostWords(tbc::mut_a<ConcurrentMemory> memory, const HostSource& source, tbc::mut_a<ds::Vec<Word, ConcurrentMemory>> words) {
+    bool whole = true;
+    const auto add = [&](std::string_view word, std::string_view description = {}) {
+      whole = keep(memory, words, {.prefix = source.prefix, .word = word, .description = description}) && whole;
+    };
+
+    const auto add_word = [&](std::string_view word) {
+      add(word);
+    };
+
+    const auto text = source.text;
+
+    try {
+      switch (source.provider) {
+      case CompletionProvider::command:
+        // The remote shell reports no aliases or functions: its builtins and the host's programs.
+        builtins(source.shell, add_word);
+        lines(text, add_word);
+        break;
+      case CompletionProvider::branch:
+      case CompletionProvider::reference:
+        listedReferences(text, source.provider == CompletionProvider::reference, add_word);
+        break;
+      case CompletionProvider::remote:
+        lines(text, add_word);
+        break;
+      case CompletionProvider::stash:
+        stashNames(std::min(parseExact<std::size_t>(trimText(text, " \t\r\n")).valueOr(0), WordReader::maximum_words), add);
+        break;
+      case CompletionProvider::process:
+        listedProcesses(memory, text, add);
+        break;
+      case CompletionProvider::make_target:
+        makeTargets(text, add);
+        break;
+      case CompletionProvider::just_recipe:
+        justRecipes(memory, text, add);
+        break;
+      case CompletionProvider::package_script:
+        packageScripts(memory, text, add);
+        break;
+      case CompletionProvider::compose_service:
+        composeServices(text, add);
+        break;
+      case CompletionProvider::ssh_host:
+      case CompletionProvider::path:
+      case CompletionProvider::directory:
+      case CompletionProvider::executable:
+      case CompletionProvider::shell:
+        break;
+      }
+    } catch (const JsonError&) {
+      // A package.json that is no JSON names no scripts, as on this host.
+      words.clear();
+      return true;
     }
 
-    const auto duplicates = std::ranges::unique(result.words.viewMut(), {}, &Word::text);
-
-    result.words.truncate(result.words.size() - duplicates.size());
-    if (result.words.size() > maximum_words) {
-      result.words.truncate(maximum_words);
-      result.truncated = true;
-    }
+    return settle(words, source.provider) && whole;
   }
 
   void WordReader::stop() noexcept {}

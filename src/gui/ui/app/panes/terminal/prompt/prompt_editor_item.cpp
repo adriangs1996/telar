@@ -311,35 +311,33 @@ namespace telar::gui::qt {
     QVariantList result;
     const auto& menu = *line->menu();
     const auto [first, last] = menuPage(menu);
-    // The letters of each choice that what was typed matches, in order, for the menu to mark.
+    // The bytes of each choice the word typed matches, as the menu ranked it, for it to mark.
     const auto text = line->text();
     const auto typed = menu.begin < menu.end && menu.end <= text.size() ? text.substr(menu.begin, menu.end - menu.begin) : std::string_view{};
-    const auto fold = [](char byte) {
-      return byte >= 'A' && byte <= 'Z' ? static_cast<char>(byte + ('a' - 'A')) : byte;
-    };
+    application::prompt::HistoryMatchRanges ranges;
 
     for (auto index = first; index < last; ++index) {
       const auto& choice = menu.choices[index];
+      const auto shown = choice.text.view();
       QVariantList segments;
-      std::size_t matched = 0;
       std::size_t start = 0;
-      bool marked = false;
+      const auto segment = [&](std::size_t end, bool marked) {
+        if (end > start) {
+          const auto piece = shown.substr(start, end - start);
 
-      for (std::size_t offset = 0; offset <= choice.text.size(); ++offset) {
-        const bool hit = offset < choice.text.size() && matched < typed.size() && fold(choice.text[offset]) == fold(typed[matched]);
-        const bool boundary = offset == choice.text.size() || (hit != marked && !continuationByte(choice.text[offset]));
-        if (boundary && offset > start) {
-          segments.push_back(QVariantMap{{u"text"_s, QString::fromUtf8(choice.text.view().substr(start, offset - start).data(), static_cast<qsizetype>(offset - start))}, {u"marked"_s, marked}});
-          start = offset;
+          segments.push_back(QVariantMap{{u"text"_s, QString::fromUtf8(piece.data(), static_cast<qsizetype>(piece.size()))}, {u"marked"_s, marked}});
+          start = end;
         }
+      };
 
-        if (boundary) {
-          marked = hit;
+      if (!typed.empty() && application::prompt::menuMatch(typed, shown, ranges)) {
+        for (const auto& range : ranges.view()) {
+          segment(std::min<std::size_t>(range.begin, shown.size()), false);
+          segment(std::min<std::size_t>(range.end, shown.size()), true);
         }
-
-        matched += static_cast<std::size_t>(hit);
       }
 
+      segment(shown.size(), false);
       result.push_back(QVariantMap{
           {u"text"_s, QString::fromUtf8(choice.text.data(), static_cast<qsizetype>(choice.text.size()))},
           {u"segments"_s, segments},
@@ -513,35 +511,7 @@ namespace telar::gui::qt {
 
     const auto row = static_cast<std::uint32_t>(std::max(0, first_row_ + static_cast<int>(std::floor(point.y() / cellHeight()))));
     const auto column = static_cast<std::uint32_t>(std::max(0.0, std::floor(point.x() / cellWidth())));
-    const auto typed = line->text().size();
-    ds::Option<std::size_t> offset;
-
-    // The run under the column, a character a cell; past the row's last, the row's end.
-    for (const auto& run : layout_.runs) {
-      if (run.row != row || run.start >= typed) {
-        continue;
-      }
-
-      if (column < run.column) {
-        offset = offset.valueOr(run.start);
-        break;
-      }
-
-      auto byte = run.start;
-
-      for (auto cell = run.column; byte < run.end && cell < column; ++cell) {
-        ++byte;
-        while (byte < run.end && continuationByte(display_.view()[byte])) {
-          ++byte;
-        }
-      }
-
-      offset = std::min(byte, typed);
-      if (column < run.column + run.columns) {
-        break;
-      }
-    }
-
+    const auto offset = application::prompt::offsetAt(layout_, display_.view(), {.row = row, .column = column}, line->text().size());
     if (offset) {
       controller_->placeCursor(pane_id_, *offset);
     }
@@ -720,6 +690,11 @@ namespace telar::gui::qt {
     std::ranges::fill(styles.subspan(composed.cursor, composed.composing), application::prompt::Style::pending);
     std::ranges::fill(styles.subspan(typed), application::prompt::Style::ghost);
     markCommands(typed);
+
+    // An option the command does not accept, as a spec that lists them all says.
+    if (const auto rejected = controller_->rejectedOption(pane_id_); rejected && rejected->second <= typed) {
+      std::ranges::fill(styles_.viewMut().subspan(rejected->first, rejected->second - rejected->first), application::prompt::Style::rejected);
+    }
   }
 
   // A command the shell does not run is marked; one the runtime is still looking for waits.
@@ -917,6 +892,7 @@ namespace telar::gui::qt {
     case application::prompt::Style::error:
     case application::prompt::Style::missing:
     case application::prompt::Style::hidden:
+    case application::prompt::Style::rejected:
       return role("red", "failure");
     case application::prompt::Style::ghost: {
       constexpr float ghost_alpha = 0.7F;
@@ -1166,7 +1142,8 @@ namespace telar::gui::qt {
     }
   }
 
-  // A command the shell does not run gets a wavy underline; a path, a dotted one.
+  // A command the shell does not run and an option it does not accept get a wavy underline; a
+  // path, a dotted one.
   void PromptEditorItem::paintUnderlines(QSGNode& group) const {
     ChildNodes underlines{group};
     const auto width = cellWidth();
@@ -1174,11 +1151,11 @@ namespace telar::gui::qt {
     const auto pixel = 1.0 / scale_;
 
     for (const auto& run : layout_.runs) {
-      if ((run.style != application::prompt::Style::missing && run.style != application::prompt::Style::path) || !rowVisible(run.row)) {
+      const bool wavy = run.style == application::prompt::Style::missing || run.style == application::prompt::Style::rejected;
+      if ((!wavy && run.style != application::prompt::Style::path) || !rowVisible(run.row)) {
         continue;
       }
 
-      const bool wavy = run.style == application::prompt::Style::missing;
       const auto left = run.column * width;
       const auto right = (run.column + run.columns) * width;
       const auto baseline = ((static_cast<int>(run.row) - first_row_ + 1) * height) - (2 * pixel);

@@ -14,6 +14,24 @@ HistoryEmptyLayout {
     property real ratio: 1
     readonly property var regions: layout
     signal searchEverywhere()
+    // A filter word to search with, chosen from the suggestions.
+    signal filterChosen(string word)
+    // The filters worth trying from here, as the words that type them: each changes the search.
+    readonly property var suggestions: {
+        // Nothing recorded yet: no filter finds anything, the import does.
+        if (root.state.phase !== "ready" || root.action === "import") {
+            return [];
+        }
+        const words = [];
+        if (!root.state.failedOnly) {
+            words.push("exit:fail");
+        }
+        words.push(root.state.author === "agent" ? "by:you" : "by:agents");
+        if (root.state.effectiveScope !== "cwd") {
+            words.push("cwd:.");
+        }
+        return words;
+    }
 
     input: ({state: root.state, workspace: root.workspace, ratio: root.ratio, bodyPixels: root.typography.body, smallPixels: root.typography.small})
 
@@ -96,6 +114,51 @@ HistoryEmptyLayout {
         disabledAlpha: root.regions.disabledAlpha
         pressedAlpha: root.regions.pressedAlpha
         onActivated: root.searchEverywhere()
+    }
+
+    // The filters the empty search can try, as chips that type them.
+    Row {
+        objectName: "historyEmptyFilters"
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: root.regions.action.y + root.regions.action.height + 14 * root.ratio
+        spacing: 6 * root.ratio
+        visible: root.suggestions.length > 0
+
+        Repeater {
+            model: root.suggestions
+            delegate: Item {
+                id: suggestion
+                objectName: "historyEmptyFilter"
+                required property string modelData
+                width: word.implicitWidth + 16 * root.ratio
+                height: 24 * root.ratio
+
+                NativeRoundedRectangle {
+                    anchors.fill: parent
+                    radius: 4 * root.ratio
+                    color: area.containsMouse ? root.colors.surface1 : root.colors.surface0
+                }
+
+                CellText {
+                    id: word
+                    anchors.centerIn: parent
+                    text: suggestion.modelData
+                    color: root.colors.text
+                    grid: root.typography.grid
+                }
+
+                MouseArea {
+                    id: area
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.filterChosen(suggestion.modelData)
+                }
+
+                Accessible.role: Accessible.Button
+                Accessible.name: "Search with " + suggestion.modelData
+            }
+        }
     }
 
     Component.onCompleted: root.scheduleMeasurement()

@@ -53,13 +53,100 @@ import telar.base.diagnostics;
 import telar.runtime.workspaces.git_status;
 import telar.base.ds;
 
+// Interface: runtime/background_service.cppm
+export {
+#if TELAR_DIAGNOSTICS
+#endif
+
+  namespace telar::runtime {
+
+    class BackgroundService {
+    public:
+      using InternalRequest = HistoryEvent;
+
+      explicit BackgroundService(ConcurrentMemory& memory, const char* history_path, const HistoryFilters& filters = defaultHistoryFilters());
+
+      void process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context = {});
+
+      void processInternal(const InternalRequest& request);
+
+      bool acceptsInternal(const HistoryEventView& event) const noexcept;
+
+      // The writer's queue emptied: what it gathered commits now.
+      void drained() noexcept;
+
+      // Its writes on one thread, its reads on another: what a pool asks before either starts.
+      void separateLanes() noexcept;
+
+      // Signalled once changes are committed for the clients that watch.
+      [[nodiscard]] int changesDescriptor() const noexcept;
+
+      // A read the reader lane answers.
+      void read(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context);
+      void warm() noexcept;
+
+      // The changes committed since, oldest first, in place of what `out` held.
+      void takeChanges(ds::Vec<HistoryChanged, ConcurrentMemory>& out);
+
+      void idle() noexcept;
+
+#if TELAR_DIAGNOSTICS
+      HistoryMetrics historyMetrics() const noexcept;
+#endif
+
+    private:
+      template <typename Message>
+      void execute(const Message& request, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context);
+      void signalChanges() noexcept;
+
+      static constexpr std::size_t decode_capacity = std::size_t{128} * 1024;
+      std::variant<HistoryFilters, HistoryStore> history_;
+      CompletionSignal changed_;
+      bool lanes_ = false;
+      ds::Vec<Byte, ConcurrentMemory> read_decode_;
+#if TELAR_DIAGNOSTICS
+      diagnostics::FileStorage<ConcurrentMemory> storage_;
+#endif
+      ds::Vec<Byte, ConcurrentMemory> decode_;
+      [[no_unique_address]] HistoryCounters counters_;
+    };
+
+  }
+}
+
+// Interface: runtime/history_read_lane.cppm
+export {
+  namespace telar::runtime {
+
+    // The history's reads, on a worker of their own: a query never waits behind a write, nor a
+    // write behind a query.
+    class HistoryReadLane {
+    public:
+      explicit HistoryReadLane(BackgroundService& service) noexcept;
+
+      void process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context = {});
+
+      void idle() noexcept;
+
+    private:
+      BackgroundService& service_;
+    };
+
+  }
+}
+
 // Interface: runtime/background_pool.cppm
 export {
   namespace telar::runtime {
 
-    // The workers a background pool runs, one descriptor each: history, paths, editors, suggestions,
-    // files and worktrees.
-    inline constexpr std::size_t background_worker_count = 6;
+    // The workers a background pool runs, one descriptor each: the history's writes, its reads and
+    // its changes, paths, editors, suggestions, files and worktrees.
+    inline constexpr std::size_t background_worker_count = 8;
+
+    // A history request that only reads, which the history's reader answers while its writer
+    // writes.
+    template <typename Message>
+    concept HistoryRead = std::same_as<Message, QueryHistory> || std::same_as<Message, ReadHistoryOutput> || std::same_as<Message, HistoryStatsQuery> || std::same_as<Message, QueryHistoryCommandStats> || std::same_as<Message, QueryHistoryWorkspaces>;
 
     // A request on the files of the machine, which the files worker answers.
     template <typename Message>
@@ -95,12 +182,14 @@ export {
           files_.submit(client, message, context);
         } else if constexpr (std::same_as<Message, QueryHistory>) {
           try {
-            history_.submit(client, message, context);
+            history_reads_.submit(client, message, context);
             TELAR_DIAGNOSTIC(++history_queries_);
           } catch (...) {
             TELAR_DIAGNOSTIC(++history_query_failures_);
             throw;
           }
+        } else if constexpr (HistoryRead<Message>) {
+          history_reads_.submit(client, message, context);
         } else {
           history_.submit(client, message, context);
         }
@@ -110,6 +199,7 @@ export {
       template <typename Consumer>
       [[tbc::generic]] inline void collect(const Consumer& consumer) {
         history_.collect(consumer);
+        history_reads_.collect(consumer);
         path_service_.collect(consumer);
         editor_.collect(consumer);
         suggestions_.collect(consumer);
@@ -120,6 +210,15 @@ export {
       template <typename Reply>
       [[tbc::generic]] inline bool tryPaths(std::uint64_t client, const FindPaths& request, Reply& reply) {
         return path_service_.tryQuery(client, request, reply);
+      }
+
+      // Kept here: the consumer is the caller's callable, an open set no unit can instantiate ahead.
+      template <typename Consumer>
+      [[tbc::generic]] inline void collectHistoryChanges(const Consumer& consume) {
+        history_service_ref_.takeChanges(history_changes_);
+        for (const auto& change : history_changes_.view()) {
+          consume(change);
+        }
       }
 
       bool recordHistory(const HistoryEventView& event) noexcept;
@@ -151,7 +250,11 @@ export {
       std::uint64_t history_queries_ = 0;
       std::uint64_t history_query_failures_ = 0;
 #endif
+      History& history_service_ref_;
+      ds::Vec<HistoryChanged, ConcurrentMemory> history_changes_;
       RequestWorker<ConcurrentMemory, History> history_;
+      HistoryReadLane history_reader_;
+      RequestWorker<ConcurrentMemory, HistoryReadLane> history_reads_;
       RequestWorker<ConcurrentMemory, Editor> editor_;
       RequestWorker<ConcurrentMemory, Suggestions> suggestions_;
       FileService file_service_;
@@ -162,47 +265,6 @@ export {
 
     template <typename History, typename Paths, typename Editor, typename Suggestions>
     BackgroundPool(ConcurrentMemory& memory, History& history, Paths& paths, Editor& editor, Suggestions& suggestions) -> BackgroundPool<History, Paths, Editor, Suggestions>;
-
-  }
-}
-
-// Interface: runtime/background_service.cppm
-export {
-#if TELAR_DIAGNOSTICS
-#endif
-
-  namespace telar::runtime {
-
-    class BackgroundService {
-    public:
-      using InternalRequest = HistoryEvent;
-
-      explicit BackgroundService(ConcurrentMemory& memory, const char* history_path, const HistoryFilters& filters = defaultHistoryFilters());
-
-      void process(std::span<const Byte> payload, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context = {});
-
-      void processInternal(const InternalRequest& request);
-
-      bool acceptsInternal(const HistoryEventView& event) const noexcept;
-
-#if TELAR_DIAGNOSTICS
-      void idle() noexcept;
-
-      HistoryMetrics historyMetrics() const noexcept;
-#endif
-
-    private:
-      template <typename Message>
-      void execute(const Message& request, EncodedReply<ConcurrentMemory>& reply, const RequestContext& context);
-
-      static constexpr std::size_t decode_capacity = std::size_t{128} * 1024;
-      std::variant<HistoryFilters, HistoryStore> history_;
-#if TELAR_DIAGNOSTICS
-      diagnostics::FileStorage<ConcurrentMemory> storage_;
-#endif
-      ds::Vec<Byte, ConcurrentMemory> decode_;
-      [[no_unique_address]] HistoryCounters counters_;
-    };
 
   }
 }

@@ -302,6 +302,34 @@ namespace telar::runtime::cli {
       return installed;
     }
 
+    // The private directory where the connections `ssh` shares keep their sockets: the runtime's
+    // own directory beside a managed socket, one named after an explicit socket beside it. None
+    // when it cannot be a directory only the user may enter, and ssh then shares nothing.
+    tbc::val_a<ds::String<ConcurrentMemory>> sshControlDirectory(tbc::mut_a<ConcurrentMemory> memory, const RuntimePaths<ConcurrentMemory>& paths, bool wanted) {
+      ds::String<ConcurrentMemory> directory{memory};
+      const auto socket = paths.socket.view();
+      if (!wanted || !socket.starts_with('/')) {
+        return directory;
+      }
+
+      if (paths.socket_managed) {
+        directory.assign(socket.substr(0, socket.rfind('/')));
+        directory.append("/ssh");
+      } else {
+        directory.assign(socket);
+        directory.append(".ssh");
+      }
+
+      try {
+        createPrivateDirectory(directory.view());
+      } catch (const SystemError& error) {
+        std::println(stderr, "telar runtime: ssh connection sharing disabled: {}", error.what());
+        directory.clear();
+      }
+
+      return directory;
+    }
+
     // Where the editor's Neovim reads its configuration, whatever file configured telar; empty
     // without a home for configurations.
     tbc::val_a<ds::String<ConcurrentMemory>> editorConfiguration(tbc::mut_a<ConcurrentMemory> memory, std::string_view config_home) {
@@ -328,6 +356,7 @@ namespace telar::runtime::cli {
     installPngDecoder();
 
     const auto shell_integration = installShellIntegration(memory, paths, configuration.shell_integration);
+    const auto ssh_control = sshControlDirectory(memory, paths, configuration.ssh_integration && !shell_integration.empty());
     const SqliteAllocator sqlite_memory{memory};
     ds::Option<traffic::Service> traffic_service;
 
@@ -393,7 +422,7 @@ namespace telar::runtime::cli {
     const RuntimeOptions runtime_options{
         .socket = paths.socket,
         .cli_executable = cli.view(),
-        .session = {.path = paths.session, .resume_agents = options.resume_agents},
+        .session = {.path = paths.session, .resume_agents = options.resume_agents, .history_filters = &configuration.history_filters},
         .fresh = options.fresh,
         .capture_output = configuration.capture_output,
         .manifests = &configuration.manifests,
@@ -403,7 +432,10 @@ namespace telar::runtime::cli {
         .shell_integration = shell_integration,
         .data_home = paths.data_home,
         .ssh_integration = configuration.ssh_integration,
+        .ssh_control = ssh_control.view(),
         .agent_plans = configuration.agent_plans,
+        .shell_completion = configuration.shell_completion,
+        .shell_completion_configuration = configuration.shell_completion_rc,
         .configuration_directory = configuration_directory.empty() ? std::string_view{config_home} : configuration_directory,
         .editor_configuration = editor_configuration.view(),
     };

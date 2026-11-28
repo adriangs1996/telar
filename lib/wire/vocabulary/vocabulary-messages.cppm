@@ -119,6 +119,11 @@ export {
       create_explorer_pane = 0x72,
       keep_explorer = 0x73,
       delete_history_command = 0x74,
+      watch_history = 0x75,
+      choose_history_entry = 0x76,
+      run_pane_command = 0x77,
+      rewrite_history = 0x78,
+      query_history_command_stats = 0x79,
     };
 
     enum class ServerTag : Byte {
@@ -216,6 +221,10 @@ export {
       nvim_explore = 0xe0,
       explorer_kept = 0xe1,
       pane_facts = 0xe2,
+      pane_typeahead = 0xe3,
+      history_changed = 0xe4,
+      history_rewritten = 0xe5,
+      history_command_stats = 0xe6,
     };
 
     struct RequestRuntimeState {
@@ -570,6 +579,16 @@ export {
         return "keep_explorer";
       case ClientTag::delete_history_command:
         return "delete_history_command";
+      case ClientTag::watch_history:
+        return "watch_history";
+      case ClientTag::choose_history_entry:
+        return "choose_history_entry";
+      case ClientTag::run_pane_command:
+        return "run_pane_command";
+      case ClientTag::rewrite_history:
+        return "rewrite_history";
+      case ClientTag::query_history_command_stats:
+        return "query_history_command_stats";
       }
 
       return {};
@@ -707,6 +726,8 @@ export {
         return "monitor_snapshot";
       case ServerTag::history_workspaces:
         return "history_workspaces";
+      case ServerTag::history_changed:
+        return "history_changed";
       case ServerTag::pane_kind_notice:
         return "pane_kind_notice";
       case ServerTag::nvim_grid:
@@ -763,6 +784,12 @@ export {
         return "explorer_kept";
       case ServerTag::pane_facts:
         return "pane_facts";
+      case ServerTag::pane_typeahead:
+        return "pane_typeahead";
+      case ServerTag::history_rewritten:
+        return "history_rewritten";
+      case ServerTag::history_command_stats:
+        return "history_command_stats";
       case ServerTag::pane_theme:
         return "pane_theme";
       }
@@ -1057,6 +1084,17 @@ export {
       std::int32_t command_exit = 0;
     };
 
+    // The bytes [start, end) of a command or an excerpt that a query matched.
+    struct HistoryRange {
+      std::uint32_t start = 0;
+      std::uint32_t end = 0;
+    };
+
+    inline constexpr std::size_t max_history_match_ranges = 32;
+    inline constexpr std::size_t max_history_excerpt_bytes = 512;
+    inline constexpr std::size_t max_history_shell_bytes = 64;
+    inline constexpr std::size_t max_history_host_bytes = 255;
+
     struct HistoryEntry {
       std::uint64_t id = 0;
       std::uint64_t pane_id = 0;
@@ -1071,6 +1109,21 @@ export {
       std::string_view cwd;
       std::string_view workspace_path;
       bool command_truncated = false;
+      // The machine, the git branch and the shell the run had; empty when unknown.
+      std::string_view host;
+      std::string_view branch;
+      std::string_view shell;
+      // The runs of this command the history keeps, and how the newest of them ended.
+      std::uint32_t run_count = 0;
+      ds::Option<std::int32_t> last_exit;
+      // Where the query matched the command, in order and apart; empty for an empty query.
+      std::span<const HistoryRange> ranges;
+      // For a query that searched the captured output: a short piece of it around the match, and
+      // where in that piece the query matched.
+      std::string_view excerpt;
+      std::span<const HistoryRange> excerpt_ranges;
+      // A run a raw listing shows around a match without matching itself.
+      bool neighbour = false;
     };
 
     struct AgentSnapshotEntry {
@@ -1255,6 +1308,10 @@ export {
     inline constexpr std::size_t max_tab_layout_nodes = 127;
     inline constexpr std::size_t max_completion_bytes = 256;
     inline constexpr std::size_t max_block_command_bytes = 256;
+    // Where a block's command ran: its directory, the host and user it ran as.
+    inline constexpr std::size_t max_block_directory_bytes = 1024;
+    inline constexpr std::size_t max_block_host_bytes = 255;
+    inline constexpr std::size_t max_block_user_bytes = 64;
     inline constexpr std::size_t max_match_path_bytes = 1024;
     inline constexpr std::size_t max_match_positions = 64;
     inline constexpr std::size_t max_limit_name_bytes = 64;
@@ -1401,8 +1458,14 @@ export {
     };
 
     template <>
+    struct BodySchema<HistoryRange>
+        : Serializer<Field<&HistoryRange::start, u32, "start">, Field<&HistoryRange::end, u32, "end">> {
+      static void validate(const HistoryRange& value);
+    };
+
+    template <>
     struct BodySchema<HistoryEntry>
-        : Serializer<Field<&HistoryEntry::id, NonzeroU64, "id">, Field<&HistoryEntry::pane_id, NonzeroU64, "pane_id">, Field<&HistoryEntry::started_at_ms, i64, "started_at_ms">, Field<&HistoryEntry::duration_ns, i64, "duration_ns">, Field<&HistoryEntry::exit_code, OptionalValue<i32>, "exit_code">, Field<&HistoryEntry::status, EnumByte<HistoryStatus, 2>, "status">, Field<&HistoryEntry::author, EnumByte<HistoryAuthor, 1>, "author">, Field<&HistoryEntry::origin, EnumByte<HistoryOrigin, 2>, "origin">, Field<&HistoryEntry::provider, Text16<max_provider_bytes>, "provider">, Field<&HistoryEntry::command, Text32<max_history_command_bytes, false>, "command">, Field<&HistoryEntry::cwd, Text16<max_path_bytes>, "cwd">, Field<&HistoryEntry::workspace_path, Text16<max_path_bytes>, "workspace_path">, Field<&HistoryEntry::command_truncated, BoolByte, "command_truncated">> {};
+        : Serializer<Field<&HistoryEntry::id, NonzeroU64, "id">, Field<&HistoryEntry::pane_id, NonzeroU64, "pane_id">, Field<&HistoryEntry::started_at_ms, i64, "started_at_ms">, Field<&HistoryEntry::duration_ns, i64, "duration_ns">, Field<&HistoryEntry::exit_code, OptionalValue<i32>, "exit_code">, Field<&HistoryEntry::status, EnumByte<HistoryStatus, 2>, "status">, Field<&HistoryEntry::author, EnumByte<HistoryAuthor, 1>, "author">, Field<&HistoryEntry::origin, EnumByte<HistoryOrigin, 2>, "origin">, Field<&HistoryEntry::provider, Text16<max_provider_bytes>, "provider">, Field<&HistoryEntry::command, Text32<max_history_command_bytes, false>, "command">, Field<&HistoryEntry::cwd, Text16<max_path_bytes>, "cwd">, Field<&HistoryEntry::workspace_path, Text16<max_path_bytes>, "workspace_path">, Field<&HistoryEntry::command_truncated, BoolByte, "command_truncated">, Field<&HistoryEntry::host, Text16<max_history_host_bytes>, "host">, Field<&HistoryEntry::branch, Text16<max_branch_bytes>, "branch">, Field<&HistoryEntry::shell, Text16<max_history_shell_bytes>, "shell">, Field<&HistoryEntry::run_count, u32, "run_count">, Field<&HistoryEntry::last_exit, OptionalValue<i32>, "last_exit">, Field<&HistoryEntry::ranges, CountedSpan<u8, ValueCodec<HistoryRange>, max_history_match_ranges>, "ranges">, Field<&HistoryEntry::excerpt, Text16<max_history_excerpt_bytes>, "excerpt">, Field<&HistoryEntry::excerpt_ranges, CountedSpan<u8, ValueCodec<HistoryRange>, max_history_match_ranges>, "excerpt_ranges">, Field<&HistoryEntry::neighbour, BoolByte, "neighbour">> {};
 
     template <>
     struct BodySchema<AgentSnapshotEntry>
@@ -1511,6 +1574,10 @@ export {
       interrupted = 3,
       // An ssh whose remote shell has taken over the pane: it ends when that shell does.
       session = 4,
+      // Output no command printed: a background job's, or a program's that the shell left
+      // running, printed while the shell waited at its prompt. It has no prompt or command rows:
+      // its output starts on its row.
+      background = 5,
     };
 
     // The command a pane's integrated shell runs or last ran, as PaneFacts reports it.
@@ -1530,7 +1597,8 @@ export {
     };
 
     // One command an integrated shell ran: the rows its prompt and command line take, from the
-    // top of the scrollback as a viewport counts them, its first line and how it ended.
+    // top of the scrollback as a viewport counts them, its first line and how it ended, and where
+    // and when it started. A text the shell reported that is not displayable is left empty.
     struct CommandBlock {
       std::uint32_t row = 0;
       std::uint16_t rows = 0;
@@ -1541,11 +1609,23 @@ export {
       std::uint32_t duration_ms = 0;
       std::string_view command;
       CommandBlockNest nest{};
+      // When the command started, in milliseconds since the Unix epoch.
+      std::int64_t started_ms = 0;
+      // The directory it started in, as the shell last reported it (OSC 7).
+      std::string_view directory;
+      // The host and user it ran as: a remote shell's, for a command inside an ssh session.
+      std::string_view host;
+      std::string_view user;
+      // The branch of the repository the directory was in, when the shell runs on this host.
+      std::string_view branch;
+      // A block an earlier runtime kept: its rows went with that runtime's scrollback, so it has
+      // none, and it comes before every block of this runtime's.
+      bool restored = false;
     };
 
     template <>
     struct BodySchema<CommandBlock>
-        : Serializer<Field<&CommandBlock::row, u32, "row">, Field<&CommandBlock::rows, u16, "rows">, Field<&CommandBlock::lines, u16, "lines">, Field<&CommandBlock::state, EnumByte<CommandBlockState, 4>, "state">, Field<&CommandBlock::status, i32, "status">, Field<&CommandBlock::duration_ms, u32, "duration_ms">, Field<&CommandBlock::command, DisplayText16<max_block_command_bytes>, "command">, Field<&CommandBlock::nest, EnumByte<CommandBlockNest, 2>, "nest">> {
+        : Serializer<Field<&CommandBlock::row, u32, "row">, Field<&CommandBlock::rows, u16, "rows">, Field<&CommandBlock::lines, u16, "lines">, Field<&CommandBlock::state, EnumByte<CommandBlockState, std::to_underlying(CommandBlockState::background)>, "state">, Field<&CommandBlock::status, i32, "status">, Field<&CommandBlock::duration_ms, u32, "duration_ms">, Field<&CommandBlock::command, DisplayText16<max_block_command_bytes>, "command">, Field<&CommandBlock::nest, EnumByte<CommandBlockNest, 2>, "nest">, Field<&CommandBlock::started_ms, i64, "started_ms">, Field<&CommandBlock::directory, DisplayText16<max_block_directory_bytes>, "directory">, Field<&CommandBlock::host, DisplayText16<max_block_host_bytes>, "host">, Field<&CommandBlock::user, DisplayText16<max_block_user_bytes>, "user">, Field<&CommandBlock::branch, DisplayText16<max_branch_bytes>, "branch">, Field<&CommandBlock::restored, BoolByte, "restored">> {
       static void validate(const CommandBlock& value);
     };
 
@@ -1718,9 +1798,35 @@ export {
       finished = 1,
     };
 
+    // How a history query's text matches a command. Each matches case-folded text; `fts`, the
+    // name it had when only the full-text index answered it, is `substring`.
     enum class HistoryMatch : Byte {
-      fts = 0,
+      substring = 0,
       fuzzy = 1,
+      prefix = 2,
+      regex = 3,
+      fts = substring,
+    };
+
+    // The order of a history query's entries: by how well each matches, weighed by how often and
+    // how lately it ran and where; by when it ran, newest first; or, automatic, by rank for a fuzzy
+    // query and by time for any other.
+    enum class HistorySort : Byte {
+      automatic = 0,
+      rank = 1,
+      time = 2,
+    };
+
+    // What changed in the history, as a HistoryChanged tells a client that watches it.
+    enum class HistoryChange : Byte {
+      // A command started or finished: `entry_id` is its run.
+      recorded = 0,
+      // The run `entry_id` was deleted.
+      removed = 1,
+      // Every run of the command of `entry_id` was deleted.
+      removed_command = 2,
+      // Many runs changed at once, by a prune, an import, the retention or a moved directory.
+      many = 3,
     };
 
     enum class PaneProgressState : Byte {
@@ -1809,9 +1915,16 @@ export {
       static Decoded<value_type> decode(DecodeInput input, DecodeStorage& storage, const PaneTarget& target);
     };
 
+    // One command an import read, and what its source knew of how it ran: the directory (empty when
+    // unknown), the exit status and the duration (0 when unknown). Since cqp00015 for the last three.
     struct ImportHistoryEntry {
+      static constexpr std::size_t maximum_cwd_bytes = 4096;
+
       std::int64_t started_at_ms = 0;
       std::string_view command;
+      std::string_view cwd;
+      ds::Option<std::int32_t> exit_code;
+      std::int64_t duration_ns = 0;
     };
 
     struct PaneDescriptor {
@@ -1833,7 +1946,7 @@ export {
 
     template <>
     struct BodySchema<ImportHistoryEntry>
-        : Serializer<Field<&ImportHistoryEntry::started_at_ms, i64, "started_at_ms">, Field<&ImportHistoryEntry::command, Text16<max_text16_bytes, false>, "command">> {};
+        : Serializer<Field<&ImportHistoryEntry::started_at_ms, i64, "started_at_ms">, Field<&ImportHistoryEntry::command, Text16<max_text16_bytes, false>, "command">, Field<&ImportHistoryEntry::cwd, Text16<ImportHistoryEntry::maximum_cwd_bytes>, "cwd">, Field<&ImportHistoryEntry::exit_code, OptionalValue<i32>, "exit_code">, Field<&ImportHistoryEntry::duration_ns, i64, "duration_ns">> {};
 
     template <>
     struct BodySchema<PaneDescriptor>

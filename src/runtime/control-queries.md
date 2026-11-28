@@ -306,7 +306,7 @@ retains `listing_only`. The runtime preserves that gesture type: an intervening
 mode reset cancels a listing without pasting text; an ordinary paste remains
 text even if mode5522 becomes enabled. Empty ordinary pastes emit no bracket
 delimiters. These behaviors match Surface's separate list/paste completions.
-The C++ client and runtime use schema `cqp00014`; earlier layouts are rejected.
+The C++ client and runtime use schema `cqp00015`; earlier layouts are rejected.
 This does not change the retired Zig runtime or make it wire-compatible.
 
 The bounded ACK outbox now retains non-query graphics responses without replay,
@@ -450,3 +450,64 @@ Explicit abort cleanup passes, but error propagation remains unproven/incorrect.
 All earlier memory/resource, desktop and platform limitations remain open.
 Adrian requested pause after160; no161 or whole-goal completion is authorized
 by this checkpoint. Resume only upon a subsequent user instruction.
+
+## History requests (schema `cqp00015`)
+
+The runtime's command history answers these requests; every field is bounded by its codec in
+`lib/wire/history/history.cppm` and validated on decode. Reads (`QueryHistory`,
+`ReadHistoryOutput`, `HistoryStatsQuery`, `QueryHistoryCommandStats`, `QueryHistoryWorkspaces`) run on the history's
+reader lane with their own SQLite connection and the in-memory index; writes (pane and agent
+commands, imports, deletes, prunes, `ChooseHistoryEntry`) run on the writer lane. Neither waits
+for the other.
+
+`QueryHistory` (answered with `HistoryResults`):
+
+| Field | Meaning |
+| --- | --- |
+| `query`, `match` | Up to 1024 bytes. `fuzzy`, `substring`, `prefix` use the matcher of `lib/base/history` (fzf V2 and its extended syntax, smart case, Unicode simple folding); `regex` is the runtime's linear-time engine (`src/runtime/history/regex`), at most 4096 instructions, refused with `invalid_request` when malformed. `fts` is the old name of `substring`. |
+| `sort` | `automatic` (rank for a non-empty fuzzy query, else time), `rank`, `time`. Rank is the match score times bounded priors: recency, run count, same directory, workspace, pane, a recent failure, what followed the asking pane's previous command, how often it was chosen. |
+| `distinct` | Each command text once, as its newest run that passes the filters. |
+| `scope`, `scope_value`, `preload` | Global, cwd, workspace (by the directory's real path) or pane; with pane and `preload`, also every run started before the pane started (session preload). |
+| `failed_only`, `exit_code` | Failed means a nonzero status that was not interrupted: exit 130 (Ctrl-C) and 141 (SIGPIPE) are recorded as `interrupted`. `exit_code` is exact. |
+| `since_ms`, `until_ms`, `min_duration_ms`, `host`, `branch`, `shell` | Started in `[since, until)` (0 open), ran at least this long, on that machine, git branch, shell (empty: any; a shell by its name, so `zsh` is a run of `/usr/bin/zsh` or `-zsh`). |
+| `output` | Match the captured output (substring, case-insensitive trigram index over the output without escape sequences) instead of the command; entries carry `excerpt` (at most 512 bytes) and `excerpt_ranges`. Output capture is opt-in (`runtime.history.output = "bounded"`). |
+| `neighbours` | Time order, non-distinct: up to 8 runs before and after each match that do not match, marked `neighbour`. |
+| `origin_pane`, `origin_cwd` | Who asks, for the priors. |
+| `limit`, `offset`, `snapshot_id` | A page of 1–1000. `snapshot_id` 0 takes the newest run id; later pages pass it back so newer runs stay out. `offset` pages a ranked listing. |
+| `after_started_ms`, `after_id` | Pages a time-ordered listing after the last entry shown (keyset): a deletion between pages skips nothing. |
+
+`HistoryEntry` adds to the run's fields: `ranges` (byte ranges of the command the query matched,
+at most 32, in order), `host`, `branch`, `shell`, `run_count` (runs of the command; 0 when the
+runtime answered without its index), `last_exit` (newest run's status), `excerpt`,
+`excerpt_ranges`, `neighbour`. `has_more` is true whenever the listing has more entries than the
+page held.
+
+`PruneHistory.keep_runs` keeps the newest N runs of each command per directory and machine
+(`atuin history dedup --dupkeep N`); 0 keeps all. A running command is never pruned.
+
+`WatchHistory{watch}` (answered with `RequestCompleted`) subscribes a client to
+`HistoryChanged{revision, change, entry_id, pane_id}`, sent unasked after each committed change:
+`recorded` (a command started or finished, `entry_id` its run), `removed`, `removed_command`, or
+`many` (a prune, import, retention or moved directory, or more than 16 changes between two
+deliveries). A client refreshes what it shows; it is not sent the entries.
+
+`ChooseHistoryEntry{id, pane_id}` (answered with `RequestCompleted`) says a person picked entry
+`id` for the pane. It counts as chosen, a prior of the ranking, only when the pane's next
+command is that text in the same directory, within ten minutes.
+
+`QueryHistoryCommandStats{entry_id, command, days, until_ms}` (answered with
+`HistoryCommandStats`) tells how one command's runs went: the command run `entry_id` ran, or with
+`entry_id` 0 the stored text `command` (at most 64 KiB). The reply has `found`, `runs`,
+`measured` (runs whose duration the shell told) and `mean_duration_ms` over them, `ended` (runs
+that ended with a status and were not interrupted) and `succeeded` (of those, status 0),
+`last_started_ms` and `last_exit` of the newest run, and `per_day`: the runs that started in each
+of `days` (at most 90) days of 24 hours, the last ending at `until_ms` (exclusive; 0 for now),
+the oldest day first. The index keeps the counts per command as runs change and walks only the
+runs of the days asked for.
+
+Configuration (`runtime.history`): `store_failed = false` drops commands that failed;
+`retention = { max_rows = 1000000, max_age_days = 0, max_output_mib = 256, keep_runs = 0 }` (0:
+unbounded) removes the oldest runs past a bound, and with `keep_runs = N` the runs past the
+newest N of each command per directory and machine, as `PruneHistory.keep_runs` does; never a
+running one, with incremental vacuum, periodic `PRAGMA optimize`, and a WAL checkpoint (passive,
+then restart) past 32 MiB.

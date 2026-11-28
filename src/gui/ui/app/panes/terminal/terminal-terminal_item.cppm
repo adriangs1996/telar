@@ -96,7 +96,24 @@ export namespace telar::gui::qt {
     }
 
     [[nodiscard]] QVariantList rail() const;
+    // The letters of the vim marks on block `index`, for its separator and its rail segment.
+    [[nodiscard]] static QString markLetters(const application::Pane<Memory>& pane, std::size_t index);
     [[nodiscard]] QVariantList remoteRows() const;
+
+    [[tbc::hot_path]] [[nodiscard]] inline QVariantList backgroundRows() const {
+      return background_rows_;
+    }
+
+    [[tbc::hot_path]] [[nodiscard]] inline QVariantList restoredBlocks() const {
+      return restored_blocks_;
+    }
+
+    // Where and when a block's command ran, for its separator, the pinned one, the rail and the
+    // restored list: `place` (directory and branch), `where` (user@host, for a command run
+    // elsewhere), `started`, `restored` and `tip`, all of it for a pointer resting on it.
+    [[nodiscard]] static QVariantMap blockPlace(const CommandBlock& block);
+    // The commands an earlier runtime kept, as `restoredBlocks` lists them.
+    [[nodiscard]] static QVariantList restoredList(const application::Pane<Memory>& pane);
     [[nodiscard]] int promptRow() const noexcept;
 
     [[tbc::hot_path]] [[nodiscard]] inline int promptTop() const noexcept {
@@ -121,6 +138,16 @@ export namespace telar::gui::qt {
     [[qt::invokable]] void toggleFold(int index);
     // Copies the command at `index`, or its output.
     [[qt::invokable]] void copyBlock(int index, bool command);
+    // Puts the command at `index` in the editor, `how` "edit" or "root" for it with sudo, or
+    // "run" to run it again.
+    [[qt::invokable]] void reuseBlock(int index, const QString& how);
+    // The same with the command at `index` among the restored ones: "edit" or "run".
+    [[qt::invokable]] void reuseRestored(int index, const QString& how);
+    // Opens the filter on the output of the command at `index`, filters it by a query, and
+    // closes it.
+    [[qt::invokable]] void filterBlock(int index);
+    [[qt::invokable]] void queryBlockFilter(const QString& text, bool regex, bool ignore_case, bool invert, int context);
+    [[qt::invokable]] void closeBlockFilter();
     // A click on something drawn over the terminal: its pane comes forward and takes the keys.
     [[qt::invokable]] void focusFromPointer();
     // Glides back to the live end and follows the output again.
@@ -169,6 +196,10 @@ export namespace telar::gui::qt {
       return rail_height_;
     }
 
+    [[tbc::hot_path]] [[nodiscard]] inline QVariantMap blockFilter() const {
+      return block_filter_;
+    }
+
     [[nodiscard]] ds::Option<application::terminal::links::PresentedLink> prepareLinkPresentation() const;
 
     // What the window routes to the terminal, as its parent: the keys its bindings leave, the
@@ -212,6 +243,7 @@ export namespace telar::gui::qt {
     [[qt::signal]] void scrollChanged();
     [[qt::signal]] void stickyChanged();
     [[qt::signal]] void matchesChanged();
+    [[qt::signal]] void blockFilterChanged();
     // A command's command or output was copied, or had nothing to copy: `what` is "command" or
     // "output".
     [[qt::signal]] void blockCopied(int index, const QString& what, bool copied);
@@ -251,6 +283,7 @@ export namespace telar::gui::qt {
     static void requestRowFonts(ResidentFonts& fonts, WindowFontCatalog& catalog, std::span<const CellValue> cells);
     void refresh();
     void refreshBlocks();
+    void refreshBlockFilter();
 
     // Emits blockCopied for a copy of one of this pane's blocks since the last one it told of.
     void announceBlockCopy();
@@ -263,6 +296,19 @@ export namespace telar::gui::qt {
     void mousePacket(unsigned button, QPointF position, bool released);
     ds::Option<TerminalKey> sendKeyPress(const QKeyEvent& event, const InputModes& modes);
     void sendCommittedText(const QString& text);
+
+    // The part of the editor's line an input method reads to reconvert, its caret and the
+    // selection's other end in UTF-16 units of it, and the byte of the line it starts at; no text
+    // while the editor does not have the pane's keys.
+    struct PromptText {
+      ds::Option<QString> text;
+      std::size_t begin = 0;
+      qsizetype cursor = 0;
+      qsizetype anchor = 0;
+    };
+
+    [[nodiscard]] PromptText promptText() const;
+    [[nodiscard]] static QVariant answer(Qt::InputMethodQuery query, const PromptText& around);
     void dispatchWheel(const QWheelEvent& event, std::int32_t lines);
 
     // ---- scrolling by pixels (terminal_scroll.cpp) ----
@@ -321,6 +367,8 @@ export namespace telar::gui::qt {
     [[nodiscard]] QVariantMap pinnedBlock() const;
     // The search's matches on the rows drawn, and on the rail.
     void markMatches();
+    // The filter's matches on the rows drawn of its block's output.
+    void markFilterMatches();
     [[nodiscard]] ds::Option<std::size_t> drawnRowOf(std::uint64_t row, std::uint64_t first) const;
     Arrivals arrivalsSince(bool at_end, bool telar);
     [[nodiscard]] std::uint64_t scrollNow() const;
@@ -386,6 +434,8 @@ export namespace telar::gui::qt {
     QVariantMap document_rows_;
     QVariantList rail_;
     QVariantList remote_rows_;
+    QVariantList background_rows_;
+    QVariantList restored_blocks_;
     int prompt_row_ = -1;
     int prompt_top_ = -1;
     int cursor_row_ = -1;
@@ -449,6 +499,7 @@ export namespace telar::gui::qt {
     ds::Option<std::uint64_t> top_anchor_;
     ds::Vec<float, Memory> row_offsets_{adapter_};
     ds::Vec<MatchMark, Memory> match_marks_{adapter_};
+    QVariantMap block_filter_;
     QVariantList rail_matches_;
     int fold_from_ = -1;
     qreal fold_offset_ = 0;
@@ -539,6 +590,8 @@ export namespace telar::gui::qt {
         telar::qt::property("documentRows", &TerminalItem::documentRows).withNotify(&TerminalItem::blocksChanged),
         telar::qt::property("rail", &TerminalItem::rail).withNotify(&TerminalItem::blocksChanged),
         telar::qt::property("remoteRows", &TerminalItem::remoteRows).withNotify(&TerminalItem::blocksChanged),
+        telar::qt::property("backgroundRows", &TerminalItem::backgroundRows).withNotify(&TerminalItem::blocksChanged),
+        telar::qt::property("restoredBlocks", &TerminalItem::restoredBlocks).withNotify(&TerminalItem::blocksChanged),
         telar::qt::property("promptRow", &TerminalItem::promptRow).withNotify(&TerminalItem::blocksChanged),
         telar::qt::property("cell", &TerminalItem::cellSize).withNotify(&TerminalItem::blocksChanged),
         telar::qt::property("promptTop", &TerminalItem::promptTop).withNotify(&TerminalItem::placeChanged),
@@ -554,7 +607,8 @@ export namespace telar::gui::qt {
         telar::qt::property("foldOffset", &TerminalItem::foldOffset).withNotify(&TerminalItem::scrollChanged),
         telar::qt::property("railMatches", &TerminalItem::railMatches).withNotify(&TerminalItem::matchesChanged),
         telar::qt::property("railTop", &TerminalItem::railTop).withNotify(&TerminalItem::scrollChanged),
-        telar::qt::property("railHeight", &TerminalItem::railHeight).withNotify(&TerminalItem::scrollChanged)
+        telar::qt::property("railHeight", &TerminalItem::railHeight).withNotify(&TerminalItem::scrollChanged),
+        telar::qt::property("blockFilter", &TerminalItem::blockFilter).withNotify(&TerminalItem::blockFilterChanged)
     );
   };
 

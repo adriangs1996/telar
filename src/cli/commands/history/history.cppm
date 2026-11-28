@@ -8,10 +8,8 @@ import telar.cli.console.command_limit;
 import telar.platform.paths;
 
 import telar.wire.vocabulary;
-import telar.wire.history;
 import telar.platform.primitives;
 import telar.cli.session.runtime_observer;
-import telar.cli.session.control_session;
 import telar.base.memory.allocators;
 import telar.base.ds;
 
@@ -124,23 +122,45 @@ export {
         stats,
         list,
         search,
+        export_history,
       };
       enum class ImportKind : std::uint8_t {
         automatic,
         zsh,
         bash,
         fish,
+        nushell,
+        xonsh,
+        powershell,
+        atuin,
+        mcfly,
+        histdb,
+      };
+      // How list, search and export print each entry.
+      enum class Output : std::uint8_t {
+        text,
+        json,
+        format,
+        zsh,
+        bash,
+        fish,
       };
       static constexpr std::uint16_t default_limit = 20;
       static constexpr std::uint16_t max_results = 1000;
+      static constexpr std::uint8_t max_ngram_size = 10;
       Action action;
       ImportKind import_kind = ImportKind::automatic;
       ds::Option<std::string_view> import_file = ds::none;
       std::uint64_t id = 0;
       std::int64_t before_ms = 0;
       std::uint16_t period_days = 0;
+      // `--period today`: since local midnight rather than a number of days.
+      bool period_today = false;
+      std::uint8_t ngram_size = 1;
       bool dry_run = false;
       bool assume_yes = false;
+      // `prune --filters`: the entries today's history filters would refuse.
+      bool prune_filters = false;
       std::string_view query;
       HistoryScope scope = HistoryScope::global;
       tbc::val_a<std::string_view> scope_value;
@@ -148,13 +168,41 @@ export {
       bool failed_only = false;
       HistoryAuthorFilter author = HistoryAuthorFilter::all;
       std::uint16_t limit = default_limit;
+      std::uint32_t offset = 0;
+      // `--after ID`: a listing by time continues past that entry, the last one the previous
+      // page showed, so what was deleted or recorded meanwhile neither skips nor repeats any.
+      std::uint64_t after_id = 0;
+      // `prune --keep N`: only the older runs past the newest N of each command go.
+      std::uint32_t keep_runs = 0;
+      bool distinct = false;
+      Output output = Output::text;
+      std::string_view format;
       ds::Option<std::string_view> socket = ds::none;
+      // The filters --since, --until, --exit, --min-duration, --host, --branch and --shell set,
+      // and the order and mode --sort and --mode choose.
+      std::int64_t since_ms = 0;
+      std::int64_t until_ms = 0;
+      ds::Option<std::int32_t> exit_code = ds::none;
+      std::uint64_t min_duration_ms = 0;
+      std::string_view host;
+      std::string_view branch;
+      std::string_view shell;
+      HistorySort sort = HistorySort::automatic;
+      HistoryMatch match = HistoryMatch::substring;
 
       void setScope(HistoryScope value, tbc::val_a<std::string_view> path = {});
 
       static ImportKind importKind(std::string_view value);
 
       static std::int64_t parseBefore(std::string_view text);
+
+      // A time as --since and --until take it, in milliseconds: `today`, `yesterday`, an age
+      // before `now_ms` as `-1d`, `2h`, `30m`, `90s` or `1w`, a date as YYYY-MM-DD, or seconds
+      // since the epoch.
+      static std::int64_t parseTime(std::string_view text, std::int64_t now_ms);
+
+      // A duration as --min-duration takes it: `500ms`, `2s`, `5m`, `1h`, or milliseconds.
+      static std::uint64_t parseDuration(std::string_view text);
 
       static HistoryOptions parse(Arguments words);
     };
@@ -165,15 +213,6 @@ export {
 // Interface: history.cppm
 export {
   namespace telar::runtime::cli::history {
-
-    // The results view the session; region `b` keeps them apart from the options' own `a`.
-    tbc::val_b<HistoryResults> query(tbc::mut_b<ControlSession> session, const HistoryOptions& options, const HistoryScopeValue& scope);
-
-    void prune(Memory& memory, const char* socket, ControlSession& session, const HistoryOptions& options, const HistoryScopeValue& scope);
-
-    void show(ControlSession& session, const HistoryOptions& options);
-
-    void stats(ControlSession& session, const HistoryOptions& options, const HistoryScopeValue& scope);
 
     int run(Memory& memory, const HistoryOptions& options);
 

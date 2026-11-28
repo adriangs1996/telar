@@ -15,6 +15,9 @@ export import :text;
 export import :editor;
 export import :specs;
 export import :line;
+export import :recall;
+export import :ranking;
+export import :correction;
 
 import std;
 import telar.tbc;
@@ -71,6 +74,23 @@ namespace telar::gui::features::prompt {
     Name word;
   };
 
+  // A command the shell did not find, whose word [begin, end) the runtime is asked about.
+  struct Correction {
+    std::uint64_t pane_id;
+    Name command;
+    std::size_t begin = 0;
+    std::size_t end = 0;
+    shell::Dialect dialect = shell::Dialect::posix;
+  };
+
+  // A command a line handed over that the runtime is yet to say it typed; `kept` when the
+  // history filters let it be remembered.
+  struct SentCommand {
+    std::uint64_t pane_id;
+    Name command;
+    bool kept = false;
+  };
+
   struct CommandChecks {
     explicit CommandChecks(Memory& memory);
 
@@ -110,6 +130,24 @@ export namespace telar::gui::features::prompt {
     // The command the queue waits for ended well: the shell may report its end before it is
     // back at its prompt, where the queued command runs.
     bool succeeded = false;
+    // The line ran a command the recall remembers, whose end the shell has not reported yet.
+    bool awaiting_end = false;
+    // What the shell's own line editor held when a command cleared it (PaneTypeahead), for the
+    // line to take at the next prompt.
+    Name typeahead;
+    // The question for the runtime's ranked suggestion in flight, 0 for none, and whether the
+    // line changed since it was asked, so it is asked again once answered.
+    std::uint64_t suggesting = 0;
+    bool suggest_again = false;
+
+    // The option rejectedOption found, for the revisions of the line and of the specs it read.
+    struct Rejected {
+      std::uint64_t line = 0;
+      std::uint64_t specs = 0;
+      ds::Option<std::pair<std::size_t, std::size_t>> option;
+    };
+
+    ds::Option<Rejected> rejected;
     // When the shell reported a command's end without its prompt back yet, as `now` reads the
     // clock: keys typed in between wait in the line, for a while. None outside that gap.
     ds::Option<std::int64_t> ended;
@@ -127,13 +165,46 @@ export namespace telar::gui::features::prompt {
     std::size_t jump = 0;
   };
 
-  // What ui reads of a pane's line: a view of it and of the commands its suggestions read, valid
-  // until a use case changes them. Inline, as a line's view reads it whenever it draws.
+  // The commands the suggestions and Up read, newest first and each once: a view of the state's,
+  // valid until a use case changes them.
+  class Recalled {
+  public:
+    [[tbc::hot_path]] inline explicit Recalled(tbc::ref_a<Recall> recall) noexcept
+        : recall_(&recall) {}
+
+    [[nodiscard]] [[tbc::hot_path]] inline std::size_t size() const noexcept {
+      return recall_->size();
+    }
+
+    [[nodiscard]] [[tbc::hot_path]] inline bool empty() const noexcept {
+      return recall_->empty();
+    }
+
+    [[nodiscard]] [[tbc::hot_path]] inline tbc::val_a<std::string_view> operator[](std::size_t index) const noexcept {
+      return recall_->command(index);
+    }
+
+    [[nodiscard]] [[tbc::hot_path]] inline tbc::val_a<std::string_view> front() const noexcept {
+      return recall_->command(0);
+    }
+
+    [[nodiscard]] [[tbc::hot_path]] inline tbc::val_a<std::string_view> back() const noexcept {
+      return recall_->command(recall_->size() - 1);
+    }
+
+  private:
+    tbc::val_a<const Recall*> recall_;
+  };
+
+  // What ui reads of a pane's line: a view of it and of the commands its suggestions read for
+  // where the line is, valid until a use case changes them. Inline, as a line's view reads it
+  // whenever it draws.
   class LineView {
   public:
-    [[tbc::hot_path]] inline LineView(tbc::ref_a<Line> line, tbc::val_a<History> history) noexcept
+    [[tbc::hot_path]] inline LineView(tbc::ref_a<Line> line, tbc::ref_a<Recall> recall, tbc::val_a<Place> place) noexcept
         : line_(&line),
-          history_(history) {}
+          recall_(&recall),
+          place_(place) {}
 
     [[nodiscard]] [[tbc::hot_path]] inline tbc::val_a<std::string_view> text() const noexcept {
       return line_->editor().text().view();
@@ -200,10 +271,11 @@ export namespace telar::gui::features::prompt {
       return line_->pending(request);
     }
 
-    // The rest of a command this one starts: from what this line sent, then from the history.
-    // Only while typing at the end of a line of two characters or more.
+    // The rest of a command this one starts: the newest whose last run did not fail, from the
+    // line's directory first, then its workspace, then anywhere (Recall::suggest). Only while
+    // typing at the end of a line of two characters or more.
     [[nodiscard]] [[tbc::hot_path]] inline tbc::val_a<std::string_view> suggestion() const noexcept {
-      return line_->suggestion(history_);
+      return line_->suggestion(*recall_, place_);
     }
 
     // The same for every view of one line, for a view to tell when the line it shows changed: an
@@ -214,14 +286,16 @@ export namespace telar::gui::features::prompt {
 
   private:
     tbc::val_a<const Line*> line_;
-    tbc::val_a<History> history_;
+    tbc::val_a<const Recall*> recall_;
+    tbc::val_a<Place> place_;
   };
 
   // The questions Tab asks the runtime, and the choices known at once. Opaque: application asks
   // each question under an id of its own (request, sent), then offers the plan to the line.
   struct CompletionPlan {
-    // Files or directories under the directory typed, then each provider the spec names.
-    static constexpr std::size_t maximum_questions = 11;
+    // Files or directories under the directory typed, each provider the spec names, then the
+    // pane's own shell.
+    static constexpr std::size_t maximum_questions = 12;
 
     explicit CompletionPlan(Memory& memory);
 
@@ -265,9 +339,8 @@ export namespace telar::gui::features::prompt {
   // take the ones they need apart, as Rust borrows a struct's fields; ui goes through the use cases
   // below.
   struct State {
-    // The suggestions read the whole history on every refresh: commands run since it loaded
-    // replace the oldest instead of growing it for as long as the client lives.
-    static constexpr std::uint16_t history_limit = 1000;
+    // The most commands the history query asks for, which the recall holds.
+    static constexpr std::uint16_t history_limit = Recall::capacity;
 
     // Every line and what it asks for live in `allocator`.
     explicit State(tbc::mut_a<Memory> allocator);
@@ -277,10 +350,13 @@ export namespace telar::gui::features::prompt {
     tbc::val_a<Specs> specs;
     // Apart from the specs, so a spec read from them is matched with it.
     tbc::val_a<MatchScratch> scratch;
-    tbc::val_a<ds::Vec<Name, Memory>> history;
+    tbc::val_a<Recall> recall;
     std::uint64_t history_request = 0;
     // An answer to the history query arrived: until one does, it is asked again.
     bool history_loaded = false;
+    // The history changed while a query was on its way, which may have read it before: one more
+    // query follows its answer, however many changes come meanwhile.
+    bool history_again = false;
     tbc::val_a<ds::Map<std::uint64_t, PathCompletion, Memory>> completions;
     tbc::val_a<ds::Map<std::uint64_t, CommandRequest, Memory>> command_requests;
     tbc::val_a<ds::Map<std::uint64_t, CommandChecks, Memory>> command_checks;
@@ -289,6 +365,12 @@ export namespace telar::gui::features::prompt {
     tbc::val_a<ds::Map<std::uint64_t, Name, Memory>> spec_completions;
     // The directory a question about a command named by its path reads, while it is sent.
     tbc::val_a<Name> command_root;
+    // The commands sent that wait for the runtime's answer, by request.
+    tbc::val_a<ds::Map<std::uint64_t, SentCommand, Memory>> sent_commands;
+    // The commands the shell did not find whose closest command the runtime is asked for.
+    tbc::val_a<ds::Map<std::uint64_t, Correction, Memory>> corrections;
+    // The questions for ranked suggestions in flight, by request: the pane that asked.
+    tbc::val_a<ds::Map<std::uint64_t, std::uint64_t, Memory>> suggestions;
     std::uint64_t written = 0;
   };
 
@@ -304,12 +386,13 @@ export namespace telar::gui::features::prompt {
 
   [[nodiscard]] [[tbc::hot_path]] inline PaneLine* find(Lines& lines, std::uint64_t pane_id) noexcept;
 
-  [[nodiscard]] [[tbc::hot_path]] inline tbc::val_a<ds::Option<LineView>> line(tbc::ref_a<State> state, tbc::ref_a<Lines> lines, std::uint64_t pane_id) noexcept;
+  // Pane `pane_id`'s line as it reads at `place`, its own pane alone where none is given.
+  [[nodiscard]] [[tbc::hot_path]] inline tbc::val_a<ds::Option<LineView>> line(tbc::ref_a<State> state, tbc::ref_a<Lines> lines, std::uint64_t pane_id, tbc::val_a<Place> place = {}) noexcept;
 
-  [[nodiscard]] [[tbc::hot_path]] inline tbc::val_a<LineView> view(tbc::ref_a<State> state, tbc::ref_a<PaneLine> line) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline tbc::val_a<LineView> view(tbc::ref_a<State> state, tbc::ref_a<PaneLine> line, tbc::val_a<Place> place = {}) noexcept;
 
   // The commands people typed, most recent first and each once, which the suggestions read.
-  [[nodiscard]] [[tbc::hot_path]] inline History history(const State& state) noexcept;
+  [[nodiscard]] [[tbc::hot_path]] inline tbc::val_a<Recalled> history(tbc::ref_a<State> state) noexcept;
 
   // Pane `pane_id` printed now, as `now` reads the clock, only for a pane with a line: a program
   // quiet since may be asking a question.
@@ -323,24 +406,26 @@ export namespace telar::gui::features::prompt {
 
   // Whether a key typed while a program runs reaches the program instead of the queue: the signal
   // and end-of-file keys of `shell`'s line discipline, and any key while the program seems to ask
-  // a question, its cursor at `cursor_column` and quiet since its last output. Once a key reached
+  // a question, `asked` before its cursor (PendingPrompt::question) and quiet since its last
+  // output. Once a key reached
   // it, the rest of the answer follows it until Enter: the echo of each key is output too, and
   // would send the next one to the queue. `now` reads the clock, only when the line is empty and
   // no answer is under way.
   template <typename Now>
-  [[nodiscard]] [[tbc::generic]] bool toProgram(PaneLine& line, const KeyPress& key, const PaneShell& shell, std::uint32_t cursor_column, Now&& now);
+  [[nodiscard]] [[tbc::generic]] bool toProgram(PaneLine& line, const KeyPress& key, const PaneShell& shell, std::string_view asked, Now&& now);
 
   // Whether text an input method committed or a paste reaches the program instead of the queue,
   // as a key would: during an answer, or as its start. Only one line does (oneLine), and a line
   // end after it ends the answer.
   template <typename Now>
-  [[nodiscard]] [[tbc::generic]] bool toProgram(PaneLine& line, std::string_view text, std::uint32_t cursor_column, Now&& now);
+  [[nodiscard]] [[tbc::generic]] bool toProgram(PaneLine& line, std::string_view text, std::string_view asked, Now&& now);
 
-  // How the line reads a key: the bindings of `configuration`, and the `dialect` of the shell that
-  // runs the command.
+  // How the line reads a key: the bindings and Up's scope of `configuration`, the `dialect` of the
+  // shell that runs the command, and the `place` the suggestions and Up rank commands for.
   struct KeyReading {
     const PromptConfiguration& configuration;
     shell::Dialect dialect = shell::Dialect::posix;
+    Place place;
   };
 
   // A key in the line: the action the configuration binds to it in the editor's mode, or the
@@ -351,17 +436,48 @@ export namespace telar::gui::features::prompt {
   // keys. Valid until the line's next key.
   [[nodiscard]] [[tbc::hot_path]] inline std::string_view delivery(const PaneLine& line) noexcept;
 
-  // `command` ran from a line: every pane's suggestions know it at once, without asking the
-  // history again.
-  void remember(State& state, std::string_view command);
+  // `command` ran from a line at `place`: every pane's suggestions know it at once, without asking
+  // the history again.
+  void remember(State& state, std::string_view command, const Place& place = {});
+
+  // A command ended in the line's pane with `status`: when it is the one the line ran, a failure
+  // keeps it out of the suggestions until it runs again. An interrupt is not a failure: Ctrl-C
+  // ends `tail -f` as it should.
+  void ended(State& state, PaneLine& line, std::int32_t status) noexcept;
 
   // What the line handed over with `run` or `answer` reached its pane: the line clears and
   // remembers `command`, empty for an answer. A delivery that fails leaves the text in the line.
   void committed(PaneLine& line, std::string_view command);
 
+  // The most commands that wait for the runtime's answer at once; one sent past it is taken as
+  // typed, as a runtime that does not answer.
+  inline constexpr std::size_t sent_commands_limit = 64;
+
+  // The line's `command` went out under `request_id`, for a runtime that answers it: the line
+  // clears at once, as the shell's would, but remembers nothing until the runtime typed it.
+  // `kept` when the history filters keep it. False when too many wait: the caller commits it.
+  [[nodiscard]] bool sent(State& state, PaneLine& line, std::uint64_t request_id, std::string_view command, bool kept);
+
+  // The pane that sent the command waiting under `request_id`; none when no command waits there.
+  [[nodiscard]] ds::Option<std::uint64_t> sentFrom(const State& state, std::uint64_t request_id) noexcept;
+
+  // The runtime typed the command sent under `request_id`, from `place`: the line remembers it,
+  // and every line's suggestions and Up do when it was kept. False when none waited there.
+  bool accepted(State& state, Lines& lines, std::uint64_t request_id, const Place& place);
+
+  // The runtime refused the command sent under `request_id`: it comes back into its line, when
+  // nothing was typed there since, and nothing remembers it. The command, none when none waited
+  // there; it lives until the state's next use case.
+  [[nodiscard]] tbc::val_a<ds::Option<SentCommand>> refused(tbc::mut_a<State> state, Lines& lines, std::uint64_t request_id);
+
   // Text an input method committed or a paste, into the line. Controls other than newline and tab
-  // are dropped: they would act on the shell instead of being written.
-  void insert(State& state, PaneLine& line, std::string_view text);
+  // are dropped: they would act on the shell instead of being written. False when the line
+  // cannot hold it all, past Text's capacity: it is refused whole, as a command cut short could
+  // run something else, and the line stays as it was.
+  [[nodiscard]] bool insert(State& state, PaneLine& line, std::string_view text);
+
+  // The most bytes a line holds, which a paste past it is refused for.
+  inline constexpr std::size_t line_capacity = Text::capacity;
 
   // `command` replaces the line, the caret at its end, as a history entry pasted does.
   void write(State& state, PaneLine& line, std::string_view command);
@@ -478,6 +594,11 @@ export namespace telar::gui::features::prompt {
     // The runtime names revisions, tags too, where a spec expects a @ref; an older one lists
     // branches there.
     bool reads_references = false;
+    // The runtime asks the pane's own shell for a command no spec describes.
+    bool reads_shell = false;
+    // The pane's shell is on a host `ssh` reached, which the runtime asks only for its files and
+    // its shell's words.
+    bool remote = false;
   };
 
   // The choices for `context` in `line`, from `sources`.
@@ -522,6 +643,62 @@ export namespace telar::gui::features::prompt {
   // Every question in flight fails.
   void failAll(State& state, Lines& lines) noexcept;
 
+  // ---- what the shell's own line held ----------------------------------------------------------
+
+  // The runtime reports `typed`, what the shell's line editor held when a command cleared it:
+  // the line takes it at the shell's next prompt (takeTypeahead). At most the wire's bound.
+  void typeahead(PaneLine& line, std::string_view typed);
+
+  // At the shell's prompt, the text the shell's line held goes into the line, before what was
+  // typed there since; true when there was any.
+  bool takeTypeahead(State& state, PaneLine& line);
+
+  // ---- the runtime's ranked suggestion ---------------------------------------------------------
+
+  // The question for the runtime's best command that starts with what the line holds, its index
+  // ranking it with its priors for the line's pane and directory at `place`, under `request_id`:
+  // only while typing at the end of a line of two characters or more. None when it has nothing
+  // to ask, or a question is in flight, which asks again once answered. It views the line and
+  // `place`.
+  [[nodiscard]] tbc::val_a<ds::Option<QueryHistory>> suggestionQuery(tbc::ref_a<PaneLine> line, tbc::val_a<Place> place, std::uint64_t request_id);
+
+  // The question went out under `request_id`, `sent`, or not.
+  void askedSuggestion(State& state, PaneLine& line, std::uint64_t request_id, bool sent);
+
+  // An answer to a suggestion's question: the pane whose line suggests it now, 0 when it
+  // suggests what it did; none when the answer is not one.
+  [[nodiscard]] ds::Option<std::uint64_t> ranked(State& state, Lines& lines, const HistoryResults& message);
+
+  // The history entry whose command the line's last key took whole as the runtime suggested
+  // it, for the runtime to learn the choice; none, once taken.
+  [[nodiscard]] ds::Option<std::uint64_t> takeChosen(PaneLine& line) noexcept;
+
+  // ---- options a command does not accept ------------------------------------------------------
+
+  // The bytes [first, second) of the first option the line's command does not accept, as the
+  // spec held for it reads the words, the `dialect`'s shell splitting them: only for a spec
+  // marked complete (Specs::complete_marker), and a line of one plain command, without `$`,
+  // quotes, escapes, pipes, lists, redirections, groups or substitutions, which only the shell
+  // can resolve. Never the word at the line's end, which is still being typed. Kept until the
+  // line or the specs change, as each redraw asks.
+  [[nodiscard]] ds::Option<std::pair<std::size_t, std::size_t>> rejectedOption(State& state, PaneLine& line, shell::Dialect dialect);
+
+  // ---- did you mean ----------------------------------------------------------------------------
+
+  // The shell said it did not find the command `line` ran, with status 127: its empty line
+  // suggests the closest command known, from the history, the pane's aliases and the commands it
+  // saw run, as the `dialect`'s shell reads the command. With an `asking` request id, the
+  // question under it for the commands the shell runs that start as the word does, whose answer
+  // may hold a closer one; none when there is nothing to ask. It views the state.
+  [[nodiscard]] tbc::val_a<ds::Option<CompleteWords>> mistyped(tbc::mut_a<State> state, PaneLine& line, std::int32_t status, shell::Dialect dialect, ds::Option<std::uint64_t> asking);
+
+  // The question `request_id` for a correction went out, `sent`, or not.
+  void askedCorrection(State& state, std::uint64_t request_id, bool sent);
+
+  // The commands the runtime found for a correction: the pane whose line suggests another, 0 when
+  // it suggests the same; none when the answer is not a correction's.
+  [[nodiscard]] ds::Option<std::uint64_t> correct(State& state, Lines& lines, const CompletionWords& message);
+
   // ---- the history the suggestions read --------------------------------------------------------
 
   // Whether the history is on its way.
@@ -530,6 +707,11 @@ export namespace telar::gui::features::prompt {
   // Whether the history is to be asked for: no answer arrived and none is on its way, as after
   // a query that failed or a connection lost.
   [[nodiscard]] bool historyWanted(const State& state) noexcept;
+
+  // The history the state holds is older than the runtime's: it is to be asked for again. A
+  // query already on its way is not asked again: its answer is kept, and the history is wanted
+  // once more after it, for every change that came meanwhile.
+  void historyStale(State& state) noexcept;
 
   // The question for the commands people typed, most recent first and each once.
   [[nodiscard]] QueryHistory historyQuery(std::uint64_t request_id) noexcept;
@@ -580,21 +762,25 @@ namespace telar::gui::features::prompt {
     return found == nullptr ? nullptr : &found->getMut();
   }
 
-  inline tbc::val_a<LineView> view(tbc::ref_a<State> state, tbc::ref_a<PaneLine> line) noexcept {
-    return LineView{line.line, state.history.view()};
+  inline tbc::val_a<LineView> view(tbc::ref_a<State> state, tbc::ref_a<PaneLine> line, tbc::val_a<Place> place) noexcept {
+    if (place.pane_id == 0) {
+      place.pane_id = line.pane_id;
+    }
+
+    return LineView{line.line, state.recall, place};
   }
 
-  inline tbc::val_a<ds::Option<LineView>> line(tbc::ref_a<State> state, tbc::ref_a<Lines> lines, std::uint64_t pane_id) noexcept {
+  inline tbc::val_a<ds::Option<LineView>> line(tbc::ref_a<State> state, tbc::ref_a<Lines> lines, std::uint64_t pane_id, tbc::val_a<Place> place) noexcept {
     const auto* found = lines.find(pane_id);
     if (found == nullptr) {
       return ds::none;
     }
 
-    return view(state, **found);
+    return view(state, **found, place);
   }
 
-  inline History history(const State& state) noexcept {
-    return state.history.view();
+  inline tbc::val_a<Recalled> history(tbc::ref_a<State> state) noexcept {
+    return Recalled{state.recall};
   }
 
   template <typename Now>
@@ -604,6 +790,24 @@ namespace telar::gui::features::prompt {
     }
   }
 
+  [[nodiscard]] [[tbc::hot_path]] inline UpScope upScope(PromptUpScope scope) noexcept {
+    switch (scope) {
+    case PromptUpScope::pane:
+      return UpScope::pane;
+    case PromptUpScope::workspace:
+      return UpScope::workspace;
+    case PromptUpScope::global:
+      break;
+    }
+
+    return UpScope::global;
+  }
+
+  // Space after a command word that names one of the pane's aliases, as the shell reported it:
+  // the word becomes what it stands for and a space, as fish's abbreviations do. False, the line
+  // as it was, anywhere else. Defined with the use cases that are not on a key's path.
+  [[nodiscard]] bool expand(const State& state, Line& line, std::uint64_t pane_id, shell::Dialect dialect);
+
   // The action bound to `key` in the editor's mode; defined with the use cases that are not on a
   // key's path.
   [[nodiscard]] ds::Option<Action> bound(const KeyPress& key, const Editor& editor, const PromptConfiguration& configuration);
@@ -611,29 +815,56 @@ namespace telar::gui::features::prompt {
   inline Outcome press(const State& state, PaneLine& line, Surface surface, const KeyPress& key, KeyReading reading) {
     auto& edited = line.line;
     const auto syntax = shell::Syntax{.dialect = reading.dialect};
+
+    edited.useDialect(reading.dialect);
     const auto incomplete = [&memory = state.memory, syntax](std::string_view text) {
       return prompt::incomplete(memory, text, syntax);
     };
 
-    // The menu that shows and the suggestion keep their keys from the bindings.
-    const auto action = edited.claims(key, history(state)) ? ds::none : bound(key, edited.editor(), reading.configuration);
+    auto place = reading.place;
 
-    return action ? edited.perform(surface, *action, incomplete, history(state)) : edited.press(surface, key, incomplete, history(state));
+    if (place.pane_id == 0) {
+      place.pane_id = line.pane_id;
+    }
+
+    // With aliases expanded, Space writes what an alias stands for and Alt-Space a space alone,
+    // where Space types: not in vim's normal mode, nor in a menu, which takes its keys.
+    const bool types = edited.editor().keymap() == Keymap::emacs || edited.editor().mode() == Mode::insert;
+
+    if (reading.configuration.expand_aliases && types && key.key == Key::character && key.character == U' ' && !key.modifiers.control && !edited.menu()) {
+      if (key.modifiers.alt) {
+        edited.insertText(" ");
+        return Outcome::edited;
+      }
+
+      if (expand(state, edited, line.pane_id, reading.dialect)) {
+        return Outcome::edited;
+      }
+    }
+
+    const Recalling recalling{.recall = state.recall, .place = place, .scope = upScope(reading.configuration.up_scope)};
+    // The menu that shows and the suggestion keep their keys from the bindings.
+    const auto action = edited.claims(key, recalling) ? ds::none : bound(key, edited.editor(), reading.configuration);
+
+    const auto outcome = action ? edited.perform(surface, *action, incomplete, recalling) : edited.press(surface, key, incomplete, recalling);
+
+    edited.settleCorrection();
+    return outcome;
   }
 
   // An answer under way, or a program that seems to ask a question. The echo of each key it
   // takes is output too, so its quiet is only read before the first one.
   template <typename Now>
-  [[tbc::generic]] bool answers(const PaneLine& line, std::uint32_t cursor_column, Now&& now) {
+  [[tbc::generic]] bool answers(const PaneLine& line, std::string_view asked, Now&& now) {
     if (line.forwarding) {
       return true;
     }
 
-    return line.line.editor().text().empty() && PendingPrompt::likely(cursor_column, std::chrono::nanoseconds{std::forward<Now>(now)() - line.output});
+    return line.line.editor().text().empty() && PendingPrompt::likely(asked, std::chrono::nanoseconds{std::forward<Now>(now)() - line.output});
   }
 
   template <typename Now>
-  bool toProgram(PaneLine& line, const KeyPress& key, const PaneShell& shell, std::uint32_t cursor_column, Now&& now) {
+  bool toProgram(PaneLine& line, const KeyPress& key, const PaneShell& shell, std::string_view asked, Now&& now) {
     // Ctrl with an ASCII character types the control byte that shares its low five bits.
     constexpr char32_t ascii_end = 0x80;
     constexpr char32_t control_bits = 0x1f;
@@ -665,7 +896,7 @@ namespace telar::gui::features::prompt {
       return true;
     }
 
-    if (!answers(line, cursor_column, std::forward<Now>(now))) {
+    if (!answers(line, asked, std::forward<Now>(now))) {
       return false;
     }
 
@@ -675,8 +906,8 @@ namespace telar::gui::features::prompt {
   }
 
   template <typename Now>
-  bool toProgram(PaneLine& line, std::string_view text, std::uint32_t cursor_column, Now&& now) {
-    if (line.line.answering() || !oneLine(text) || !answers(line, cursor_column, std::forward<Now>(now))) {
+  bool toProgram(PaneLine& line, std::string_view text, std::string_view asked, Now&& now) {
+    if (line.line.answering() || !oneLine(text) || !answers(line, asked, std::forward<Now>(now))) {
       return false;
     }
 
