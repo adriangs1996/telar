@@ -2,19 +2,24 @@
 #include "attributes.hpp"
 #include "meta_model.hpp"
 
+#include <clang/Basic/Stack.h>
 #include <clang/Frontend/FrontendAction.h>
 #include <clang/Tooling/ArgumentsAdjusters.h>
 #include <clang/Tooling/CommonOptionsParser.h>
 #include <clang/Tooling/Tooling.h>
 #include <llvm/Support/CommandLine.h>
+#include <llvm/Support/PrettyStackTrace.h>
+#include <llvm/Support/Signals.h>
 #include <llvm/Support/JSON.h>
 #include <llvm/Support/Path.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/Support/thread.h>
 
 #include <filesystem>
 #include <fstream>
 #include <map>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -215,7 +220,30 @@ namespace {
 
 }
 
+namespace {
+  int run(int argc, const char** argv);
+}
+
 int main(int argc, const char** argv) {
+  // A crash prints where it happened, as clang does.
+  llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
+  const llvm::PrettyStackTraceProgram program(argc, argv);
+  int status = 1;
+  // Clang parses a unit of the GUI with Qt's headers and every BMI it imports, deeper than the
+  // main thread's stack holds; clang's driver grows its stack for that, and a tool has to ask.
+  constexpr unsigned stack_bytes = 256U << 20U;
+  llvm::thread worker(std::optional<unsigned>{stack_bytes}, [&] {
+    clang::noteBottomOfStack();
+    status = run(argc, argv);
+  });
+
+  worker.join();
+  return status;
+}
+
+namespace {
+
+int run(int argc, const char** argv) {
   registerAttributes();
 
   llvm::cl::OptionCategory category("telar-moc options");
@@ -324,4 +352,6 @@ int main(int argc, const char** argv) {
   }
 
   return 0;
+}
+
 }

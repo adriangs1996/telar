@@ -87,6 +87,11 @@ function(telar_add_qt_moc target)
 
   if(moc_sources)
     target_sources(${target} PRIVATE ${moc_sources})
+    # The interfaces' vtables name the meta-object and the member functions that ${target}
+    # defines, and ${target} imports the interfaces: two archives that need each other. A
+    # cycle of static libraries makes CMake repeat them on the link line, which GNU ld needs
+    # and ld64 does without.
+    target_link_libraries(${qt_moc_MODULES_TARGET} INTERFACE ${target})
   endif()
 
   if(qt_moc_QML_URI AND meta_jsons)
