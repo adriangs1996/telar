@@ -423,6 +423,26 @@ namespace telar::remote {
     return clients;
   }
 
+  AuthorizedClients::Stamp AuthorizedClients::stamp(int directory) noexcept {
+    struct stat status{};
+    if (::fstatat(directory, clients_file.data(), &status, AT_SYMLINK_NOFOLLOW) != 0) {
+      return {};
+    }
+
+#ifdef __APPLE__
+    const auto& modified = status.st_mtimespec;
+#else
+    const auto& modified = status.st_mtim;
+#endif
+    constexpr std::int64_t nanoseconds_per_second = 1'000'000'000;
+
+    return {
+        .inode = static_cast<std::uint64_t>(status.st_ino),
+        .size = static_cast<std::uint64_t>(status.st_size),
+        .modified_ns = (static_cast<std::int64_t>(modified.tv_sec) * nanoseconds_per_second) + modified.tv_nsec,
+    };
+  }
+
   bool AuthorizedClients::admits(const PublicKey& key) const noexcept {
     bool found = false;
 

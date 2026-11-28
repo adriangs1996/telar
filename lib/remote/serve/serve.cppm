@@ -96,6 +96,27 @@ export {
       [[nodiscard]] bool enterHandshake(const Source& source) noexcept;
       void leaveHandshake(const Source& source) noexcept;
 
+      // A channel that serves an admitted client, in the list of those a revocation cuts while it
+      // serves.
+      class LiveChannel {
+      public:
+        LiveChannel(Server& server, const Channel& channel) noexcept;
+        ~LiveChannel();
+
+        LiveChannel(const LiveChannel&) = delete;
+        LiveChannel& operator=(const LiveChannel&) = delete;
+        LiveChannel(LiveChannel&&) = delete;
+        LiveChannel& operator=(LiveChannel&&) = delete;
+
+      private:
+        Server& server_;
+        int descriptor_;
+      };
+
+      // Once a second, when the list of clients changed, shuts the channels of those it no longer
+      // admits: what they relay waits on them without end.
+      void cutRevoked() noexcept;
+
       // Hand each connection waiting on the TCP listener, and on the sharing socket, to a thread
       // of its own.
       void admitClients() noexcept;
@@ -177,6 +198,16 @@ export {
 
       ds::Array<Handshakes, maximum_handshakes> handshaking_;
       unsigned handshakes_ = 0;
+
+      // The channels serving admitted clients, under the mutex; a channel leaves before it closes.
+      struct Live {
+        PublicKey peer{};
+        int descriptor = -1;
+      };
+
+      ds::Array<Live, maximum_connections> live_;
+      AuthorizedClients::Stamp clients_stamp_;
+      Clock::time_point clients_checked_;
       std::atomic<unsigned> connections_{0};
       std::atomic<bool> stopping_{false};
     };

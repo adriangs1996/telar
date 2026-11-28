@@ -30,6 +30,8 @@ namespace telar::remote {
     // How old the list must be for a port missing from it to be worth reading it again.
     constexpr auto listening_recheck = std::chrono::milliseconds{20};
     constexpr auto line_timeout = std::chrono::seconds{2};
+    // How often the list of clients is looked at for one revoked while it is served.
+    constexpr auto revocation_interval = std::chrono::seconds{1};
     constexpr std::size_t line_bytes = 256;
     constexpr unsigned byte_bits = 8;
 
@@ -169,12 +171,69 @@ namespace telar::remote {
           pollfd{.fd = sharing_.get(), .events = POLLIN, .revents = 0},
       };
 
-      if (::poll(entries.dataMut(), entries.size(), -1) < 0 && sys::lastError() != EINTR) {
+      if (::poll(entries.dataMut(), entries.size(), static_cast<int>(std::chrono::milliseconds{revocation_interval}.count())) < 0 && sys::lastError() != EINTR) {
         return;
       }
 
       admitClients();
       admitPrograms();
+      cutRevoked();
+    }
+  }
+
+  Server::LiveChannel::LiveChannel(Server& server, const Channel& channel) noexcept
+      : server_(server),
+        descriptor_(channel.descriptor()) {
+    const std::scoped_lock lock{server_.mutex_};
+    // A place for each connection the server answers, so one is free.
+    const auto live = server_.live_.viewMut();
+    const auto vacant = std::ranges::find(live, -1, &Live::descriptor);
+    if (vacant == live.end()) {
+      descriptor_ = -1;
+      return;
+    }
+
+    *vacant = {.peer = channel.peer(), .descriptor = descriptor_};
+  }
+
+  Server::LiveChannel::~LiveChannel() {
+    if (descriptor_ < 0) {
+      return;
+    }
+
+    const std::scoped_lock lock{server_.mutex_};
+    const auto live = server_.live_.viewMut();
+
+    if (const auto entry = std::ranges::find(live, descriptor_, &Live::descriptor); entry != live.end()) {
+      entry->descriptor = -1;
+    }
+  }
+
+  void Server::cutRevoked() noexcept {
+    const auto now = Clock::now();
+    if (now - clients_checked_ < revocation_interval) {
+      return;
+    }
+
+    clients_checked_ = now;
+    const auto stamp = AuthorizedClients::stamp(state_.directory());
+    if (stamp == clients_stamp_) {
+      return;
+    }
+
+    clients_stamp_ = stamp;
+    try {
+      const auto clients = AuthorizedClients::load(state_.directory());
+      const std::scoped_lock lock{mutex_};
+
+      for (const auto& entry : live_) {
+        if (entry.descriptor >= 0 && !clients.admits(entry.peer)) {
+          ::shutdown(entry.descriptor, SHUT_RDWR);
+        }
+      }
+    } catch (const std::exception&) {
+      // A list that cannot be read now is read again once it changes.
+      clients_stamp_ = {};
     }
   }
 
@@ -348,6 +407,9 @@ namespace telar::remote {
       pair(channel);
       return;
     }
+
+    // Listed before the list is read, so that a client revoked once it is read is cut.
+    const LiveChannel live{*this, channel};
 
     // The list is read for every connection, so a client revoked now is refused now.
     if (!AuthorizedClients::load(state_.directory()).admits(channel.peer())) {

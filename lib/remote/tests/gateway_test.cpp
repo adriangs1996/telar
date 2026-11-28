@@ -297,6 +297,29 @@ namespace {
     check(pair.run(pair.client.state, pair.destination, "echo no").status == connection_lost_status, "a revoked client is refused at once");
   }
 
+  // A client revoked while a command of its runs there is cut then, not once it ends.
+  void aClientRevokedWhileServedIsCut() {
+    const Pair pair;
+    const auto started = std::chrono::steady_clock::now();
+    Pair::Result result;
+    std::thread running{[&] {
+      result = pair.run(pair.client.state, pair.destination, "echo started; sleep 30");
+    }};
+
+    std::this_thread::sleep_for(std::chrono::seconds{1});
+    {
+      const StateLock lock{pair.server.state.directory()};
+      auto clients = AuthorizedClients::load(pair.server.state.directory());
+
+      check(clients.revoke("test-client") == 1);
+      clients.save(pair.server.state.directory());
+    }
+
+    running.join();
+    check(result.output == "started\n" && result.status != 0, "the command ran until the revocation");
+    check(std::chrono::steady_clock::now() - started < std::chrono::seconds{15}, "the revoked client was cut");
+  }
+
   void clientsRefuseAGatewayWithAnotherKey() {
     const Pair pair;
     auto endpoint = Endpoint::parse(pair.destination);
@@ -761,6 +784,7 @@ namespace {
   const telar::testing::Case case_commands_run_with_their_streams_and_status{"gateway.commands_run_with_their_streams_and_status", commandsRunWithTheirStreamsAndStatus};
   const telar::testing::Case case_commands_carry_more_than_their_buffers{"gateway.commands_carry_more_than_their_buffers", commandsCarryMoreThanTheirBuffers};
   const telar::testing::Case case_only_paired_clients_are_served{"gateway.only_paired_clients_are_served", onlyPairedClientsAreServed};
+  const telar::testing::Case case_a_client_revoked_while_served_is_cut{"gateway.a_client_revoked_while_served_is_cut", aClientRevokedWhileServedIsCut};
   const telar::testing::Case case_clients_refuse_a_gateway_with_another_key{"gateway.clients_refuse_a_gateway_with_another_key", clientsRefuseAGatewayWithAnotherKey};
   const telar::testing::Case case_pairing_codes_enroll_once{"gateway.pairing_codes_enroll_once", pairingCodesEnrollOnce};
   const telar::testing::Case case_one_address_holds_a_few_handshakes{"gateway.one_address_holds_a_few_handshakes", oneAddressHoldsAFewHandshakes};

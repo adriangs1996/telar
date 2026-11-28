@@ -137,6 +137,18 @@ export {
 
       [[nodiscard]] static AuthorizedClients load(int directory);
 
+      // What tells one saved list from the next, as each save replaces the file; zero while
+      // there is none.
+      struct Stamp {
+        std::uint64_t inode = 0;
+        std::uint64_t size = 0;
+        std::int64_t modified_ns = 0;
+
+        [[nodiscard]] bool operator==(const Stamp&) const noexcept = default;
+      };
+
+      [[nodiscard]] static Stamp stamp(int directory) noexcept;
+
       [[nodiscard]] bool admits(const PublicKey& key) const noexcept;
       [[nodiscard]] std::span<const Client> rows() const noexcept;
 
