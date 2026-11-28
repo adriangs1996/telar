@@ -405,22 +405,30 @@ namespace telar::remote {
     Secret secret{};
 
     std::ranges::copy(request.view().first(secret_bytes), secret.viewMut().begin());
-    if (!PairingCodes::redeem(state_.directory(), secret)) {
-      // A wrong code costs its sender a second, whatever it guessed.
-      std::this_thread::sleep_for(refusal_delay);
-      refuse(channel);
-      return;
-    }
+    auto reply = Reply::accepted;
 
+    // The list is read before the code is spent: a list with no room for a new client leaves the
+    // code pending, for once a client is revoked.
     {
       const StateLock lock{state_.directory()};
       auto clients = AuthorizedClients::load(state_.directory());
 
-      clients.admit(channel.peer(), {reinterpret_cast<const char*>(name.data()), length}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the name's bytes are read as text
-      clients.save(state_.directory());
+      if (!clients.admits(channel.peer()) && clients.rows().size() == AuthorizedClients::maximum) {
+        reply = Reply::unavailable;
+      } else if (!PairingCodes::redeem(state_.directory(), secret, lock)) {
+        reply = Reply::refused;
+      } else {
+        clients.admit(channel.peer(), {reinterpret_cast<const char*>(name.data()), length}); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast): the name's bytes are read as text
+        clients.save(state_.directory());
+      }
     }
 
-    refuse(channel, Reply::accepted);
+    // A wrong code costs its sender a second, whatever it guessed.
+    if (reply == Reply::refused) {
+      std::this_thread::sleep_for(refusal_delay);
+    }
+
+    refuse(channel, reply);
   }
 
   bool Server::listening(std::uint16_t port) noexcept {

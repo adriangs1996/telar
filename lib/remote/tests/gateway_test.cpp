@@ -329,6 +329,38 @@ namespace {
     check(refused, "a code that enrolled a client enrolls no other");
   }
 
+  // A gateway that admits as many clients as it keeps refuses a new one without spending its
+  // code: the same code pairs it once a client is revoked.
+  void aFullClientListLeavesThePairingCodePending() {
+    const Pair pair;
+    auto clients = AuthorizedClients::load(pair.server.state.directory());
+
+    for (std::size_t index = clients.rows().size(); index < AuthorizedClients::maximum; ++index) {
+      PublicKey key{};
+
+      key.atMut(0) = static_cast<std::uint8_t>(index);
+      key.atMut(1) = 0xa5;
+      clients.admit(key, std::format("filler-{}", index));
+    }
+
+    clients.save(pair.server.state.directory());
+    const tests::Gateway newcomer;
+    auto endpoint = Endpoint::parse(pair.unpaired);
+    std::string refusal;
+
+    endpoint.secret = PairingCodes::mint(pair.server.state.directory());
+    try {
+      static_cast<void>(enroll(newcomer.state, {.address = endpoint.format().view(), .name = "newcomer"}));
+    } catch (const ChannelFailure& failure) {
+      refusal = failure.what();
+    }
+
+    check(refusal.contains("as many clients"), "a full list is told apart from a wrong code");
+    check(clients.revoke("filler-1") == 1);
+    clients.save(pair.server.state.directory());
+    check(enroll(newcomer.state, {.address = endpoint.format().view(), .name = "newcomer"}).view() == pair.unpaired, "the code was left pending");
+  }
+
   void theLinkOffersAMachinesRuntimeOnALocalSocket() {
     const Pair pair;
     const LocalLink local{pair};
@@ -712,6 +744,7 @@ namespace {
   const telar::testing::Case case_only_paired_clients_are_served{"gateway.only_paired_clients_are_served", onlyPairedClientsAreServed};
   const telar::testing::Case case_clients_refuse_a_gateway_with_another_key{"gateway.clients_refuse_a_gateway_with_another_key", clientsRefuseAGatewayWithAnotherKey};
   const telar::testing::Case case_pairing_codes_enroll_once{"gateway.pairing_codes_enroll_once", pairingCodesEnrollOnce};
+  const telar::testing::Case case_a_full_client_list_leaves_the_pairing_code_pending{"gateway.a_full_client_list_leaves_the_pairing_code_pending", aFullClientListLeavesThePairingCodePending};
   const telar::testing::Case case_the_link_offers_a_machines_runtime_on_a_local_socket{"gateway.the_link_offers_a_machines_runtime_on_a_local_socket", theLinkOffersAMachinesRuntimeOnALocalSocket};
   const telar::testing::Case case_the_link_forwards_a_port_until_it_closes_there{"gateway.the_link_forwards_a_port_until_it_closes_there", theLinkForwardsAPortUntilItClosesThere};
   const telar::testing::Case case_a_port_a_machine_shares_is_forwarded_to_whoever_holds_it{"gateway.a_port_a_machine_shares_is_forwarded_to_whoever_holds_it", aPortAMachineSharesIsForwardedToWhoeverHoldsIt};

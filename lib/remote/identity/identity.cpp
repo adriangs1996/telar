@@ -525,6 +525,11 @@ namespace telar::remote {
 
   bool PairingCodes::redeem(int directory, const Secret& secret) {
     const StateLock lock{directory};
+
+    return redeem(directory, secret, lock);
+  }
+
+  bool PairingCodes::redeem(int directory, const Secret& secret, const StateLock& /*held*/) {
     auto codes = Codes::load(directory);
     const auto digest = digestOf(secret);
     std::size_t kept = 0;

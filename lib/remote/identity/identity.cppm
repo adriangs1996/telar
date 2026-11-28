@@ -182,6 +182,9 @@ export {
 
       // Whether `secret` is a pending code, which it then no longer is.
       [[nodiscard]] static bool redeem(int directory, const Secret& secret);
+      // The same under a lock the caller holds: a second lock of the state, on another
+      // descriptor, would wait for the first forever.
+      [[nodiscard]] static bool redeem(int directory, const Secret& secret, const StateLock& held);
     };
 
   }

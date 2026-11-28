@@ -1375,7 +1375,12 @@ namespace telar::remote {
     request.atMut(secret_bytes) = static_cast<std::uint8_t>(length);
     std::ranges::copy(enrollment.name.substr(0, length), request.viewMut().subspan(secret_bytes + 1).begin());
     channel.send(request.view().first(secret_bytes + 1 + length), Clock::now() + exchange_timeout);
-    if (receiveReply(channel) != Reply::accepted) {
+    const auto reply = receiveReply(channel);
+    if (reply == Reply::unavailable) {
+      throw ChannelFailure{"The gateway already admits as many clients as it keeps; revoke one there, and the same code pairs this machine"};
+    }
+
+    if (reply != Reply::accepted) {
       throw ChannelFailure{"The gateway refused the pairing code: it was used, it expired or it was mistyped"};
     }
 
