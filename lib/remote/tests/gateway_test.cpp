@@ -426,6 +426,23 @@ namespace {
     writer.join();
   }
 
+  // A link that serves as many machines as it keeps gives the slot of one nothing uses to the
+  // next machine, and removes the socket of the one it let go.
+  void theLinkReusesTheSlotOfAMachineNothingUses() {
+    const Pair pair;
+    const LocalLink local{pair};
+    auto endpoint = Endpoint::parse(pair.destination);
+    std::vector<std::string> sockets;
+
+    for (std::size_t index = 0; index <= Link::maximum_machines; ++index) {
+      endpoint.port = static_cast<std::uint16_t>(20000 + index);
+      sockets.emplace_back(LinkClient::socket(local.paths(), endpoint.destination().view()).view());
+    }
+
+    check(::access(sockets.front().c_str(), F_OK) != 0, "the socket of the machine whose slot was taken is gone");
+    check(::access(sockets.back().c_str(), F_OK) == 0, "the next machine has a socket");
+  }
+
   void theLinkForwardsAPortUntilItClosesThere() {
     const Pair pair;
     const LocalLink local{pair};
@@ -790,6 +807,7 @@ namespace {
   const telar::testing::Case case_one_address_holds_a_few_handshakes{"gateway.one_address_holds_a_few_handshakes", oneAddressHoldsAFewHandshakes};
   const telar::testing::Case case_a_full_client_list_leaves_the_pairing_code_pending{"gateway.a_full_client_list_leaves_the_pairing_code_pending", aFullClientListLeavesThePairingCodePending};
   const telar::testing::Case case_the_link_offers_a_machines_runtime_on_a_local_socket{"gateway.the_link_offers_a_machines_runtime_on_a_local_socket", theLinkOffersAMachinesRuntimeOnALocalSocket};
+  const telar::testing::Case case_the_link_reuses_the_slot_of_a_machine_nothing_uses{"gateway.the_link_reuses_the_slot_of_a_machine_nothing_uses", theLinkReusesTheSlotOfAMachineNothingUses};
   const telar::testing::Case case_the_link_forwards_a_port_until_it_closes_there{"gateway.the_link_forwards_a_port_until_it_closes_there", theLinkForwardsAPortUntilItClosesThere};
   const telar::testing::Case case_a_port_a_machine_shares_is_forwarded_to_whoever_holds_it{"gateway.a_port_a_machine_shares_is_forwarded_to_whoever_holds_it", aPortAMachineSharesIsForwardedToWhoeverHoldsIt};
   const telar::testing::Case case_the_link_lets_go_of_a_holder_whose_request_came_late{"gateway.the_link_lets_go_of_a_holder_whose_request_came_late", theLinkLetsGoOfAHolderWhoseRequestCameLate};
