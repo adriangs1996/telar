@@ -49,7 +49,7 @@ export {
       ino_t inode_ = 0;
       bool bound_ = false;
       // When accept may run again after it ran out of descriptors or memory.
-      std::chrono::steady_clock::time_point resting_until_{};
+      std::chrono::steady_clock::time_point resting_until_;
     };
 
   }

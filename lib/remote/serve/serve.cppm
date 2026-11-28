@@ -11,6 +11,7 @@ import telar.platform.primitives;
 import telar.remote.channel;
 import telar.remote.identity;
 import telar.sys.posix;
+import telar.sys.socket;
 
 // Interface: telar_remote/server.cppm
 export {
@@ -65,7 +66,7 @@ export {
     private:
       // The address a connection comes from, by which the places in the handshake are counted.
       struct Source {
-        ds::Array<std::uint8_t, 16> address{};
+        ds::Array<std::uint8_t, sizeof(in6_addr)> address{};
         std::size_t length = 0;
 
         [[nodiscard]] static Source of(int socket) noexcept;

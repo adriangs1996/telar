@@ -1014,10 +1014,10 @@ namespace telar::runtime::redirect {
     }
 
     const auto& source = key.source.endpoint.storage;
-    const auto unacceptedFromSource = [&](const auto& flow) {
+    const auto unaccepted_from_source = [&](const auto& flow) {
       return flow && flow->incoming && !flow->accepted && flow->key.source.endpoint.storage.ss_family == source.ss_family && sameHost(flow->key.source.endpoint.storage, source);
     };
-    if (incoming && std::cmp_greater_equal(std::ranges::count_if(flows_, unacceptedFromSource), maximum_unaccepted_per_source)) {
+    if (incoming && std::cmp_greater_equal(std::ranges::count_if(flows_, unaccepted_from_source), maximum_unaccepted_per_source)) {
       return Tracking::full;
     }
 
