@@ -1,4 +1,11 @@
-telar_process(gui OPTIONS ${TELAR_WARNINGS} -ffp-contract=off QML ui)
+# Qt built with -reduce-relocations hands -fPIC to every target that links it on Linux. Every
+# domain compiles with it there, so the importers of a module agree on its flags and CMake
+# synthesizes one set of BMIs for them, not one for Qt's importers and one for the others.
+set(gui_position_independent)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(gui_position_independent -fPIC)
+endif()
+telar_process(gui OPTIONS ${TELAR_WARNINGS} -ffp-contract=off ${gui_position_independent} QML ui)
 
 option(TELAR_GUI_NATIVE "Build the native window" ON)
 # clangd, lint and per-file incremental rebuilds need one compile command per source.
