@@ -4,7 +4,10 @@ import QtQuick
 import Telar.Gui
 
 // What Neovim says, as notices of telar's own stacked in a corner of the pane: each fades by
-// itself, an error stays longer, and none asks for a key to go away.
+// itself, an error stays longer, and none asks for a key to go away. Only what is said to the
+// person is a notice: a search's count goes on the status line, and the output of a command
+// that lists in the pane's output panel. An error names its code apart from what it says, and
+// a task's progress is a bar that fills in place.
 Item {
     id: root
 
@@ -21,9 +24,9 @@ Item {
     signal dismissed(string key)
 
     // The notices shown: a message Neovim keeps is shown until its time is up.
-    readonly property var shown: items.filter(item => item.text.length > 0).slice(-4)
+    readonly property var shown: items.filter(item => item.text.length > 0 && item.kind !== "search" && item.kind !== "list").slice(-4)
 
-    width: Math.min(parent.width - 24 * ratio, 300 * ratio)
+    width: Math.min(parent.width - 24 * ratio, 340 * ratio)
     height: stack.height
     x: parent.width - width - 12 * ratio
     y: 12 * ratio
@@ -43,11 +46,19 @@ Item {
                 required property var modelData
                 readonly property bool failure: modelData.kind === "error"
                 readonly property bool caution: modelData.kind === "warning"
-                readonly property color tone: failure ? root.colors.red : caution ? root.colors.yellow : root.colors.accent
-                // The first line says what happened; the rest is its detail.
+                readonly property bool progress: modelData.kind === "progress"
+                readonly property color tone: failure ? root.colors.red : caution ? root.colors.yellow : progress ? root.colors.accent : root.colors.subtext0
+                // The first line says what happened; the rest is its detail. An error's code,
+                // as `E492:`, is set apart from it.
                 readonly property var lines: modelData.text.split("\n")
-                readonly property string title: lines[0]
-                readonly property string detail: lines.slice(1).join("\n").trim()
+                readonly property var coded: /^(E\d+|W\d+):\s*(.*)$/.exec(lines[0])
+                readonly property string code: coded ? coded[1] : ""
+                // A task's progress, as Neovim writes it: `clangd:  43% Indexing 412 of 958`.
+                readonly property var task: progress ? /^([^:]+):\s*(?:(\d{1,3})%)?\s*(.*)$/.exec(lines[0]) : null
+                readonly property string title: task ? task[1] : coded ? coded[2] : lines[0]
+                readonly property string detail: task ? task[3] : lines.slice(1).join("\n").trim()
+                // How far a task has come, when it says so as a percentage.
+                readonly property var percent: task && task[2] ? [task[0], task[2]] : progress ? /(\d{1,3})\s*%/.exec(modelData.text) : null
                 property real reveal: 0
 
                 function dismiss() {
@@ -65,9 +76,9 @@ Item {
                     NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
                 }
 
-                // An error is read, not glimpsed.
+                // An error is read, not glimpsed; a task in progress stays until it says more.
                 Timer {
-                    interval: notice.failure ? 9000 : 4500
+                    interval: notice.failure ? 9000 : notice.progress ? 12000 : 4500
                     running: true
                     onTriggered: notice.dismiss()
                 }
@@ -91,7 +102,7 @@ Item {
                         anchors.centerIn: parent
                         width: Math.round(root.typography.body * 1.05)
                         height: width
-                        glyph: notice.failure ? "\uea87" : notice.caution ? "\uea6c" : "\ueab2"
+                        glyph: notice.failure ? "\uea87" : notice.caution ? "\uea6c" : notice.progress ? "\ueb19" : "\uea74"
                         pixelSize: width
                         color: notice.tone
                     }
@@ -101,19 +112,45 @@ Item {
                     id: body
                     x: 48 * root.ratio
                     y: 12 * root.ratio
-                    width: parent.width - x - 34 * root.ratio
+                    width: parent.width - x - (notice.progress ? 16 : 34) * root.ratio
                     spacing: 3 * root.ratio
 
-                    Text {
+                    Row {
                         width: parent.width
-                        text: notice.title
-                        color: root.colors.text
-                        font.pixelSize: root.typography.body
-                        font.weight: Font.DemiBold
-                        textFormat: Text.PlainText
-                        wrapMode: Text.Wrap
-                        maximumLineCount: 3
-                        elide: Text.ElideRight
+                        spacing: 7 * root.ratio
+
+                        // The code of an error, as a chip in its tone.
+                        Rectangle {
+                            visible: notice.code.length > 0
+                            y: 1 * root.ratio
+                            width: codeText.implicitWidth + 10 * root.ratio
+                            height: codeText.implicitHeight + 4 * root.ratio
+                            radius: 4 * root.ratio
+                            color: Qt.alpha(notice.tone, 0.14)
+
+                            Text {
+                                id: codeText
+                                anchors.centerIn: parent
+                                text: notice.code
+                                color: notice.tone
+                                font.family: root.typography.primaryFamily || "Telar Forma"
+                                font.pixelSize: Math.round(root.typography.small * 0.95)
+                                textFormat: Text.PlainText
+                                renderType: Text.NativeRendering
+                            }
+                        }
+
+                        Text {
+                            width: parent.width - (notice.code.length > 0 ? codeText.implicitWidth + 17 * root.ratio : 0)
+                            text: notice.title
+                            color: root.colors.text
+                            font.pixelSize: root.typography.body
+                            font.weight: notice.failure || notice.caution ? Font.DemiBold : Font.Medium
+                            textFormat: Text.PlainText
+                            wrapMode: Text.Wrap
+                            maximumLineCount: 3
+                            elide: Text.ElideRight
+                        }
                     }
 
                     Text {
@@ -129,10 +166,47 @@ Item {
                         lineHeight: 1.25
                     }
 
+                    // How far the task has come: the share it says, or a band that runs while it
+                    // says none.
+                    Item {
+                        visible: notice.progress
+                        width: parent.width
+                        height: 10 * root.ratio
+
+                        Rectangle {
+                            id: track
+                            y: 5 * root.ratio
+                            width: parent.width
+                            height: 3 * root.ratio
+                            radius: height / 2
+                            color: Qt.alpha(root.colors.text, 0.1)
+                            clip: true
+
+                            Rectangle {
+                                id: band
+                                property real at: 0
+                                readonly property real share: notice.percent ? Math.min(100, Number(notice.percent[1])) / 100 : 0.3
+                                x: notice.percent ? 0 : (at * (track.width + width)) - width
+                                width: track.width * share
+                                height: parent.height
+                                radius: height / 2
+                                color: notice.tone
+
+                                NumberAnimation on at {
+                                    running: notice.progress && !notice.percent
+                                    from: 0
+                                    to: 1
+                                    duration: 1400
+                                    loops: Animation.Infinite
+                                }
+                            }
+                        }
+                    }
+
                     // An error is where the rest of what was said matters.
                     Text {
                         visible: notice.failure
-                        text: "History \u2192"
+                        text: "History →"
                         color: historyArea.containsMouse ? root.colors.text : root.colors.accent
                         font.pixelSize: root.typography.small
 
@@ -148,6 +222,7 @@ Item {
                 }
 
                 ChromeIcon {
+                    visible: !notice.progress
                     x: parent.width - width - 14 * root.ratio
                     y: 14 * root.ratio
                     width: Math.round(root.typography.small * 0.9)

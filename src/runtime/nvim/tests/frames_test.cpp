@@ -713,7 +713,71 @@ namespace {
     check(line.runs[1].bytes == 3 && line.runs[1].style.foreground.kind == CellColor::Kind::default_color, "the rest in the default one");
   }
 
+  // Neovim sends `:` uncolored: the configuration's colors stand in while they are of the text
+  // the line shows, and what the line completes names the kind of each word.
+  void commandLineTakesTheConfigurationsColors() {
+    testing::TestMemory adapter;
+    ConcurrentMemory& memory = adapter;
+    NvimScreen screen{memory};
+    NvimFrames frames{memory};
+    const ds::Array<NvimColoredRun, 2> runs{
+        NvimColoredRun{.bytes = 3, .highlight = {.foreground = 0x7aa2f7, .attributes = NvimHighlight::bold}},
+        NvimColoredRun{.bytes = 5},
+    };
+
+    redraw(screen, memory, 3, [](msgpack::Writer& writer) {
+      event(writer, "grid_resize", {1, 20, 4});
+      writer.array(2);
+      writer.string("cmdline_show");
+      writer.array(6);
+      writer.array(1);
+      writer.array(2);
+      writer.unsignedInteger(0);
+      writer.string("lua x()");
+      writer.unsignedInteger(7);
+      writer.string(":");
+      writer.string("");
+      writer.unsignedInteger(0);
+      writer.unsignedInteger(1);
+      writer.array(2);
+      writer.string("popupmenu_show");
+      writer.array(5);
+      writer.array(2);
+      for (const auto* word : {"src/", "main.rs"}) {
+        writer.array(4);
+        writer.string(word);
+        writer.string("");
+        writer.string("");
+        writer.string("");
+      }
+      writer.integer(-1);
+      writer.integer(0);
+      writer.integer(0);
+      writer.integer(-1);
+    });
+
+    check(!screen.colorCommandLine("lua y()", runs.view(), "file"), "colors of another text leave the line as it is");
+    check(screen.colorCommandLine("lua x()", runs.view(), "file"), "colors of the text shown send it again");
+
+    std::vector<Byte> scratch(16 * 1024);
+
+    frames.begin(screen, {.pane_id = 3, .seen = 0});
+    skipGrids(frames, screen);
+    const auto line = decoded<NvimCmdline>(frames.cmdline(screen), scratch);
+    const CellColor colored{.kind = CellColor::Kind::rgb, .channels = {0x7a, 0xa2, 0xf7}};
+
+    check(line.runs.size() == 2 && line.runs[0].bytes == 3 && line.runs[0].style.foreground == colored, "the colored piece in its color");
+    check((line.runs[0].style.flags & std::to_underlying(CellAttribute::bold)) != 0, "and its attributes");
+    check(line.runs[1].style.foreground.kind == CellColor::Kind::default_color, "the rest in the default one");
+
+    std::vector<Byte> menu_scratch(16 * 1024);
+    const auto menu = decoded<NvimPopupMenu>(frames.popupMenu(screen), menu_scratch);
+
+    check(menu.items.size() == 2 && menu.items[0].kind == "folder" && menu.items[1].kind == "file", "a completed path is a folder or a file");
+  }
+
   const telar::testing::Case case_highlights{"nvim_frames.command_line_keeps_its_highlights", commandLineKeepsItsHighlights};
+  const telar::testing::Case case_colors{"nvim_frames.command_line_takes_the_configurations_colors", commandLineTakesTheConfigurationsColors};
   const telar::testing::Case case_surfaces{"nvim_frames.surfaces_are_sent_when_they_change", surfacesAreSentWhenTheyChange};
   const telar::testing::Case case_snapshot{"nvim_frames.snapshot_then_changes", snapshotThenChanges};
   const telar::testing::Case case_unsized{"nvim_frames.unsized_grids_are_not_sent", unsizedGridsAreNotSent};

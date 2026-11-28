@@ -889,6 +889,37 @@ namespace telar::gui::features::nvim {
       return slice;
     }
 
+    // With nothing typed in a search of files, the files the editor has open under its root
+    // come first, and the one being edited last of them: it is where the person already is.
+    void listOpen(Picker& picker, const OpenFiles& files) {
+      ds::Array<OpenFile, max_nvim_open_files> below{};
+      std::size_t count = 0;
+      const auto root = picker.root.view();
+      const std::string_view text{files.text.data(), files.text.size()};
+
+      if (picker.source != NvimPickSource::files || !picker.query.view().empty() || root.empty()) {
+        return;
+      }
+
+      // Each as its path below the root, a piece of the editor's own.
+      for (const auto& file : files.files) {
+        const auto path = file.path.of(text);
+        const auto skipped = static_cast<std::uint32_t>(root.size() + 1);
+
+        if (count < below.size() && path.size() > skipped && path.starts_with(root) && path[root.size()] == '/') {
+          below.atMut(count++) = {.path = {.offset = file.path.offset + skipped, .size = file.path.size - skipped}, .current = file.current};
+        }
+      }
+
+      for (const bool current : {false, true}) {
+        for (const auto& file : below.view().first(count)) {
+          if (file.current == current) {
+            picker.matches.push({.path = keep(picker, file.path.of(text)), .open = true, .current = file.current});
+          }
+        }
+      }
+    }
+
   }
 
   bool pick(State& state, std::uint64_t pane_id, NvimPickSource source, std::string_view root) {
@@ -1036,8 +1067,17 @@ namespace telar::gui::features::nvim {
     // The runtime says when it could not index every path; a list as long as a search takes
     // has more past it too.
     picker.truncated = message.truncated || message.matches.size() >= FindPaths::maximum_limit;
+    listOpen(picker, editor->files);
     for (const auto& match : message.matches) {
       const auto first = static_cast<std::uint32_t>(picker.positions.size());
+      const std::string_view kept{picker.text.data(), picker.text.size()};
+      const auto listed = std::ranges::any_of(picker.matches, [&](const PickMatch& open) {
+        return open.open && open.path.of(kept) == match.path;
+      });
+
+      if (listed) {
+        continue;
+      }
 
       picker.positions.extend(match.positions);
       picker.matches.push({.path = keep(picker, match.path), .first_position = first, .position_count = static_cast<std::uint16_t>(match.positions.size()), .change = match.change});

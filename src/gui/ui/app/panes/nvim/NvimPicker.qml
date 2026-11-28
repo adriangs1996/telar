@@ -4,16 +4,18 @@ import QtQuick
 import Telar.Gui
 
 // The editor's picker: files by name, lines of files by their text, or the editor's buffers.
-// It is the window's one picker panel, the one the terminal's path search is too, over the
-// editor pane: this gives it the editor's rows and says what its keys do here. The runtime
-// searches where the files are and sends only what it found. What is chosen is shown beside
-// the list in a float of Neovim itself, which the pane draws over the room the panel leaves.
+// It is the window's one picker panel, the one the terminal's path search is too, spacious over
+// the editor pane: this gives it the editor's rows and says what its keys do here. The runtime
+// searches where the files are and sends only what it found. A row reads as its file's name,
+// then the folder it is in, and with nothing typed the files the editor has open come first.
+// What is chosen is shown beside the list in a float of Neovim itself, which the pane draws
+// where the panel's preview column leaves room, to the pixel.
 FocusScope {
     id: root
     objectName: "editorPicker"
 
     // The editor's picker: open, source, query, root, loading, truncated and rows of
-    // {runs, name, directory, line, text, textRuns}.
+    // {runs, name, directory, line, text, textRuns, icon, badge, badgeTone, section}.
     required property var picker
     required property var colors
     required property var typography
@@ -29,9 +31,7 @@ FocusScope {
     // The room left for the preview, in the parent's own coordinates.
     readonly property rect previewArea: Qt.rect(x + panel.previewArea.x, y + panel.previewArea.y, panel.previewArea.width, panel.previewArea.height)
     readonly property var currentRow: rows[current] ?? null
-    // The cells a row has for its path in the editor's family: the runtime's rows are cut to
-    // them. A row of the text search keeps room for the line it names.
-    readonly property int columns: Math.floor(panel.nameRoom / Math.max(1, glyphs.advanceWidth("M"))) - (source === "text" ? 6 : 0)
+    readonly property var changes: ({M: "Modified", A: "Added", D: "Deleted", R: "Renamed", U: "Untracked", "!": "Conflicted"})
     property int current: 0
     // The entries marked for the quickfix list, by their place in the list.
     property var marked: []
@@ -45,26 +45,19 @@ FocusScope {
     signal previewed(int index, rect area)
     signal closed()
 
-    // The panel takes a share of the pane, never less than it took when its size was fixed,
-    // and stands on the editor's cells: its preview starts on a column, right under the
-    // header, and holds whole cells. The list keeps to what a name needs and the preview to
-    // what a line of code needs; a pane too narrow for a preview gives the list all of it.
-    readonly property real margin: 16 * ratio
-    readonly property real roomWidth: Math.min(parent.width - 2 * margin, Math.max(1040 * ratio, parent.width * 0.8))
-    readonly property real roomHeight: Math.min(parent.height - 2 * margin, Math.max(560 * ratio, parent.height * 0.75))
-    readonly property int listWidth: Math.round(Math.min(560 * ratio, Math.max(320 * ratio, roomWidth * 0.4)))
-    readonly property int previewColumns: cellWidth > 0 ? Math.min(140, Math.floor((roomWidth - listWidth - 2 * panel.inset) / cellWidth)) : 0
-    readonly property bool previewing: previewColumns >= 45 && cellHeight > 0
-    readonly property int previewRows: previewing ? Math.floor((roomHeight - panel.headerHeight - panel.footerHeight) / cellHeight) : 0
-    // The first column and row of the preview, nearest to the panel centred in the pane.
-    readonly property int previewColumn: previewing ? Math.max(Math.ceil((listWidth + panel.inset) / cellWidth), Math.min(Math.floor((parent.width - width + listWidth + panel.inset) / cellWidth), Math.round(((parent.width - width) / 2 + listWidth + panel.inset) / cellWidth))) : 0
-    readonly property int previewRow: previewing ? Math.max(Math.ceil(panel.headerHeight / cellHeight), Math.min(Math.floor((parent.height - height + panel.headerHeight) / cellHeight), Math.round(((parent.height - height) / 2 + panel.headerHeight) / cellHeight))) : 0
+    // The panel stands apart from the editor, with the editor showing around it: as wide as a
+    // list and a page of code need and no wider, in the upper part of the pane. The list keeps
+    // to what a name and its folder need; a pane too narrow for a preview of 45 columns gives
+    // the list all of it.
+    readonly property real margin: 24 * ratio
+    readonly property int splitWidth: Math.round(Math.min(480 * ratio, Math.max(340 * ratio, width * 0.42)))
+    readonly property bool previewing: cellWidth > 0 && cellHeight > 0 && (width - splitWidth - 24 * ratio) / cellWidth >= 45
+    readonly property int listWidth: previewing ? splitWidth : width
 
-    // A pixel past the cells, as the panel's own edges are whole pixels below theirs.
-    width: previewing ? Math.ceil(listWidth + 2 * panel.inset + previewColumns * cellWidth) + 1 : Math.round(roomWidth)
-    height: previewing ? Math.ceil(panel.headerHeight + previewRows * cellHeight + panel.footerHeight) + 1 : Math.round(roomHeight)
-    x: previewing ? Math.floor(previewColumn * cellWidth - listWidth - panel.inset) : Math.round((parent.width - width) / 2)
-    y: (previewing ? Math.floor(previewRow * cellHeight - panel.headerHeight) : Math.round((parent.height - height) / 2)) - (1 - reveal) * 8 * ratio
+    width: Math.round(Math.min(parent.width - 2 * margin, 1120 * ratio))
+    height: Math.round(Math.min(parent.height - 2 * margin, Math.max(440 * ratio, parent.height * 0.8)))
+    x: Math.round((parent.width - width) / 2)
+    y: Math.round(Math.max(margin, (parent.height - height) * 0.35)) - (1 - reveal) * 8 * ratio
     opacity: reveal
     visible: reveal > 0
 
@@ -118,10 +111,28 @@ FocusScope {
         NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
     }
 
-    FontMetrics {
-        id: glyphs
-        font.family: root.typography.primaryFamily || "Telar Forma"
-        font.pixelSize: root.typography.body ?? 13
+    // A path's runs as a row's two lines: its name, and the folder before it with what the
+    // query matched in it marked.
+    function pathRow(row) {
+        const runs = row.runs ?? [];
+        const slash = runs.map(run => run.text).join("").lastIndexOf("/");
+        const name = [];
+        const folder = [];
+        let at = 0;
+
+        for (const run of runs) {
+            const cut = Math.max(0, Math.min(run.text.length, slash + 1 - at));
+
+            if (cut > 0)
+                folder.push({text: run.text.slice(0, cut), bold: run.bold});
+            if (cut < run.text.length)
+                name.push({text: run.text.slice(cut), bold: run.bold, colorRole: "text"});
+            at += run.text.length;
+        }
+
+        if (folder.length > 0)
+            folder[folder.length - 1].text = folder[folder.length - 1].text.replace(/\/$/, "");
+        return {name: name, folder: folder.filter(run => run.text.length > 0)};
     }
 
     NvimSurface {
@@ -137,23 +148,32 @@ FocusScope {
         colors: root.colors
         typography: root.typography
         ratio: root.ratio
-        rowFamily: root.typography.primaryFamily || "Telar Forma"
+        spacious: true
         fieldName: "editorPickerSearch"
         searchName: "Search the editor's files"
         placeholder: root.currentSource.placeholder
         glyph: root.currentSource.icon
         scopes: root.sources
         scope: root.source
-        rows: root.rows.map((row, index) => ({
-            runs: row.runs ?? [],
-            icon: row.icon ?? "",
-            badge: row.badge ?? "",
-            badgeTone: row.badgeTone ?? "",
-            suffix: (row.line ?? 0) > 0 ? ":" + row.line : "",
-            detail: (row.line ?? 0) > 0 ? (row.text ?? "") : "",
-            detailRuns: (row.line ?? 0) > 0 ? (row.textRuns ?? []) : [],
-            marked: root.marked.indexOf(index) >= 0
-        }))
+        rows: root.rows.map((row, index) => {
+            const lined = (row.line ?? 0) > 0;
+            const path = root.pathRow(row);
+
+            return {
+                runs: path.name,
+                icon: row.icon ?? "",
+                badge: row.badge ?? "",
+                badgeTone: row.badgeTone ?? "",
+                suffix: lined ? ":" + row.line : "",
+                // A line of text under the name it is in; a file's folder under its name.
+                detail: lined ? (row.text ?? "") : (row.directory ?? ""),
+                detailRuns: lined ? (row.textRuns ?? []) : path.folder,
+                detailFromEnd: !lined,
+                detailCode: lined,
+                section: row.section ?? "",
+                marked: root.marked.indexOf(index) >= 0
+            };
+        })
         current: root.current
         // Where the chosen row is among those found, and what they are.
         countText: {
@@ -171,8 +191,9 @@ FocusScope {
         // What Enter does, where the eye ends.
         trailing: [{keys: ["esc"], word: "Close"}, {keys: ["↵"], word: root.marked.length > 0 ? "Quickfix" : "Open", primary: true}]
         previewShare: root.previewing ? 1 - root.listWidth / root.width : 0
-        previewTitle: root.currentRow === null ? "" : (root.currentRow.name ?? "") + ((root.currentRow.line ?? 0) > 0 ? ":" + root.currentRow.line : "")
+        previewTitle: root.currentRow?.name ?? ""
         previewDetail: root.currentRow?.directory ?? ""
+        previewMeta: root.currentRow === null ? "" : (root.currentRow.line ?? 0) > 0 ? "Line " + root.currentRow.line : root.changes[root.currentRow.badge ?? ""] ?? ""
         onSearched: text => root.searched(text)
         onScopeChosen: name => root.sourceChosen(name)
         onRowPointed: index => root.current = index

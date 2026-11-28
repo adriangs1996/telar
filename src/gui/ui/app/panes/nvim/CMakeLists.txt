@@ -11,6 +11,7 @@ telar_add_qml_sources(gui-quick
   QML_FILES
     NvimCmdline.qml
     NvimMessages.qml
+    NvimOutput.qml
     NvimPane.qml
     NvimPicker.qml
     NvimPopupMenu.qml

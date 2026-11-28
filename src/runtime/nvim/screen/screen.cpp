@@ -148,7 +148,10 @@ namespace telar::runtime {
   NvimCommandLine::NvimCommandLine(ConcurrentMemory& memory)
       : content(memory),
         prompt(memory),
-        block(memory) {}
+        block(memory),
+        colored(memory),
+        coloring(memory),
+        completes(memory) {}
 
   NvimCompletion::NvimCompletion(ConcurrentMemory& memory)
       : text(memory),
@@ -848,6 +851,23 @@ namespace telar::runtime {
 
   const NvimShownFiles& NvimScreen::files() const noexcept {
     return files_;
+  }
+
+  bool NvimScreen::colorCommandLine(std::string_view text, std::span<const NvimColoredRun> runs, std::string_view completes) {
+    auto& line = command_line_;
+    const auto kept = runs.first(std::min(runs.size(), max_nvim_text_runs));
+
+    line.colored.assign(text);
+    line.coloring.clear();
+    line.coloring.extend(kept);
+    line.completes.assign(completes);
+    if (!line.visible || line.content.view() != text) {
+      return false;
+    }
+
+    touch();
+    line.changed_at = stamp();
+    return true;
   }
 
   bool NvimScreen::showFiles(std::span<const NvimOpenFile> files) {
