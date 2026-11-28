@@ -26,10 +26,8 @@ add_library(telar::gui::qt::platform ALIAS gui-qt-platform)
 target_sources(gui-qt-platform PUBLIC FILE_SET CXX_MODULES BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/platform" FILES
   platform/platform.cppm)
 target_compile_features(gui-qt-platform PUBLIC cxx_std_23)
-target_link_libraries(gui-qt-platform PUBLIC telar::build_flags telar::base telar::tbc gui-foundation-core gui-platform gui-qt)
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  target_link_libraries(gui-qt-platform PUBLIC telar::clipboard)
-endif()
+# The Linux clipboard monitors' headers import telar.platform.primitives.
+target_link_libraries(gui-qt-platform PUBLIC telar::build_flags telar::base telar::platform telar::tbc gui-foundation-core gui-platform gui-qt)
 target_compile_options(gui-qt-platform PUBLIC ${TELAR_PROCESS_OPTIONS})
 set_target_properties(gui-qt-platform PROPERTIES POSITION_INDEPENDENT_CODE ON AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
 
