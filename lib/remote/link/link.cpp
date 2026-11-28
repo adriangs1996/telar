@@ -389,7 +389,11 @@ namespace telar::remote {
 
     for (auto socket = acceptConnection(listener); socket; socket = acceptConnection(listener)) {
       admitted = true;
-      threads_.fetch_add(1);
+      if (threads_.fetch_add(1) >= maximum_threads) {
+        threads_.fetch_sub(1);
+        continue;
+      }
+
       try {
         // The descriptor crosses as a number, and is the thread's once the thread has started:
         // one that could not start leaves the connection here, which closes it.
@@ -1115,7 +1119,7 @@ namespace telar::remote {
       const std::scoped_lock lock{mutex_};
       auto& forward = forwards_.atMut(accepted.index);
 
-      if (!forward.used || forward.generation != accepted.generation || forward.holders == 0) {
+      if (!forward.used || forward.generation != accepted.generation || forward.holders == 0 || forward.connections >= maximum_forward_connections) {
         return;
       }
 

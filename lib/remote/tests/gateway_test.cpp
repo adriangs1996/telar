@@ -443,6 +443,45 @@ namespace {
     check(::access(sockets.back().c_str(), F_OK) == 0, "the next machine has a socket");
   }
 
+  // Any program here may connect to a forwarded port, and each connection is one to the
+  // gateway: a forward carries a few at once, and closes the next.
+  void aForwardCarriesAFewConnectionsAtOnce() {
+    const Pair pair;
+    const LocalLink local{pair};
+    auto listener = listenTcp("127.0.0.1", 0);
+    const auto port = listener.port;
+    EchoServer echo{std::move(listener.socket)};
+    int reply[2];
+
+    check(::pipe(reply) == 0);
+    std::thread holder{[&] {
+      static_cast<void>(LinkClient::forward(local.paths(), pair.destination, port, "test origin", reply[1]));
+    }};
+    const auto local_port = static_cast<std::uint16_t>(std::stoul(readSome(reply[0], 16)));
+
+    {
+      std::vector<FileDescriptor> carried;
+
+      for (unsigned index = 0; index < Link::maximum_forward_connections; ++index) {
+        carried.push_back(connectLocalPort(local_port));
+        writeAll(carried.back().get(), "x");
+        check(readExactly(carried.back().get(), 1) == "x", "a connection within the bound is carried");
+      }
+
+      const auto refused = connectLocalPort(local_port);
+      pollfd entry{.fd = refused.get(), .events = POLLIN, .revents = 0};
+      char byte = 0;
+
+      check(::poll(&entry, 1, 3000) == 1 && ::read(refused.get(), &byte, 1) <= 0, "the connection past the bound is closed");
+    }
+
+    echo.stop();
+    holder.join();
+    for (const int descriptor : reply) {
+      ::close(descriptor);
+    }
+  }
+
   void theLinkForwardsAPortUntilItClosesThere() {
     const Pair pair;
     const LocalLink local{pair};
@@ -808,6 +847,7 @@ namespace {
   const telar::testing::Case case_a_full_client_list_leaves_the_pairing_code_pending{"gateway.a_full_client_list_leaves_the_pairing_code_pending", aFullClientListLeavesThePairingCodePending};
   const telar::testing::Case case_the_link_offers_a_machines_runtime_on_a_local_socket{"gateway.the_link_offers_a_machines_runtime_on_a_local_socket", theLinkOffersAMachinesRuntimeOnALocalSocket};
   const telar::testing::Case case_the_link_reuses_the_slot_of_a_machine_nothing_uses{"gateway.the_link_reuses_the_slot_of_a_machine_nothing_uses", theLinkReusesTheSlotOfAMachineNothingUses};
+  const telar::testing::Case case_a_forward_carries_a_few_connections_at_once{"gateway.a_forward_carries_a_few_connections_at_once", aForwardCarriesAFewConnectionsAtOnce};
   const telar::testing::Case case_the_link_forwards_a_port_until_it_closes_there{"gateway.the_link_forwards_a_port_until_it_closes_there", theLinkForwardsAPortUntilItClosesThere};
   const telar::testing::Case case_a_port_a_machine_shares_is_forwarded_to_whoever_holds_it{"gateway.a_port_a_machine_shares_is_forwarded_to_whoever_holds_it", aPortAMachineSharesIsForwardedToWhoeverHoldsIt};
   const telar::testing::Case case_the_link_lets_go_of_a_holder_whose_request_came_late{"gateway.the_link_lets_go_of_a_holder_whose_request_came_late", theLinkLetsGoOfAHolderWhoseRequestCameLate};

@@ -45,6 +45,10 @@ export {
     public:
       static constexpr std::size_t maximum_machines = 16;
       static constexpr std::size_t maximum_forwards = 64;
+      // The most connections one forward carries at once, each a connection to the gateway, and
+      // the most threads the link runs: any program here may connect to a forwarded port.
+      static constexpr unsigned maximum_forward_connections = 32;
+      static constexpr unsigned maximum_threads = 256;
       static constexpr std::size_t origin_bytes = PortNotice::origin_bytes;
 
       // Binds the control socket; throws SystemError when another link already serves `paths`.
