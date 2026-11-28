@@ -323,6 +323,20 @@ namespace {
     }
   }
 
+  // Closing the helper's terminal sends SIGHUP: it stops the helper like SIGTERM, so that its
+  // rules are removed, instead of killing it.
+  void shutdownSignals() {
+    for (const int code : {SIGHUP, SIGQUIT}) {
+      const redirect::ShutdownSignals signals;
+
+      check(!redirect::ShutdownSignals::stopping());
+      check(::raise(code) == 0);
+      check(redirect::ShutdownSignals::stopping());
+    }
+
+    check(!redirect::ShutdownSignals::stopping());
+  }
+
   const telar::testing::Case case_account_snapshot_ipv4{
       "socket_owner.account_snapshot_ipv4",
       [] {
@@ -348,5 +362,6 @@ namespace {
       },
   };
   const telar::testing::Case case_local_addresses{"socket_owner.local_addresses", localAddresses};
+  const telar::testing::Case case_shutdown_signals{"socket_owner.shutdown_signals", shutdownSignals};
 
 }

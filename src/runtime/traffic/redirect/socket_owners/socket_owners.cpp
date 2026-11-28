@@ -616,6 +616,17 @@ namespace telar::runtime::redirect {
 
   namespace {
 
+    // The signals that stop the helper and remove its rules; closing its terminal sends SIGHUP.
+    constexpr ds::Array<int, 4> shutdown_signals{SIGINT, SIGTERM, SIGHUP, SIGQUIT};
+
+    bool shutdownPending() noexcept {
+      sigset_t pending{};
+
+      return ::sigpending(&pending) == 0 && std::ranges::any_of(shutdown_signals, [&](int code) {
+        return sigismember(&pending, code) != 0;
+      });
+    }
+
     // Reports why an incoming origin connection failed.
     void reportOriginFailure(int code) noexcept {
       constexpr std::size_t error_text_bytes = 128;
@@ -690,8 +701,10 @@ namespace telar::runtime::redirect {
 
   ShutdownSignals::ShutdownSignals() {
     sigemptyset(&selected_);
-    sigaddset(&selected_, SIGINT);
-    sigaddset(&selected_, SIGTERM);
+    for (const int code : shutdown_signals) {
+      sigaddset(&selected_, code);
+    }
+
     const auto result = ::pthread_sigmask(SIG_BLOCK, &selected_, &previous_);
     if (result != 0) {
       throw SystemError{"Block redirect shutdown signals", result};
@@ -700,8 +713,7 @@ namespace telar::runtime::redirect {
 
   ShutdownSignals::~ShutdownSignals() {
     // Consume the handled shutdown signal before restoring the old mask.
-    sigset_t pending{};
-    if (::sigpending(&pending) == 0 && ((sigismember(&pending, SIGINT) != 0) || (sigismember(&pending, SIGTERM) != 0))) {
+    if (shutdownPending()) {
       int received = 0;
 
       ::sigwait(&selected_, &received);
@@ -711,9 +723,7 @@ namespace telar::runtime::redirect {
   }
 
   bool ShutdownSignals::stopping() noexcept {
-    sigset_t pending{};
-
-    return ::sigpending(&pending) == 0 && ((sigismember(&pending, SIGINT) != 0) || (sigismember(&pending, SIGTERM) != 0));
+    return shutdownPending();
   }
 
   Helper::Helper(Memory& memory, std::string_view endpoint, std::span<const Target> targets, std::span<const ProcessIdentity> processes, Direction direction)
