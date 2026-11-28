@@ -1095,7 +1095,12 @@ namespace telar::runtime::redirect {
         continue;
       }
 
+      // The accepted flow waits for its origin as long as the pending connection does, not until
+      // the deadline its SYN set.
+      const auto deadline = std::chrono::steady_clock::now() + connection_grace;
+
       flow->getMut().accepted = true;
+      flow->getMut().deadline = deadline;
       if ((*flow)->incoming) {
         writeErrorLine("telar redirect: accepted incoming TCP for destination port {}", target.port);
       }
@@ -1104,7 +1109,7 @@ namespace telar::runtime::redirect {
       if (::connect(connection.origin.get(), target.endpoint.address(), target.endpoint.length) == 0) {
         handoff(connection, index);
       } else if (sys::lastError() == EINPROGRESS || sys::lastError() == EINTR) {
-        slot->emplace(Pending{.connection = std::move(connection), .deadline = std::chrono::steady_clock::now() + connection_grace, .flow = index});
+        slot->emplace(Pending{.connection = std::move(connection), .deadline = deadline, .flow = index});
       } else if ((*flow)->incoming) {
         reportOriginFailure(sys::lastError());
       }
