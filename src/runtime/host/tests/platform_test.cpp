@@ -513,7 +513,6 @@ namespace {
 
     check(findExecutable({.path = "/nonexistent-telar:/bin", .program = "sh"}, found.viewMut()) && std::string_view{found.dataMut()} == "/bin/sh");
     check(!findExecutable({.path = "/nonexistent-telar", .program = "sh"}, found.viewMut()));
-    check(findExecutable({.path = "bin", .program = "sh", .cwd = "/"}, found.viewMut()));
 
     const auto self = ExecutablePath::sibling({"missing-telar-program", "runtime-host-tests"});
 

@@ -86,13 +86,12 @@ export {
 export {
   namespace telar::runtime {
 
-    // What findExecutable looks for: `program` along `path`, a colon-separated directory list. A
-    // relative directory, the empty one included, is relative to `cwd`, or to this process's
-    // working directory when `cwd` is empty.
+    // What findExecutable looks for: `program` along `path`, a colon-separated directory list. Only
+    // its absolute directories are searched: a relative one, the empty one included, names a
+    // directory of wherever the command runs, such as a repository that holds its own `bin/git`.
     struct ExecutableSearch {
       std::string_view path;
       std::string_view program;
-      std::string_view cwd;
     };
 
     // Where exec finds the program `search` names: the first `directory/program` that is a file

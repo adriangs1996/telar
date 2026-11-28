@@ -77,30 +77,18 @@ namespace telar::runtime {
   bool findExecutable(ExecutableSearch search, std::span<char, PATH_MAX> found) noexcept {
     auto path = search.path;
     const auto program = search.program;
-    const auto cwd = search.cwd;
 
     for (;;) {
       const auto separator = path.find(':');
       const auto directory = separator == std::string_view::npos ? path : std::string_view{path.data(), separator};
-      const bool relative = directory.empty() || directory.front() != '/';
-      std::string_view base;
+      const auto length = directory.size() + 1 + program.size();
 
-      if (relative) {
-        base = cwd.empty() ? std::string_view{"."} : cwd;
-      }
-
-      const auto length = base.size() + (relative ? 1 : 0) + directory.size() + 1 + program.size();
-      if (length < found.size()) {
+      if (directory.starts_with('/') && length < found.size()) {
         std::size_t written = 0;
         const auto write = [&](std::string_view text) {
           std::ranges::copy(text, found.subspan(written).begin());
           written += text.size();
         };
-
-        write(base);
-        if (relative) {
-          write("/");
-        }
 
         write(directory);
         write("/");
@@ -326,7 +314,7 @@ namespace telar::runtime {
     }
 
     ds::Array<char, PATH_MAX> found{};
-    if (!findExecutable({.path = path, .program = program, .cwd = cwd()}, found.viewMut())) {
+    if (!findExecutable({.path = path, .program = program}, found.viewMut())) {
       throw SystemError{"resolve pane executable", ENOENT};
     }
 

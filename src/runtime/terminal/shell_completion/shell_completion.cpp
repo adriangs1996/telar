@@ -49,23 +49,6 @@ namespace telar::runtime {
       return start != std::string_view::npos && line[start] != '-' && line.find_first_of("()`") == std::string_view::npos && printable(line);
     }
 
-    // The first program `search` names along the absolute directories of its path. A relative one
-    // would be the pane's directory, where a repository could hold a program of the shell's name.
-    bool findProgram(ExecutableSearch search, std::span<char, PATH_MAX> found) {
-      for (auto rest = search.path; !rest.empty();) {
-        const auto separator = rest.find(':');
-        const auto directory = rest.substr(0, separator);
-
-        if (directory.starts_with('/') && findExecutable({.path = directory, .program = search.program, .cwd = {}}, found)) {
-          return true;
-        }
-
-        rest.remove_prefix(separator == std::string_view::npos ? rest.size() : separator + 1);
-      }
-
-      return false;
-    }
-
     std::string_view programOf(IntegratedShell shell) noexcept {
       switch (shell) {
       case IntegratedShell::zsh:
@@ -287,7 +270,7 @@ namespace telar::runtime {
       return runRemote(request, path, result);
     }
 
-    if (program.empty() || !request.directory.view().starts_with('/') || !findProgram({.path = path, .program = program, .cwd = {}}, shell.viewMut())) {
+    if (program.empty() || !request.directory.view().starts_with('/') || !findExecutable({.path = path, .program = program}, shell.viewMut())) {
       return false;
     }
 
@@ -365,7 +348,7 @@ namespace telar::runtime {
     const auto control = request.control.view();
     ds::Array<char, PATH_MAX> ssh{};
     // The socket is checked last, just before ssh opens it.
-    if (question.empty() || (!directory.empty() && !directory.starts_with('/')) || !printable(directory) || !findProgram({.path = path, .program = "ssh", .cwd = {}}, ssh.viewMut()) || !remote_completion::acceptedControl(control, control_directory_.view())) {
+    if (question.empty() || (!directory.empty() && !directory.starts_with('/')) || !printable(directory) || !findExecutable({.path = path, .program = "ssh"}, ssh.viewMut()) || !remote_completion::acceptedControl(control, control_directory_.view())) {
       return false;
     }
 
