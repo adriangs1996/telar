@@ -1,7 +1,3 @@
-#include "frame_fixture.hpp"
-#include "gui_wait.hpp"
-#include "qt_case.hpp"
-#include "ui/design/controls/modal_reveal_layout.hpp"
 #include <QGuiApplication>
 #include <QPointer>
 #include <QQuickWindow>
@@ -17,7 +13,14 @@
 #include <memory>
 #include <vector>
 
+import telar.gui.ui.design.controls;
+import telar.gui.tests.frame_fixture;
+import telar.gui.tests.gui_wait;
+import telar.gui.tests.qt_case;
+import telar.gui.qt;
+
 namespace {
+  using Qt::StringLiterals::operator""_s;
 
   using namespace telar::gui::qt;
   using namespace telar::gui::test;
@@ -26,10 +29,16 @@ namespace {
   constexpr int window_width = 320;
   constexpr int window_height = 200;
 
-  class ModalRevealTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] ModalRevealTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
-    Q_SLOT static void entranceStartsAtZeroAndSettles() {
+  private:
+    [[qt::slot]] static void entranceStartsAtZeroAndSettles() {
       QQuickWindow window;
       ModalRevealLayout item(window.contentItem());
 
@@ -41,7 +50,7 @@ namespace {
         samples.push_back(item.reveal());
       });
 
-      item.setGeneration(QStringLiteral("11"));
+      item.setGeneration(u"11"_s);
       item.setActive(true);
       QVERIFY(waitForGuiCondition([&] {
         return samples.size() >= 2 && item.reveal() == 1;
@@ -54,7 +63,7 @@ namespace {
         return value >= 0 && value <= 1;
       }));
 
-      const auto* timer = window.findChild<QTimer*>(QStringLiteral("agentStatusAnimation"));
+      const auto* timer = window.findChild<QTimer*>(u"agentStatusAnimation"_s);
 
       QVERIFY(timer != nullptr);
       QVERIFY(waitForGuiCondition([&] {
@@ -63,7 +72,7 @@ namespace {
           wait_ms));
     }
 
-    Q_SLOT static void onlyANewGenerationRestartsTheEntrance() {
+    [[qt::slot]] static void onlyANewGenerationRestartsTheEntrance() {
       QQuickWindow window;
       ModalRevealLayout item(window.contentItem());
 
@@ -75,16 +84,16 @@ namespace {
         zero_samples += item.reveal() == 0;
       });
 
-      item.setGeneration(QStringLiteral("11"));
+      item.setGeneration(u"11"_s);
       item.setActive(true);
       QVERIFY(waitForGuiCondition([&] {
         return zero_samples == 1 && item.reveal() == 1;
       },
           wait_ms));
-      item.setGeneration(QStringLiteral("11"));
+      item.setGeneration(u"11"_s);
       QCOMPARE(item.reveal(), qreal{1});
       QCOMPARE(zero_samples, 1);
-      item.setGeneration(QStringLiteral("12"));
+      item.setGeneration(u"12"_s);
       QVERIFY(waitForGuiCondition([&] {
         return zero_samples == 2 && item.reveal() == 1;
       },
@@ -94,7 +103,7 @@ namespace {
       QCOMPARE(item.reveal(), qreal{1});
     }
 
-    Q_SLOT static void destructionDuringTheFirstFrameRetiresTheClockEntry() {
+    [[qt::slot]] static void destructionDuringTheFirstFrameRetiresTheClockEntry() {
       QQuickWindow window;
 
       window.resize(window_width, window_height);
@@ -108,7 +117,7 @@ namespace {
         }
       });
 
-      item->setGeneration(QStringLiteral("11"));
+      item->setGeneration(u"11"_s);
       item->setActive(true);
       QVERIFY(waitForGuiCondition([&] {
         return observer.isNull();
@@ -126,4 +135,6 @@ namespace {
 
 }
 
+#ifndef TELAR_MOC_RUN
 #include "modal_reveal_test.moc"
+#endif

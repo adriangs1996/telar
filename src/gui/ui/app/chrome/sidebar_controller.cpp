@@ -1,26 +1,15 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.chrome;
 
-#include "sidebar_controller.hpp"
-#include "sidebar_projection.hpp"
-#include "ui/kit/fonts/resident_fonts.hpp"
-#include "ui/kit/fonts/typography_projection.hpp"
-#include "ui/kit/fonts/window_font_catalog.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QAbstractItemModel>
-#include <QString>
-#include <QtCore/qstringliteral.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <string_view>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
 import telar.gui.application;
 import telar.base.memory.allocators;
+import telar.gui.foundation.fonts;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   SidebarController::SidebarController(Store& store, WorkspacesController& workspaces, ActivityController& activity, QObject* parent)
       : QObject(parent),
@@ -36,7 +25,7 @@ namespace telar::gui::qt {
 
   void SidebarController::setDisplay(const application::window::DisplayMetrics& display) {
     display_ = display;
-    emit changed();
+    changed();
   }
 
   void SidebarController::setWindow(QQuickWindow& window) {
@@ -53,7 +42,7 @@ namespace telar::gui::qt {
 
     auto result = sidebarRegionsRecord(area, display_, static_cast<std::size_t>(workspaces_.count()));
 
-    result.insert(QStringLiteral("typography"), chromeTypographyRecord(display_, store_.session().configuration.font));
+    result.insert(u"typography"_s, chromeTypographyRecord(display_, store_.session().configuration.font));
 
     return result;
   }
@@ -80,7 +69,7 @@ namespace telar::gui::qt {
 
   void SidebarController::fit() {
     if (window_ != nullptr) {
-      emit widthRequested(static_cast<qreal>(naturalWidth()));
+      widthRequested(static_cast<qreal>(naturalWidth()));
     }
   }
 
@@ -109,16 +98,16 @@ namespace telar::gui::qt {
     const auto gap = card.px(application::activity::AgentCardGeometry::gap);
     const auto mark = card.px(application::activity::AgentCardGeometry::mark_column);
     // A status whose clock is drawn later reserves a short age.
-    const auto age = QStringLiteral("59m");
+    const auto age = u"59m"_s;
     float card_width = 0;
 
     const auto& cards = activity_.records();
 
     for (int row = 0; row < cards.rowCount(); ++row) {
       const auto record = cards.data(cards.index(row), ListModel::record_role).toMap();
-      const auto status = record.value(QStringLiteral("status")).toString();
-      const auto title = padding + mark + gap + measure(record.value(QStringLiteral("title")).toString(), chrome.body, true) + gap + measure(status.isEmpty() ? age : status, chrome.small, false);
-      const auto detail = padding + mark + gap + measure(record.value(QStringLiteral("project")).toString(), chrome.small, false);
+      const auto status = record.value(u"status"_s).toString();
+      const auto title = padding + mark + gap + measure(record.value(u"title"_s).toString(), chrome.body, true) + gap + measure(status.isEmpty() ? age : status, chrome.small, false);
+      const auto detail = padding + mark + gap + measure(record.value(u"project"_s).toString(), chrome.small, false);
 
       card_width = std::max({card_width, title, detail});
     }

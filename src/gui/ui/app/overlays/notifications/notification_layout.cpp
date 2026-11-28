@@ -1,48 +1,20 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.overlays.notifications;
 
-#include "notification_layout.hpp"
-#include "tbc/view.hpp"
-#include "ui/kit/fonts/resident_fonts.hpp"
-#include "ui/kit/fonts/window_font_catalog.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "ui/kit/scene/window_animation_clock.hpp"
-#include <QAbstractItemModel>
-#include <QList>
-#include <QMetaObject>
-#include <QModelIndex>
-#include <QObject>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QString>
-#include <QVariantList>
-#include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <functional>
-#include <limits>
-#include <memory>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.tbc;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.scene;
 import telar.gui.application;
 import telar.base.ds;
 import telar.wire.vocabulary;
+import telar.base.memory.allocators;
+import telar.gui.foundation.fonts;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
+
   namespace {
 
     QRectF logicalBounds(Rect bounds, qreal density) {
@@ -52,13 +24,13 @@ namespace telar::gui::qt {
     QString accent(NotificationLevel level) {
       switch (level) {
       case NotificationLevel::info:
-        return QStringLiteral("blue");
+        return u"blue"_s;
       case NotificationLevel::success:
-        return QStringLiteral("green");
+        return u"green"_s;
       case NotificationLevel::warning:
-        return QStringLiteral("yellow");
+        return u"yellow"_s;
       case NotificationLevel::failure:
-        return QStringLiteral("red");
+        return u"red"_s;
       }
 
       return {};
@@ -67,13 +39,13 @@ namespace telar::gui::qt {
     QString symbol(NotificationLevel level) {
       switch (level) {
       case NotificationLevel::info:
-        return QStringLiteral("i");
+        return u"i"_s;
       case NotificationLevel::success:
-        return QStringLiteral("✓");
+        return u"✓"_s;
       case NotificationLevel::warning:
-        return QStringLiteral("!");
+        return u"!"_s;
       case NotificationLevel::failure:
-        return QStringLiteral("×");
+        return u"×"_s;
       }
 
       return {};
@@ -118,7 +90,7 @@ namespace telar::gui::qt {
     }
 
     invalidate();
-    emit controllerChanged();
+    controllerChanged();
   }
 
   QAbstractItemModel* NotificationLayout::cards() noexcept {
@@ -171,7 +143,7 @@ namespace telar::gui::qt {
 
     for (int index = first; index <= last; ++index) {
       const auto record = cards_.data(cards_.index(index), ListModel::record_role).toMap();
-      if (record.value(QStringLiteral("key")).toString() == identity) {
+      if (record.value(u"key"_s).toString() == identity) {
         controller_->retireFocus(identity, focused);
         return;
       }
@@ -269,7 +241,7 @@ namespace telar::gui::qt {
     QVariantList body;
 
     for (std::size_t index = 0; index < content.body.count(); ++index) {
-      body.append(QVariantMap{{QStringLiteral("text"), toQString(content.body.line(index))}, {QStringLiteral("bounds"), logicalBounds(geometry.body(index), density_)}});
+      body.append(QVariantMap{{u"text"_s, toQString(content.body.line(index))}, {u"bounds"_s, logicalBounds(geometry.body(index), density_)}});
     }
 
     auto action = application::notifications::NotificationActionLabel::target(item.target.kind);
@@ -287,29 +259,29 @@ namespace telar::gui::qt {
     for (std::size_t layer = 0; layer < application::notifications::NotificationMetrics::shadow_layers; ++layer) {
       const auto spread = metrics_.px(static_cast<float>(application::notifications::NotificationMetrics::shadow_layers - layer) * application::notifications::NotificationMetrics::shadow_spread);
 
-      shadows.append(QVariantMap{{QStringLiteral("bounds"), logicalBounds({.x = -spread, .y = -spread + metrics_.px(application::notifications::NotificationMetrics::shadow_offset), .width = content.width + (2 * spread), .height = content.height + (2 * spread)}, density_)}, {QStringLiteral("radius"), (static_cast<qreal>(metrics_.px(application::notifications::NotificationMetrics::radius) + spread)) / density_}});
+      shadows.append(QVariantMap{{u"bounds"_s, logicalBounds({.x = -spread, .y = -spread + metrics_.px(application::notifications::NotificationMetrics::shadow_offset), .width = content.width + (2 * spread), .height = content.height + (2 * spread)}, density_)}, {u"radius"_s, (static_cast<qreal>(metrics_.px(application::notifications::NotificationMetrics::radius) + spread)) / density_}});
     }
 
     const auto action_bounds = geometry.action();
     const auto action_line_height = static_cast<float>(fonts_->face(fonts::FontRole::emphasized).metrics(chrome_.small).line_height);
     const auto action_advance = measure_action(action);
-    const auto accessible = item.link.view().empty() ? toQString(item.title.view()) + QStringLiteral(": ") + toQString(item.message.view()) : toQString(item.title.view()) + QStringLiteral(", opens ") + toQString(item.linkHost()) + QStringLiteral(": ") + toQString(item.message.view());
+    const auto accessible = item.link.view().empty() ? toQString(item.title.view()) + u": "_s + toQString(item.message.view()) : toQString(item.title.view()) + u", opens "_s + toQString(item.linkHost()) + u": "_s + toQString(item.message.view());
 
     return {
         .record = {
-            {QStringLiteral("key"), controller_->identity(item.id)},
-            {QStringLiteral("title"), toQString(item.title.view())},
-            {QStringLiteral("titleBounds"), logicalBounds(geometry.title(), density_)},
-            {QStringLiteral("body"), body},
-            {QStringLiteral("action"), toQString(action)},
-            {QStringLiteral("actionBounds"), logicalBounds(action_bounds, density_)},
-            {QStringLiteral("iconBounds"), logicalBounds(geometry.icon(), density_)},
-            {QStringLiteral("closeBounds"), logicalBounds(geometry.close(), density_)},
-            {QStringLiteral("symbol"), symbol(item.level)},
-            {QStringLiteral("accent"), accent(item.level)},
-            {QStringLiteral("shadows"), shadows},
-            {QStringLiteral("clickable"), item.clickable()},
-            {QStringLiteral("accessible"), accessible},
+            {u"key"_s, controller_->identity(item.id)},
+            {u"title"_s, toQString(item.title.view())},
+            {u"titleBounds"_s, logicalBounds(geometry.title(), density_)},
+            {u"body"_s, body},
+            {u"action"_s, toQString(action)},
+            {u"actionBounds"_s, logicalBounds(action_bounds, density_)},
+            {u"iconBounds"_s, logicalBounds(geometry.icon(), density_)},
+            {u"closeBounds"_s, logicalBounds(geometry.close(), density_)},
+            {u"symbol"_s, symbol(item.level)},
+            {u"accent"_s, accent(item.level)},
+            {u"shadows"_s, shadows},
+            {u"clickable"_s, item.clickable()},
+            {u"accessible"_s, accessible},
         },
         .action_advance = action_advance,
         .action_line_height = action_line_height,
@@ -342,22 +314,22 @@ namespace telar::gui::qt {
     const auto physical_host = controller_->host();
     const auto host = logicalBounds(physical_host, density_);
     const QVariantMap style{
-        {QStringLiteral("radius"), static_cast<qreal>(metrics_.px(application::notifications::NotificationMetrics::radius)) / density_},
-        {QStringLiteral("iconRadius"), static_cast<qreal>(metrics_.px(application::notifications::NotificationMetrics::icon_radius)) / density_},
-        {QStringLiteral("closeRadius"), static_cast<qreal>(metrics_.px(application::notifications::NotificationMetrics::close_radius)) / density_},
-        {QStringLiteral("borderWidth"), static_cast<qreal>(metrics_.px(application::notifications::NotificationMetrics::border_width)) / density_},
-        {QStringLiteral("focusBorderWidth"), static_cast<qreal>(metrics_.px(application::notifications::NotificationMetrics::focus_border_width)) / density_},
-        {QStringLiteral("borderAlpha"), application::notifications::NotificationMetrics::border_alpha},
-        {QStringLiteral("iconAlpha"), application::notifications::NotificationMetrics::icon_alpha},
-        {QStringLiteral("shadowAlpha"), application::notifications::NotificationMetrics::shadow_alpha},
-        {QStringLiteral("titlePixels"), chrome_.title / density_},
-        {QStringLiteral("bodyPixels"), chrome_.body / density_},
-        {QStringLiteral("smallPixels"), chrome_.small / density_},
+        {u"radius"_s, static_cast<qreal>(metrics_.px(application::notifications::NotificationMetrics::radius)) / density_},
+        {u"iconRadius"_s, static_cast<qreal>(metrics_.px(application::notifications::NotificationMetrics::icon_radius)) / density_},
+        {u"closeRadius"_s, static_cast<qreal>(metrics_.px(application::notifications::NotificationMetrics::close_radius)) / density_},
+        {u"borderWidth"_s, static_cast<qreal>(metrics_.px(application::notifications::NotificationMetrics::border_width)) / density_},
+        {u"focusBorderWidth"_s, static_cast<qreal>(metrics_.px(application::notifications::NotificationMetrics::focus_border_width)) / density_},
+        {u"borderAlpha"_s, application::notifications::NotificationMetrics::border_alpha},
+        {u"iconAlpha"_s, application::notifications::NotificationMetrics::icon_alpha},
+        {u"shadowAlpha"_s, application::notifications::NotificationMetrics::shadow_alpha},
+        {u"titlePixels"_s, chrome_.title / density_},
+        {u"bodyPixels"_s, chrome_.body / density_},
+        {u"smallPixels"_s, chrome_.small / density_},
     };
     if (host_ != host || style_ != style) {
       host_ = host;
       style_ = style;
-      emit layoutChanged();
+      layoutChanged();
     }
 
     now_ns_ = std::max(now_ns_, clock_ ? clock_->now() : system::AwakeClock::nowNanoseconds());
@@ -380,10 +352,10 @@ namespace telar::gui::qt {
       underline.y -= placement.bounds.y;
       auto record = cached.record;
 
-      record.insert(QStringLiteral("underlineBounds"), logicalBounds(underline, density_));
-      record.insert(QStringLiteral("bounds"), logicalBounds(placement.bounds, density_));
-      record.insert(QStringLiteral("opacity"), placement.opacity);
-      record.insert(QStringLiteral("enabled"), item.phase != application::notifications::NotificationItem::Phase::exiting);
+      record.insert(u"underlineBounds"_s, logicalBounds(underline, density_));
+      record.insert(u"bounds"_s, logicalBounds(placement.bounds, density_));
+      record.insert(u"opacity"_s, placement.opacity);
+      record.insert(u"enabled"_s, item.phase != application::notifications::NotificationItem::Phase::exiting);
       records.append(record);
     }
 

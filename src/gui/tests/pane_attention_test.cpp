@@ -2,13 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "controlled_awake_clock.hpp"
-#include "gui_wait.hpp"
-#include "shape_atlas.hpp"
-#include "ui/app/panes/native_pane_attention.hpp"
-#include "ui/kit/models/pane_attention_value.hpp"
-#include "ui/kit/scene/window_animation_clock.hpp"
 #include <QColor>
 #include <QCoreApplication>
 #include <QDebug>
@@ -53,6 +46,13 @@ import telar.gui.foundation.system;
 import telar.gui.features.workbench;
 import telar.gui.features.window;
 import telar.base.ds;
+import telar.gui.ui.app.panes;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.scene;
+import telar.gui.tests.controlled_awake_clock;
+import telar.gui.tests.gui_wait;
+import telar.gui.tests.shape_atlas;
+import telar.gui.qt;
 
 namespace {
 
@@ -128,16 +128,22 @@ namespace {
     return items;
   }
 
-  class PaneAttentionTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] PaneAttentionTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void init() {
+  private:
+    [[qt::slot]] static void init() {
       ControlledAwakeClock::set(0);
       QCOMPARE(telar::gui::system::AwakeClock::nowNanoseconds(), 0);
     }
 
-    Q_SLOT static void sharedFadePreservesIdentityAndParksItsClock() {
+    [[qt::slot]] static void sharedFadePreservesIdentityAndParksItsClock() {
       QQuickWindow window;
       NativePaneAttention first{window.contentItem()};
       NativePaneAttention second{window.contentItem()};
@@ -182,7 +188,7 @@ namespace {
       QCOMPARE(second.alpha(), 1);
     }
 
-    Q_SLOT static void frameCapChangesCadenceWithoutRestartingFade() {
+    [[qt::slot]] static void frameCapChangesCadenceWithoutRestartingFade() {
       QQuickWindow window;
       NativePaneAttention item{window.contentItem()};
 
@@ -216,7 +222,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!timers.front()->isActive(), wait_ms);
     }
 
-    Q_SLOT static void absentRingsArePrunedAndRestartOnReturn() {
+    [[qt::slot]] static void absentRingsArePrunedAndRestartOnReturn() {
       QQuickWindow window;
       NativePaneAttention item{window.contentItem()};
 
@@ -243,7 +249,7 @@ namespace {
       QCOMPARE(item.alpha(), 0);
     }
 
-    Q_SLOT static void firstExposureStartsTheFadeAndHidingKeepsItsIdentity() {
+    [[qt::slot]] static void firstExposureStartsTheFadeAndHidingKeepsItsIdentity() {
       QQuickWindow window;
       NativePaneAttention item{window.contentItem()};
 
@@ -270,7 +276,7 @@ namespace {
       QVERIFY(timer != nullptr && !timer->isActive());
     }
 
-    Q_SLOT static void movingToAnotherWindowStartsASeparateFade() {
+    [[qt::slot]] static void movingToAnotherWindowStartsASeparateFade() {
       QQuickWindow first;
       QQuickWindow second;
       NativePaneAttention item{first.contentItem()};
@@ -298,7 +304,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!timer->isActive(), wait_ms);
     }
 
-    Q_SLOT static void alphaCallbacksCanDestroyTheirWindow() {
+    [[qt::slot]] static void alphaCallbacksCanDestroyTheirWindow() {
       auto window = std::make_unique<QQuickWindow>();
       auto owned_item = std::make_unique<NativePaneAttention>(window->contentItem());
       const QPointer<NativePaneAttention> alive{owned_item.get()};
@@ -320,7 +326,7 @@ namespace {
       QVERIFY(!window);
     }
 
-    Q_SLOT static void attentionRadiusFollowsPaneSurfaces() {
+    [[qt::slot]] static void attentionRadiusFollowsPaneSurfaces() {
       NativePaneAttention item;
 
       QCOMPARE(item.radius(), qreal{telar::gui::features::workbench::PaneDecorationGeometry::frame_radius});
@@ -335,7 +341,7 @@ namespace {
       QCOMPARE(changes.size(), 1);
     }
 
-    Q_SLOT static void attachmentIdentityKeepsAllIntegerBits() {
+    [[qt::slot]] static void attachmentIdentityKeepsAllIntegerBits() {
       constexpr PaneAttentionKey key{.pane_id = 0xFEDCBA9876543210, .attachment_generation = 0xABCDEF0123456789};
       const auto restored = paneAttentionKey(paneAttentionValue(key));
 
@@ -363,7 +369,7 @@ namespace {
       QCOMPARE(paneAttentionKey(ring->attachment()).valueOr(PaneAttentionKey{}), key);
     }
 
-    Q_SLOT static void originalShaderAtlasAtFourFadePhases() {
+    [[qt::slot]] static void originalShaderAtlasAtFourFadePhases() {
       QQuickWindow window;
       auto source = fixture();
       const auto density = window.effectiveDevicePixelRatio();
@@ -435,4 +441,6 @@ int main(int argc, char** argv) {
   return QTest::qExec(&test, argc, argv);
 }
 
+#ifndef TELAR_MOC_RUN
 #include "pane_attention_test.moc"
+#endif

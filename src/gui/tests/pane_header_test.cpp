@@ -2,16 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "qml_fixture.hpp"
-#include "ui/app/panes/header/pane_header_layout.hpp"
-#include "ui/app/panes/pane_projection.hpp"
-#include "ui/design/controls/native_agent_status.hpp"
-#include "ui/design/controls/native_tab_activity.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/models/agent_status_value.hpp"
-#include "ui/kit/models/progress_value.hpp"
-#include "ui/kit/models/projection.hpp"
 #include <QColor>
 #include <QFont>
 #include <QGuiApplication>
@@ -43,6 +33,15 @@ import telar.gui.features.workbench;
 import telar.base.ds;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
+import telar.gui.ui.app.panes.header;
+import telar.gui.ui.app.panes;
+import telar.gui.ui.design.controls;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
+import telar.gui.tests.qml_fixture;
+import telar.gui.foundation.core;
+import telar.gui.foundation.model;
+import telar.gui.qt;
 
 namespace {
 
@@ -87,19 +86,25 @@ namespace {
     return items.size() == 1 ? items.front() : nullptr;
   }
 
-  class PaneHeaderTest : public QObject {
-    Q_OBJECT
+  class [[qt::object]] PaneHeaderTest : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
-    Q_SLOT static void initTestCase() {
+  private:
+    [[qt::slot]] static void initTestCase() {
       bundledFonts();
       QGuiApplication::setFont(QFont{QStringLiteral("IBM Plex Sans")});
     }
 
-    Q_SLOT static void init() {
+    [[qt::slot]] static void init() {
       QTest::failOnWarning(QRegularExpression{QStringLiteral(".*")});
     }
 
-    Q_SLOT static void chipUsesPaneWordsAndDoesNotPulse() {
+    [[qt::slot]] static void chipUsesPaneWordsAndDoesNotPulse() {
       NativeAgentStatus status;
 
       status.setDisplayMode(NativeAgentStatus::DisplayMode::pane_chip);
@@ -114,7 +119,7 @@ namespace {
       QVERIFY(status.statusText().isEmpty());
     }
 
-    Q_SLOT static void projectionRejectsOtherPaneGenerationsAndUsesTheProgram() {
+    [[qt::slot]] static void projectionRejectsOtherPaneGenerationsAndUsesTheProgram() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::Memory& memory = adapter;
@@ -150,7 +155,7 @@ namespace {
       QVERIFY(paneChromeRecord(pane, span, 2).value(QStringLiteral("agent")).toMap().isEmpty());
     }
 
-    Q_SLOT static void projectionAddsSafeSessionTitleOrDirectoryContext() {
+    [[qt::slot]] static void projectionAddsSafeSessionTitleOrDirectoryContext() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::Memory& memory = adapter;
@@ -184,7 +189,7 @@ namespace {
       QVERIFY(record.value(QStringLiteral("contextIsDirectory")).toBool());
     }
 
-    Q_SLOT static void aTabsOnlyPaneDoesNotRepeatTheDirectoryItsTabShows() {
+    [[qt::slot]] static void aTabsOnlyPaneDoesNotRepeatTheDirectoryItsTabShows() {
       QQmlEngine engine;
       QQuickWindow window;
 
@@ -220,7 +225,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(context->property("text").toString().startsWith(QStringLiteral("Fix session restore")), wait_ms);
     }
 
-    Q_SLOT static void routineStatesStayQuietAndInactiveTitlesStayReadable() {
+    [[qt::slot]] static void routineStatesStayQuietAndInactiveTitlesStayReadable() {
       QQmlEngine engine;
       const ChromeMetrics chrome;
       const auto colors = themeColors(Configuration{});
@@ -248,7 +253,7 @@ namespace {
       QCOMPARE(quiet_color, attention_color);
     }
 
-    Q_SLOT static void compactHeaderKeepsTheProgramInsteadOfAnAmbiguousEllipsis() {
+    [[qt::slot]] static void compactHeaderKeepsTheProgramInsteadOfAnAmbiguousEllipsis() {
       QQmlEngine engine;
       QQuickWindow window;
 
@@ -278,7 +283,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(program->width() >= program->implicitWidth(), wait_ms);
     }
 
-    Q_SLOT static void independentHeaderMarksTheStateOnTheTileAndKeepsProgress() {
+    [[qt::slot]] static void independentHeaderMarksTheStateOnTheTileAndKeepsProgress() {
       QQmlEngine engine;
       QQuickWindow window;
 
@@ -325,4 +330,6 @@ namespace {
 }
 
 QTEST_MAIN(PaneHeaderTest)
+#ifndef TELAR_MOC_RUN
 #include "pane_header_test.moc"
+#endif

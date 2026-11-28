@@ -1,24 +1,14 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.chrome.components.machine_chrome;
 
-#include "machine_chrome_controller.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QColor>
-#include <QString>
-#include <QVariantMap>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qstringliteral.h>
-#include <cstddef>
-#include <string_view>
-#include <variant>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
 import telar.gui.foundation.core;
 import telar.gui.application;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   MachineChromeController::MachineChromeController(const Store& store, QObject* parent)
       : QObject(parent),
@@ -29,7 +19,7 @@ namespace telar::gui::qt {
 
   void MachineChromeController::setDisplay(const application::window::DisplayMetrics& display) {
     display_ = display;
-    emit changed();
+    changed();
   }
 
   void MachineChromeController::setWindow(QQuickWindow& window) {
@@ -58,12 +48,12 @@ namespace telar::gui::qt {
     const auto label = toQString(application::machines::MachineChromeGeometry::shownLabel(row.label.view()));
 
     return {
-        {QStringLiteral("label"), label},
-        {QStringLiteral("initial"), initial(label)},
-        {QStringLiteral("ink"), ink(row.color.view())},
-        {QStringLiteral("live"), row.live},
-        {QStringLiteral("attention"), machines.attentionElsewhere()},
-        {QStringLiteral("count"), static_cast<int>(machines.count())},
+        {u"label"_s, label},
+        {u"initial"_s, initial(label)},
+        {u"ink"_s, ink(row.color.view())},
+        {u"live"_s, row.live},
+        {u"attention"_s, machines.attentionElsewhere()},
+        {u"count"_s, static_cast<int>(machines.count())},
     };
   }
 
@@ -87,11 +77,11 @@ namespace telar::gui::qt {
   }
 
   void MachineChromeController::pick() {
-    emit pickerRequested();
+    pickerRequested();
   }
 
   void MachineChromeController::select(application::machines::MachineToken token) {
-    emit selectRequested(token);
+    selectRequested(token);
   }
 
 }

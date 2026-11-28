@@ -1,11 +1,7 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.store;
 
-#include "store.hpp"
-#include <QMetaObject>
-#include <exception>
+import std;
+import telar.gui.qt;
 
 namespace telar::gui::qt {
 
@@ -107,15 +103,15 @@ namespace telar::gui::qt {
     }
 
     touched_ = false;
-    emit changed();
+    changed();
   }
 
   void Store::begin() {
-    emit interacting();
+    interacting();
   }
 
   void Store::commit() {
-    emit interacted();
+    interacted();
     // A flush already queued finds nothing left to report.
     touched_ = true;
     flush();

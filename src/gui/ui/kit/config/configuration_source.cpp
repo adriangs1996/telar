@@ -1,45 +1,9 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.config;
 
-#include "configuration_source.hpp"
-#include "appearance.hpp"
-#include <algorithm>
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
-#include <variant>
-
-#include "configuration_loader.hpp"
-#include "platform/window.hpp"
-#include "ui/kit/fonts/font_resolver.hpp"
-#include <QByteArray>
-#include <QFileInfo>
-#include <QFuture>
-#include <QGuiApplication>
-#include <QList>
-#include <QPointer>
-#include <QStringList>
-#include <QStyleHints>
-#include <QtConcurrentRun>
-#include <QtCore/qlogging.h>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qobject.h>
-#include <QtCore/qstring.h>
-#include <QtCore/qtimer.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <climits>
-#include <exception>
-#include <fcntl.h>
-
+import std;
+import telar.gui.qt;
+import telar.gui.qt.platform;
+import telar.gui.ui.kit.fonts;
 import telar.gui.application;
 import telar.config.client;
 import telar.plugins;
@@ -103,7 +67,7 @@ namespace telar::gui::qt {
         static_cast<void>(future.takeResult());
       }
     } catch (const std::exception& error) {
-      qWarning() << "Configuration worker failed during shutdown:" << error.what();
+      telar::qt::warning() << "Configuration worker failed during shutdown:" << error.what();
     }
   }
 
@@ -658,7 +622,7 @@ namespace telar::gui::qt {
     case ConfigurationPreparation::State::failed:
       error_ = std::move(result.getMut().error);
       result.reset();
-      emit failed();
+      failed();
 
       return;
     case ConfigurationPreparation::State::ready:
@@ -686,7 +650,7 @@ namespace telar::gui::qt {
     loaded_ = !path_.isEmpty();
     error_.clear();
     result.reset();
-    emit changed();
+    changed();
   }
 
   void ConfigurationSource::reload() {
@@ -695,7 +659,7 @@ namespace telar::gui::qt {
 
   void ConfigurationSource::fail(const std::exception& error) {
     error_ = QString::fromUtf8(error.what());
-    emit failed();
+    failed();
   }
 
   void ConfigurationSource::updateAppearance(Appearance appearance) {
@@ -739,7 +703,7 @@ namespace telar::gui::qt {
     }
 
     configuration_.theme = selected;
-    emit themeChanged();
+    themeChanged();
   }
 
   void ConfigurationSource::previewTheme(const ds::Option<ThemeValues>& theme) {

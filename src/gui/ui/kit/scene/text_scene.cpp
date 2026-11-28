@@ -1,60 +1,19 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.scene;
 
-#include "text_scene.hpp"
-#include "chrome_glyph_images.hpp"
-#include "chrome_text_scene.hpp"
-#include "platform/font.h"
-#include "scene_nodes.hpp"
-#include "ui/kit/fonts/font_collection.hpp"
-#include "ui/kit/fonts/resident_fonts.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <algorithm>
-#include <array>
-#include <bit>
-#include <chrono>
-#include <cmath>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <freetype/freetype.h>
-#include <ghostty/vt/unicode.h>
-#include <hb.h>
-#include <limits>
-#include <memory>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <type_traits>
-#include <utility>
-#ifdef Q_OS_MACOS
-#include "optical_text.hpp"
-#endif
-#include <QBrush>
-#include <QFont>
-#include <QPointF>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QSGNode>
-#include <QSGTextNode>
-#include <QString>
-#include <QTextCharFormat>
-#include <QTextLayout>
-#include <QTextOption>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qtypes.h>
-#include <exception>
-
-#ifdef Q_OS_MACOS
-#endif
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.scene.optical_text;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 import telar.base.ds;
+
+#ifdef Q_OS_MACOS
+#endif
+
+#ifdef Q_OS_MACOS
+#endif
 
 namespace telar::gui::qt {
 

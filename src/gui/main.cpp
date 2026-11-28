@@ -4,9 +4,6 @@ static_assert(true);
 #endif
 
 #include "platform/window.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/app/local_runtime_endpoint.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
 #include <QCommandLineParser>
 #include <QFileInfo>
 #include <QFont>
@@ -30,7 +27,12 @@ import telar.gui.application;
 import telar.gui.foundation.system;
 import telar.platform.paths;
 import telar.base.ds;
+import telar.base.memory.allocators;
 import telar.gui.foundation.core;
+import telar.wire.vocabulary;
+
+import telar.gui.ui.app;
+import telar.gui.ui.kit.fonts;
 
 namespace {
 

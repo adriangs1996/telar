@@ -1,11 +1,12 @@
-#include "lua_host.hpp"
+module telar.gui.ui.kit.config;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   LuaHost::LuaHost(QObject* parent)
       : QObject(parent),
         worker_(new QObject) {
-    thread_.setObjectName(QStringLiteral("telar-lua"));
+    thread_.setObjectName(u"telar-lua"_s);
     if (worker_ != nullptr) {
       worker_->moveToThread(&thread_);
     }

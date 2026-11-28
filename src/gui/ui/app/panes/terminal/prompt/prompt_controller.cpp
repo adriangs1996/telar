@@ -1,16 +1,8 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal.prompt;
 
-#include "prompt_controller.hpp"
-#include "prompt_editor_item.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QClipboard>
-#include <QGuiApplication>
-#include <algorithm>
-#include <exception>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
 import telar.base.ds;
 
 namespace telar::gui::qt {
@@ -103,12 +95,12 @@ namespace telar::gui::qt {
       }
 
       if (outcome == Outcome::search_history) {
-        emit historyRequested();
+        historyRequested();
         return true;
       }
     } catch (const std::exception& error) {
       // A command the shell cannot receive (controls, size) stays in the editor.
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
 
     if (session.takeClipboardWrite()) {
@@ -117,11 +109,11 @@ namespace telar::gui::qt {
 
     publish(pane_id);
     if (session.takeBlockChange()) {
-      emit blockChanged(pane_id);
+      blockChanged(pane_id);
     }
 
     if (application::terminal::copy_mode::takeSearchRequest(session)) {
-      emit searchRequested();
+      searchRequested();
     }
 
     return true;
@@ -146,7 +138,7 @@ namespace telar::gui::qt {
 
   void PromptController::publish(qulonglong pane_id) {
     refresh(pane_id);
-    emit lineChanged(pane_id);
+    lineChanged(pane_id);
   }
 
   void PromptController::publishWrite() {

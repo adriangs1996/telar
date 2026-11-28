@@ -1,37 +1,14 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal.history.layout;
 
-#include "history_inspection_layout.hpp"
-#include "ui/kit/input/scroll_event.hpp"
-#include <QByteArray>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QString>
-#include <QVariantMap>
-#include <QWheelEvent>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <initializer_list>
-#include <limits>
-#include <optional>
-#include <span>
-#include <string_view>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.input;
 import telar.gui.application;
 import telar.base.ds;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
+
   namespace {
 
     std::string_view bytes(const QByteArray& text) noexcept {
@@ -63,17 +40,17 @@ namespace telar::gui::qt {
       return;
     }
 
-    const auto identity_changed = input_.value(QStringLiteral("identity")) != input.value(QStringLiteral("identity"));
+    const auto identity_changed = input_.value(u"identity"_s) != input.value(u"identity"_s);
 
     input_ = input;
-    choice_ = {.index = static_cast<std::size_t>(input_.value(QStringLiteral("selection")).toULongLong()), .revision = input_.value(QStringLiteral("revision")).toULongLong()};
-    pane_open_ = input_.value(QStringLiteral("paneOpen")).toBool();
-    ready_ = input_.value(QStringLiteral("ready")).toBool();
+    choice_ = {.index = static_cast<std::size_t>(input_.value(u"selection"_s).toULongLong()), .revision = input_.value(u"revision"_s).toULongLong()};
+    pane_open_ = input_.value(u"paneOpen"_s).toBool();
+    ready_ = input_.value(u"ready"_s).toBool();
     if (identity_changed) {
       setScroll(0);
     }
 
-    emit inputChanged();
+    inputChanged();
     polish();
   }
 
@@ -84,7 +61,7 @@ namespace telar::gui::qt {
   void HistoryInspectionLayout::setAdvances(const QVariantList& advances) {
     if (advances_ != advances) {
       advances_ = advances;
-      emit advancesChanged();
+      advancesChanged();
       polish();
     }
   }
@@ -101,7 +78,7 @@ namespace telar::gui::qt {
     const auto next = std::max(0, scroll);
     if (scroll_ != next) {
       scroll_ = next;
-      emit scrollChanged();
+      scrollChanged();
       polish();
     }
   }
@@ -124,8 +101,8 @@ namespace telar::gui::qt {
     ChromeMetrics chrome;
 
     chrome.ratio = static_cast<float>(ratio * density_);
-    chrome.body = pixels(QStringLiteral("bodyPixels"));
-    chrome.small = pixels(QStringLiteral("smallPixels"));
+    chrome.body = pixels(u"bodyPixels"_s);
+    chrome.small = pixels(u"smallPixels"_s);
 
     return chrome;
   }
@@ -134,24 +111,24 @@ namespace telar::gui::qt {
     const auto row = geometry.row(index);
 
     return {
-        {QStringLiteral("command"), line.kind == application::history::HistoryInspectionLine::Kind::command},
-        {QStringLiteral("fact"), line.kind == application::history::HistoryInspectionLine::Kind::fact},
-        {QStringLiteral("heading"), line.kind == application::history::HistoryInspectionLine::Kind::heading},
-        {QStringLiteral("text"), string(line.text)},
-        {QStringLiteral("label"), string(line.label)},
-        {QStringLiteral("color"), QString::fromLatin1(palette_names[static_cast<std::size_t>(line.color)])},
-        {QStringLiteral("mono"), line.mono},
-        {QStringLiteral("bounds"), logical(row)},
-        {QStringLiteral("textBounds"), logical(geometry.text(row, line.kind))},
-        {QStringLiteral("labelWidth"), static_cast<qreal>(geometry.label_width) / density_},
+        {u"command"_s, line.kind == application::history::HistoryInspectionLine::Kind::command},
+        {u"fact"_s, line.kind == application::history::HistoryInspectionLine::Kind::fact},
+        {u"heading"_s, line.kind == application::history::HistoryInspectionLine::Kind::heading},
+        {u"text"_s, string(line.text)},
+        {u"label"_s, string(line.label)},
+        {u"color"_s, QString::fromLatin1(palette_names[static_cast<std::size_t>(line.color)])},
+        {u"mono"_s, line.mono},
+        {u"bounds"_s, logical(row)},
+        {u"textBounds"_s, logical(geometry.text(row, line.kind))},
+        {u"labelWidth"_s, static_cast<qreal>(geometry.label_width) / density_},
     };
   }
 
   QVariantMap HistoryInspectionLayout::prepareContent(const application::history::HistoryInspectionGeometry& geometry) {
-    const auto command = input_.value(QStringLiteral("command")).toString().toUtf8();
-    const auto output = input_.value(QStringLiteral("output")).toString().toUtf8();
-    const auto heading = input_.value(QStringLiteral("heading")).toString().toUtf8();
-    const auto records = input_.value(QStringLiteral("facts")).toList();
+    const auto command = input_.value(u"command"_s).toString().toUtf8();
+    const auto output = input_.value(u"output"_s).toString().toUtf8();
+    const auto heading = input_.value(u"heading"_s).toString().toUtf8();
+    const auto records = input_.value(u"facts"_s).toList();
     ds::Array<QByteArray, application::history::HistoryInspectionFacts::count> texts;
     ds::Array<QByteArray, application::history::HistoryInspectionFacts::count> labels;
     ds::Array<application::history::HistoryInspectionLine, application::history::HistoryInspectionFacts::count> facts;
@@ -162,14 +139,14 @@ namespace telar::gui::qt {
     for (std::size_t index = 0; index < fact_count; ++index) {
       const auto record = records[static_cast<qsizetype>(index)].toMap();
 
-      texts.atMut(index) = record.value(QStringLiteral("text")).toString().toUtf8();
-      labels.atMut(index) = record.value(QStringLiteral("label")).toString().toUtf8();
+      texts.atMut(index) = record.value(u"text"_s).toString().toUtf8();
+      labels.atMut(index) = record.value(u"label"_s).toString().toUtf8();
     }
 
     for (std::size_t index = 0; index < fact_count; ++index) {
       const auto record = records[static_cast<qsizetype>(index)].toMap();
 
-      facts.atMut(index) = {.kind = application::history::HistoryInspectionLine::Kind::fact, .text = bytes(texts[index]), .label = bytes(labels[index]), .color = color(record.value(QStringLiteral("color")).toString()), .mono = record.value(QStringLiteral("mono")).toBool()};
+      facts.atMut(index) = {.kind = application::history::HistoryInspectionLine::Kind::fact, .text = bytes(texts[index]), .label = bytes(labels[index]), .color = color(record.value(u"color"_s).toString()), .mono = record.value(u"mono"_s).toBool()};
     }
 
     application::history::HistoryInspectionLines lines{{.command = bytes(command), .facts = std::span{facts}.first(fact_count), .heading = bytes(heading), .output = bytes(output)}, geometry.columns};
@@ -178,7 +155,7 @@ namespace telar::gui::qt {
     const auto next_scroll = std::min(scroll_, maximum_scroll);
     if (next_scroll != scroll_) {
       scroll_ = next_scroll;
-      emit scrollChanged();
+      scrollChanged();
     }
 
     for (int skipped = 0; skipped < scroll_; ++skipped) {
@@ -197,10 +174,10 @@ namespace telar::gui::qt {
     }
 
     return {
-        {QStringLiteral("content"), logical(geometry.content)},
-        {QStringLiteral("lines"), visible},
-        {QStringLiteral("lineCount"), total},
-        {QStringLiteral("maximumScroll"), maximum_scroll},
+        {u"content"_s, logical(geometry.content)},
+        {u"lines"_s, visible},
+        {u"lineCount"_s, total},
+        {u"maximumScroll"_s, maximum_scroll},
     };
   }
 
@@ -245,21 +222,21 @@ namespace telar::gui::qt {
   }
 
   void HistoryInspectionLayout::updatePolish() {
-    const auto ratio = input_.value(QStringLiteral("ratio"), 1).toDouble();
+    const auto ratio = input_.value(u"ratio"_s, 1).toDouble();
     if (!std::isfinite(ratio) || ratio <= 0) {
       return;
     }
 
     density_ = window() == nullptr ? 1 : window()->effectiveDevicePixelRatio();
     const auto chrome = metrics(ratio);
-    const auto geometry = application::history::HistoryInspectionGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, chrome, {.x = physical(input_.value(QStringLiteral("cellWidth"))), .y = physical(input_.value(QStringLiteral("cellHeight")))});
+    const auto geometry = application::history::HistoryInspectionGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, chrome, {.x = physical(input_.value(u"cellWidth"_s)), .y = physical(input_.value(u"cellHeight"_s))});
 
     layout_ = prepareContent(geometry);
-    layout_.insert(QStringLiteral("buttons"), prepareButtons(geometry, chrome));
-    layout_.insert(QStringLiteral("buttonRadius"), static_cast<double>(application::history::HistoryInspectionGeometry::button_radius) * ratio);
-    layout_.insert(QStringLiteral("disabledAlpha"), application::history::HistoryInspectionGeometry::disabled_alpha);
-    layout_.insert(QStringLiteral("pressedAlpha"), application::history::HistoryInspectionGeometry::pressed_alpha);
-    emit layoutChanged();
+    layout_.insert(u"buttons"_s, prepareButtons(geometry, chrome));
+    layout_.insert(u"buttonRadius"_s, static_cast<double>(application::history::HistoryInspectionGeometry::button_radius) * ratio);
+    layout_.insert(u"disabledAlpha"_s, application::history::HistoryInspectionGeometry::disabled_alpha);
+    layout_.insert(u"pressedAlpha"_s, application::history::HistoryInspectionGeometry::pressed_alpha);
+    layoutChanged();
   }
 
   void HistoryInspectionLayout::componentComplete() {
@@ -280,8 +257,8 @@ namespace telar::gui::qt {
   }
 
   void HistoryInspectionLayout::wheelEvent(QWheelEvent* event) {
-    if (input_.value(QStringLiteral("interactive")).toBool()) {
-      const auto lines = wheel_.consume(scrollSample(*event, input_.value(QStringLiteral("cellHeight")).toDouble()));
+    if (input_.value(u"interactive"_s).toBool()) {
+      const auto lines = wheel_.consume(scrollSample(*event, input_.value(u"cellHeight"_s).toDouble()));
 
       setScroll(scroll_ + lines);
     }

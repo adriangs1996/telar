@@ -71,13 +71,29 @@ if(TELAR_GUI_NATIVE)
   find_package(Qt6GuiPrivate ${TELAR_QT_VERSION} EXACT REQUIRED CONFIG
     PATHS "${TELAR_GUI_QT_PREFIX}/lib/cmake/Qt6GuiPrivate" NO_DEFAULT_PATH)
   qt_standard_project_setup(REQUIRES 6.7)
-  add_library(gui-surface-command STATIC ui/kit/process/surface_command.cpp)
-  target_link_libraries(gui-surface-command PUBLIC gui-foundation-core gui-foundation-system gui-posix gui-platform telar::base Qt6::Core)
+  set(CMAKE_AUTOMOC OFF)
+  set(CMAKE_AUTOUIC OFF)
+  include(cmake/qt_modules.cmake)
+  add_subdirectory(qt)
+
+  add_library(gui-surface-command STATIC ui/kit/process/surface_command/surface_command.cpp)
+  target_sources(gui-surface-command PUBLIC FILE_SET CXX_MODULES BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/ui"
+    FILES ui/kit/process/surface_command/surface_command.cppm)
+  target_link_libraries(gui-surface-command PUBLIC gui-foundation-core gui-foundation-system gui-posix gui-platform gui-qt telar::base Qt6::Core)
   set_target_properties(gui-surface-command PROPERTIES POSITION_INDEPENDENT_CODE ON)
   add_dependencies(gui-surface-command telar-gui-command)
 
-  add_library(gui-machine-profiles STATIC ui/app/overlays/machine_prompt/machine_profiles_source.cpp ui/app/overlays/machine_prompt/machine_profiles_source.hpp)
-  target_link_libraries(gui-machine-profiles PUBLIC gui-foundation-core gui-foundation-system gui-posix gui-platform gui-application telar::base Qt6::Concurrent)
+  add_library(gui-machine-profiles-modules STATIC)
+  target_sources(gui-machine-profiles-modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/ui"
+    FILES ui/app/overlays/machine_prompt/machine_profiles_source/machine_profiles_source.cppm)
+  target_link_libraries(gui-machine-profiles-modules PUBLIC gui-foundation-core gui-foundation-system gui-posix gui-platform gui-application gui-qt telar::base Qt6::Concurrent)
+  telar_enable_qt_plugin(gui-machine-profiles-modules PRIVATE)
+  set_target_properties(gui-machine-profiles-modules PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+  add_library(gui-machine-profiles STATIC ui/app/overlays/machine_prompt/machine_profiles_source/machine_profiles_source.cpp)
+  target_link_libraries(gui-machine-profiles PUBLIC gui-machine-profiles-modules)
+  telar_add_qt_moc(gui-machine-profiles MODULES_TARGET gui-machine-profiles-modules
+    SOURCES ui/app/overlays/machine_prompt/machine_profiles_source/machine_profiles_source.cppm)
   set_target_properties(gui-machine-profiles PROPERTIES POSITION_INDEPENDENT_CODE ON)
   if(Qt6_VERSION VERSION_GREATER_EQUAL 6.8)
     qt_policy(SET QTP0004 NEW)
@@ -85,7 +101,9 @@ if(TELAR_GUI_NATIVE)
 
   # The platform domain's native window, fonts and clipboard images, on Qt.
   add_library(gui-platform-native STATIC foundation/system/system-host_name.cpp)
-  target_link_libraries(gui-platform-native PUBLIC gui-foundation-core gui-foundation-system gui-foundation-fonts gui-platform gui-posix telar::base telar::platform telar::tbc Qt6::Gui PRIVATE Qt6::Quick)
+  target_sources(gui-platform-native PUBLIC FILE_SET CXX_MODULES BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/ui"
+    FILES ui/kit/scene/optical_text/optical_text.cppm)
+  target_link_libraries(gui-platform-native PUBLIC gui-foundation-core gui-foundation-system gui-foundation-fonts gui-platform gui-posix gui-qt telar::base telar::platform telar::tbc Qt6::Gui PRIVATE Qt6::Quick)
   set_target_properties(gui-platform-native PROPERTIES POSITION_INDEPENDENT_CODE ON)
   if(APPLE)
     if(NOT DEFINED CMAKE_OBJCXX_COMPILER AND "$ENV{OBJCXX}" STREQUAL "" AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -104,7 +122,7 @@ if(TELAR_GUI_NATIVE)
     check_objcxx_compiler_flag(-fno-objc-msgsend-class-selector-stubs TELAR_GUI_HAS_OBJC_CLASS_STUB_CONTROL)
     target_sources(gui-platform-native PRIVATE platform/macos/window.mm platform/macos/blur_symbols.m platform/macos/text_input.mm platform/macos/scroll_event.mm platform/macos/scroll_event.cpp platform/macos/clipboard_image_source.mm platform/macos/clipboard_image_source.cpp)
     target_sources(gui-platform-native PRIVATE platform/macos/font.mm platform/macos/glyph_rasterizer.mm foundation/fonts/fonts-glyph_rasterizer.cpp)
-    target_sources(gui-platform-native PRIVATE platform/macos/optical_text.cpp)
+    target_sources(gui-platform-native PRIVATE ui/kit/scene/optical_text/macos/optical_text.cpp)
     target_sources(gui-platform-native PRIVATE platform/macos/file_drag.mm platform/macos/file_drag.cpp)
     target_link_libraries(gui-platform-native PRIVATE Qt6::GuiPrivate)
     target_compile_options(gui-platform-native PRIVATE "$<$<COMPILE_LANGUAGE:OBJC,OBJCXX>:-fobjc-arc>")
@@ -146,36 +164,60 @@ if(TELAR_GUI_NATIVE)
     target_link_libraries(gui-platform-native PRIVATE Fontconfig::Fontconfig)
     target_sources(gui-platform-native PRIVATE platform/linux/font.c)
     target_sources(gui-platform-native PRIVATE platform/linux/window.cpp platform/linux/clipboard_image_source.cpp platform/linux/clipboard_image_monitor.cpp platform/linux/xcb_clipboard_image_monitor.cpp platform/linux/wayland_clipboard_image_monitor.cpp)
-    target_sources(gui-platform-native PRIVATE ui/kit/scene/optical_text_fallback.cpp)
+    target_sources(gui-platform-native PRIVATE ui/kit/scene/optical_text/linux/optical_text_fallback.cpp)
   else()
     message(FATAL_ERROR "The GUI supports macOS and Linux")
   endif()
 
-  add_library(gui-keyboard STATIC ui/kit/input/terminal_input.cpp)
+  add_library(gui-keyboard STATIC ui/kit/input/terminal_input/terminal_input.cpp)
+  target_sources(gui-keyboard PUBLIC FILE_SET CXX_MODULES BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/ui"
+    FILES ui/kit/input/terminal_input/terminal_input.cppm)
   # It imports no domain; the lowest, gui-foundation-core, gives it the GUI's settings.
-  target_link_libraries(gui-keyboard PUBLIC gui-foundation-core telar::base telar::wire Qt6::Gui)
+  target_link_libraries(gui-keyboard PUBLIC gui-foundation-core gui-qt telar::base telar::wire Qt6::Gui)
   set_target_properties(gui-keyboard PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-  add_library(gui-clipboard-images STATIC ui/app/panes/attachments/attachment_preview.cpp ui/app/panes/attachments/attachment_preview.hpp ui/app/panes/attachments/clipboard_images.cpp ui/app/panes/attachments/clipboard_images.hpp)
-  target_link_libraries(gui-clipboard-images PUBLIC gui-foundation-core gui-platform gui-platform-native gui-application telar::base telar::platform telar::tbc Qt6::Concurrent)
+  add_library(gui-clipboard-images-modules STATIC)
+  target_sources(gui-clipboard-images-modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/ui"
+    FILES
+      ui/app/panes/attachments/clipboard/clipboard.cppm
+      ui/app/panes/attachments/clipboard/clipboard-attachment_preview.cppm
+      ui/app/panes/attachments/clipboard/clipboard-clipboard_images.cppm)
+  target_link_libraries(gui-clipboard-images-modules PUBLIC gui-foundation-core gui-platform gui-platform-native gui-application gui-qt gui-qt-platform telar::base telar::platform telar::tbc Qt6::Concurrent)
+  telar_enable_qt_plugin(gui-clipboard-images-modules PRIVATE)
+  set_target_properties(gui-clipboard-images-modules PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+  add_library(gui-clipboard-images STATIC ui/app/panes/attachments/clipboard/attachment_preview.cpp ui/app/panes/attachments/clipboard/clipboard_images.cpp)
+  target_link_libraries(gui-clipboard-images PUBLIC gui-clipboard-images-modules)
+  telar_add_qt_moc(gui-clipboard-images MODULES_TARGET gui-clipboard-images-modules
+    SOURCES ui/app/panes/attachments/clipboard/clipboard-clipboard_images.cppm)
   set_target_properties(gui-clipboard-images PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
   set(gui_quick_module_targets
     gui-foundation-core gui-foundation-system gui-foundation-text
     gui-foundation-terminal gui-foundation-fonts gui-foundation-actions gui-foundation-keys gui-foundation-model
     gui-foundation-agents gui-foundation-drawing gui-foundation-forms gui-foundation-icons
-    gui-platform gui-application
+    gui-platform gui-application gui-qt gui-qt-private gui-qt-platform
     telar::base telar::wire telar::platform telar::tbc)
+
+  file(GLOB_RECURSE gui_quick_interfaces CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/ui/*.cppm")
+  list(FILTER gui_quick_interfaces EXCLUDE REGEX "/(tests|tools|surface_command|terminal_input|machine_profiles_source|clipboard|optical_text)/")
+  list(SORT gui_quick_interfaces)
+
+  add_library(gui-quick-modules STATIC)
+  set_target_properties(gui-quick-modules PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  target_sources(gui-quick-modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/ui" FILES ${gui_quick_interfaces})
+  target_link_libraries(gui-quick-modules PUBLIC ${gui_quick_module_targets}
+    gui-clipboard-images gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles gui-surface-command
+    Qt6::Quick Qt6::QuickControls2 Qt6::Network Qt6::Concurrent Qt6::Svg
+    PRIVATE Qt6::GuiPrivate)
+  telar_enable_qt_plugin(gui-quick-modules PRIVATE)
 
   qt_add_library(gui-quick STATIC)
   set_target_properties(gui-quick PROPERTIES POSITION_INDEPENDENT_CODE ON)
   target_link_libraries(gui-quick PRIVATE Qt6::GuiPrivate)
-  target_link_libraries(gui-quick PUBLIC gui-clipboard-images)
-  set_source_files_properties(ui/app/panes/attachments/attachment_preview.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+  target_link_libraries(gui-quick PUBLIC gui-quick-modules)
+  set_source_files_properties(ui/app/panes/attachments/clipboard/attachment_preview.cpp PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
 
-  target_link_libraries(gui-quick PUBLIC ${gui_quick_module_targets}
-    gui-platform-native gui-keyboard gui-fonts-native gui-machine-profiles
-    Qt6::Quick Qt6::QuickControls2 Qt6::Network Qt6::Concurrent)
   # Qt adapters import C++23 modules that import `std`; Clang does not merge stdlib types
   # such as std::string_view across a precompiled header (-include-pch) and the `std` BMI,
   # so gui-quick compiles without a precompiled header.
@@ -188,10 +230,9 @@ if(TELAR_GUI_NATIVE)
 
     # The header is included where the link host is chosen, not before every source: a module
     # unit must start with its module declaration.
-    target_compile_definitions(gui-quick PUBLIC TELAR_GUI_CUSTOM_LINK_HOST=1 "TELAR_GUI_LINK_HOST_HEADER=\"${gui_link_host_header}\"")
+    target_compile_definitions(gui-quick-modules PUBLIC TELAR_GUI_CUSTOM_LINK_HOST=1 "TELAR_GUI_LINK_HOST_HEADER=\"${gui_link_host_header}\"")
   endif()
 
-  target_link_libraries(gui-quick PRIVATE gui-surface-command Qt6::Svg)
   add_custom_target(gui-editor-ui
     COMMAND Python3::Interpreter "${CMAKE_CURRENT_SOURCE_DIR}/tools/create_editor_database.py" --build-dir "${CMAKE_BINARY_DIR}"
     DEPENDS tools/create_editor_database.py
@@ -232,7 +273,26 @@ if(TELAR_GUI_NATIVE)
     URI Telar.Gui
     VERSION 1.0
     OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Telar/Gui"
+    NO_GENERATE_QMLTYPES
+    NO_PLUGIN
+    TYPEINFO gui-quick.qmltypes
     QML_FILES ${gui_quick_qml_files})
+
+  telar_add_qt_moc(gui-quick
+    MODULES_TARGET gui-quick-modules
+    SOURCES ${gui_quick_interfaces}
+    QML_URI Telar.Gui
+    QML_MAJOR 1
+    QML_MINOR 0
+    QML_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/Telar/Gui"
+    QML_TYPEINFO gui-quick.qmltypes)
+
+  add_library(gui-quick-init OBJECT qt/gui_quick_init.cpp)
+  target_link_libraries(gui-quick-init PRIVATE Qt6::Core)
+  set_target_properties(gui-quick-init PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  add_library(gui-quickplugin INTERFACE)
+  target_sources(gui-quickplugin INTERFACE $<TARGET_OBJECTS:gui-quick-init>)
+  target_link_libraries(gui-quickplugin INTERFACE gui-quick)
 
   qt_add_executable(telar-gui main.cpp)
   set_target_properties(telar-gui PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -327,45 +387,16 @@ function(telar_gui_batch_sources target batch_size)
   list(REMOVE_DUPLICATES kept)
   set_target_properties(${target} PROPERTIES SOURCES "${kept}")
 endfunction()
-if(TARGET gui-quick AND TELAR_GUI_BATCH_SIZE GREATER 0)
-  telar_gui_batch_sources(gui-quick ${TELAR_GUI_BATCH_SIZE})
-endif()
-
-# moc includes the textual QObject headers, which import domain modules. Their
-# generated translation units must participate in the same native dependency scan.
-# telar_gui_scan_moc_imports() does so for the targets of the calling directory.
-function(telar_gui_scan_moc_imports)
-  get_property(gui_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
-  foreach(gui_target IN LISTS gui_targets)
-    get_target_property(gui_automoc ${gui_target} AUTOMOC)
-    if(gui_automoc)
-      get_target_property(gui_autogen_directory ${gui_target} AUTOGEN_BUILD_DIR)
-      if(NOT gui_autogen_directory)
-        set(gui_autogen_directory "${CMAKE_CURRENT_BINARY_DIR}/${gui_target}_autogen")
-      endif()
-      # CMake deliberately disables scanning on its synthetic moc source. A
-      # separate ordinary generated unit lets the scanner discover header imports.
-      set_source_files_properties("${gui_autogen_directory}/mocs_compilation.cpp"
-        PROPERTIES HEADER_FILE_ONLY ON)
-      set(gui_moc_imports "${CMAKE_CURRENT_BINARY_DIR}/${gui_target}_moc_imports.cpp")
-      file(GENERATE OUTPUT "${gui_moc_imports}"
-        CONTENT "#include \"${gui_autogen_directory}/mocs_compilation.cpp\"\n")
-      set_source_files_properties("${gui_moc_imports}" PROPERTIES GENERATED TRUE CXX_SCAN_FOR_MODULES ON SKIP_AUTOMOC ON)
-      target_sources(${gui_target} PRIVATE "${gui_moc_imports}")
-    endif()
-  endforeach()
-endfunction()
-
 if(BUILD_TESTING)
   add_subdirectory(tests)
 endif()
-telar_gui_scan_moc_imports()
 
 # The quality checks cover the GUI's libraries and programs; the tests register themselves.
 telar_register_checks(gui-posix CHECKS ${TELAR_CHECKS})
 if(TELAR_GUI_NATIVE)
-  telar_register_checks(gui-fonts-native gui-surface-command gui-machine-profiles gui-platform-native gui-keyboard
-    gui-clipboard-images gui-quick telar-gui CHECKS ${TELAR_CHECKS})
+  telar_register_checks(gui-fonts-native gui-surface-command gui-machine-profiles-modules gui-machine-profiles
+    gui-platform-native gui-keyboard gui-clipboard-images-modules gui-clipboard-images
+    gui-quick-modules gui-quick telar-gui CHECKS ${TELAR_CHECKS})
   if(APPLE)
     telar_register_checks(telar-gui-launcher CHECKS ${TELAR_CHECKS})
   endif()

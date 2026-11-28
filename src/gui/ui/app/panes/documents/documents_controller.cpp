@@ -1,10 +1,6 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.documents;
 
-#include "documents_controller.hpp"
-#include <QLatin1StringView>
+import telar.gui.qt;
 
 namespace telar::gui::qt {
 
@@ -53,19 +49,19 @@ namespace telar::gui::qt {
       return false;
     }
 
-    emit scrollRequested(pane_id, QString::fromLatin1(action));
+    scrollRequested(pane_id, QString::fromLatin1(action));
     return true;
   }
 
   void DocumentsController::measure(const QString& pane_id, qulonglong id, int rows) {
     const auto pane = pane_id.toULongLong();
     if (rows > 0 && store_.sessionMut().measureInline({.pane_id = pane, .id = id}, static_cast<std::uint32_t>(rows))) {
-      emit measured(pane);
+      measured(pane);
     }
   }
 
   void DocumentsController::publish(std::uint64_t pane_id) {
-    emit changed(pane_id);
+    changed(pane_id);
   }
 
 }

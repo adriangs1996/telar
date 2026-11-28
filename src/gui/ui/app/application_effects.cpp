@@ -1,10 +1,4 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
-
-#include "application_effects.hpp"
-#include "application_controller.hpp"
+module telar.gui.ui.app;
 
 import std;
 import telar.gui.foundation.system;

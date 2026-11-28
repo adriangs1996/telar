@@ -1,30 +1,7 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.scene;
 
-#include "rounded_rectangle_scene.hpp"
-#include <QColor>
-#include <QMatrix4x4>
-#include <QPaintDevice>
-#include <QPainter>
-#include <QPointF>
-#include <QQuickWindow>
-#include <QRect>
-#include <QRectF>
-#include <QRegion>
-#include <QSGNode>
-#include <QSGRenderNode>
-#include <QSGRendererInterface>
-#include <QTransform>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <functional>
-#include <memory>
-#include <utility>
-
+import std;
+import telar.gui.qt;
 import telar.gui.foundation.core;
 
 namespace telar::gui::qt {

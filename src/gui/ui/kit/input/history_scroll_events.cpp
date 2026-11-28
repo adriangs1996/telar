@@ -1,5 +1,6 @@
-#include "history_scroll_events.hpp"
-#include <QCoreApplication>
+module telar.gui.ui.kit.input;
+
+import telar.gui.qt;
 
 namespace telar::gui::qt {
 

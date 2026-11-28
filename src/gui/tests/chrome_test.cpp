@@ -2,20 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "frame_fixture.hpp"
-#include "qml_fixture.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/app/chrome/metrics_projection.hpp"
-#include "ui/app/chrome/sidebar_projection.hpp"
-#include "ui/app/chrome/tabs/tab_strip_layout.hpp"
-#include "ui/design/controls/provider_artwork.hpp"
-#include "ui/design/controls/provider_mark.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/fonts/typography_projection.hpp"
-#include "ui/kit/models/list_model.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "ui/kit/scene/window_animation_clock.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QCoreApplication>
@@ -67,6 +53,18 @@ import telar.gui.features.status_bar;
 import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.gui.ui.app;
+import telar.gui.ui.app.chrome;
+import telar.gui.ui.app.chrome.tabs;
+import telar.gui.ui.design.controls;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.scene;
+import telar.gui.tests.frame_fixture;
+import telar.gui.tests.qml_fixture;
+import telar.base.memory.allocators;
+import telar.gui.foundation.model;
+import telar.gui.qt;
 
 namespace {
 
@@ -235,16 +233,22 @@ namespace {
     return QStringLiteral("topbarBackground");
   }
 
-  class ChromeTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] ChromeTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void initTestCase() {
+  private:
+    [[qt::slot]] static void initTestCase() {
       bundledFonts();
     }
 
     // The prompt editor highlights shell syntax with the theme's syntax roles.
-    Q_SLOT static void syntaxColorsReachQml() {
+    [[qt::slot]] static void syntaxColorsReachQml() {
       Configuration configuration;
       const auto keyword = QStringLiteral("syntax_keyword");
       constexpr CellColor keyword_color{.kind = CellColor::Kind::rgb, .channels = {0x95, 0xa7, 0xba}};
@@ -254,7 +258,7 @@ namespace {
       QCOMPARE(themeColors(configuration).value(keyword).value<QColor>(), QColor(keyword_color.channels[0], keyword_color.channels[1], keyword_color.channels[2]));
     }
 
-    Q_SLOT static void chromeBandsKeepThemeRelativeSurfacesAndWindowTransparency() {
+    [[qt::slot]] static void chromeBandsKeepThemeRelativeSurfacesAndWindowTransparency() {
       QQuickWindow window;
       QQmlEngine engine;
       ListModel tabs;
@@ -333,7 +337,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void attachmentOverlaysKeepCoveringPanelColors() {
+    [[qt::slot]] static void attachmentOverlaysKeepCoveringPanelColors() {
       QTemporaryFile configuration;
 
       QVERIFY(configuration.open());
@@ -377,7 +381,7 @@ namespace {
       QCOMPARE(actual, expected);
     }
 
-    Q_SLOT static void tabsLiveInNavigationRatherThanConfiguredBottomSlots() {
+    [[qt::slot]] static void tabsLiveInNavigationRatherThanConfiguredBottomSlots() {
       QQuickWindow window;
       QQmlEngine engine;
       ListModel tabs;
@@ -418,7 +422,7 @@ namespace {
       QVERIFY(bottom->findChild<TabStripLayout*>() == nullptr);
     }
 
-    Q_SLOT static void selectedTabEmphasisDoesNotMoveAdjacentTabs() {
+    [[qt::slot]] static void selectedTabEmphasisDoesNotMoveAdjacentTabs() {
       QQuickWindow window;
       QQmlEngine engine;
       ListModel tabs;
@@ -445,7 +449,7 @@ namespace {
       QCOMPARE(tabBounds(*layout->items(), 1), before[1]);
     }
 
-    Q_SLOT static void machineWorkspacesAndTabsReadInThatOrderInBothSidebarModes() {
+    [[qt::slot]] static void machineWorkspacesAndTabsReadInThatOrderInBothSidebarModes() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController application{memory};
@@ -527,7 +531,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void tabsShareOneWellAndOneSelectionCapsule() {
+    [[qt::slot]] static void tabsShareOneWellAndOneSelectionCapsule() {
       QQuickWindow window;
       QQmlEngine engine;
       ListModel tabs;
@@ -566,7 +570,7 @@ namespace {
     }
 
     // NOLINTNEXTLINE(readability-identifier-naming): Qt requires the _data suffix.
-    Q_SLOT static void tabWellFitsNarrowAndScaledStrips_data() {
+    [[qt::slot]] static void tabWellFitsNarrowAndScaledStrips_data() {
       constexpr int narrow_width = 48;
       constexpr int overflow_width = 120;
       constexpr int fractional_width = 180;
@@ -581,7 +585,7 @@ namespace {
       QTest::newRow("double") << double_width << qreal{2};
     }
 
-    Q_SLOT static void tabWellFitsNarrowAndScaledStrips() {
+    [[qt::slot]] static void tabWellFitsNarrowAndScaledStrips() {
       QFETCH(const int, width);
       QFETCH(const qreal, ratio);
       QQuickWindow window;
@@ -621,7 +625,7 @@ namespace {
       QVERIFY(selection.left() >= 0 && selection.right() <= width);
     }
 
-    Q_SLOT static void uncoveredLabelsKeepDimensions() {
+    [[qt::slot]] static void uncoveredLabelsKeepDimensions() {
       QQmlEngine engine;
       const ChromeMetrics chrome;
       const QVariantMap properties{{QStringLiteral("pixelSize"), chrome.body}, {QStringLiteral("text"), QStringLiteral("\u4e2d")}};
@@ -631,7 +635,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(label->implicitHeight() > 0, fixture_wait_ms);
     }
 
-    Q_SLOT static void expandedSidebarNeedsNoApplicationController() {
+    [[qt::slot]] static void expandedSidebarNeedsNoApplicationController() {
       QQmlEngine engine;
       ListModel workspaces;
       ListModel agents;
@@ -651,7 +655,7 @@ namespace {
       QCOMPARE(activity->size(), expected_size);
     }
 
-    Q_SLOT static void physicalSidebarRowsNeedNoApplicationController() {
+    [[qt::slot]] static void physicalSidebarRowsNeedNoApplicationController() {
       QQmlEngine engine;
       ListModel workspaces;
       ListModel agents;
@@ -690,7 +694,7 @@ namespace {
       QVERIFY(sidebar->findChild<QQuickItem*>(QStringLiteral("workspaceList")) == nullptr);
     }
 
-    Q_SLOT static void applicationMarksNeedNoApplicationController() {
+    [[qt::slot]] static void applicationMarksNeedNoApplicationController() {
       QQuickWindow window;
       QQmlEngine engine;
       const ChromeMetrics chrome;
@@ -787,7 +791,7 @@ namespace {
       QCOMPARE(ProviderArtwork::telar(mark_side, true, static_cast<int>(ThemeName::catppuccin)), ProviderArtwork::telar(mark_side, true));
     }
 
-    Q_SLOT static void ancestorMotionKeepsProviderInkOnPhysicalPixels() {
+    [[qt::slot]] static void ancestorMotionKeepsProviderInkOnPhysicalPixels() {
       QQuickWindow window;
       QQuickItem holder{window.contentItem()};
       QQuickItem ancestor{window.contentItem()};
@@ -823,7 +827,7 @@ namespace {
       ancestor.setParentItem(window.contentItem());
     }
 
-    Q_SLOT static void tabCaptionsUseOnlyAnEligibleFocusedAgent() {
+    [[qt::slot]] static void tabCaptionsUseOnlyAnEligibleFocusedAgent() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::Memory& memory = adapter;
@@ -860,7 +864,7 @@ namespace {
       QCOMPARE(tabRecord(tab, &pane, telar::ds::Array<const application::Pane<telar::Memory>*, 1>{&pane}, std::span<const Agent<telar::Memory>>{agents}, true).value(QStringLiteral("label")).toString(), QStringLiteral("Review ⛶"));
     }
 
-    Q_SLOT static void unloadedTabsShowTheirListedPanes() {
+    [[qt::slot]] static void unloadedTabsShowTheirListedPanes() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::Memory& memory = adapter;
@@ -890,7 +894,7 @@ namespace {
       QVERIFY(tabRecord(tab, static_cast<const application::Pane<telar::Memory>*>(nullptr), std::span<const application::Pane<telar::Memory>* const>{}, std::span<const Agent<telar::Memory>>{agents}, false).value(QStringLiteral("cards")).toList().isEmpty());
     }
 
-    Q_SLOT static void transitioningTabsUseAnAlreadyScheduledFrame() {
+    [[qt::slot]] static void transitioningTabsUseAnAlreadyScheduledFrame() {
       QQuickWindow window;
       ListModel tabs;
       QList<QVariantMap> rows;
@@ -939,7 +943,7 @@ namespace {
       QCOMPARE(samples.size(), 0);
     }
 
-    Q_SLOT static void selectionCapsuleAnimatesAndResetsWithItsWorkspace() {
+    [[qt::slot]] static void selectionCapsuleAnimatesAndResetsWithItsWorkspace() {
       QQuickWindow window;
       ListModel tabs;
       QList<QVariantMap> rows;
@@ -987,7 +991,7 @@ namespace {
       QVERIFY(!layout.transitioning());
     }
 
-    Q_SLOT static void tabsUseTheirNaturalWidthsWhenTheyFit() {
+    [[qt::slot]] static void tabsUseTheirNaturalWidthsWhenTheyFit() {
       using Geometry = TabStripGeometry;
       const auto metrics = Geometry::Metrics::scaled(1);
       const telar::ds::Array sizes{
@@ -1011,7 +1015,7 @@ namespace {
       QCOMPARE(single.fits[0], Geometry::Fit::truncated);
     }
 
-    Q_SLOT static void tabsKeepTheirCaptionsBeforeAnyTabCollapses() {
+    [[qt::slot]] static void tabsKeepTheirCaptionsBeforeAnyTabCollapses() {
       using Geometry = TabStripGeometry;
       const auto metrics = Geometry::Metrics::scaled(1);
       telar::ds::Array<Geometry::Measure, 3> sizes;
@@ -1035,7 +1039,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void restoredAndSwitchedWorkspacesExpandTabsWithoutPointerMovement() {
+    [[qt::slot]] static void restoredAndSwitchedWorkspacesExpandTabsWithoutPointerMovement() {
       QQuickWindow window;
       ListModel tabs;
       TabStripLayout layout{window.contentItem()};
@@ -1087,7 +1091,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void tabsPackAndKeepTheirWidthsWhileHovered() {
+    [[qt::slot]] static void tabsPackAndKeepTheirWidthsWhileHovered() {
       QQuickWindow window;
       QQmlEngine engine;
       ListModel tabs;
@@ -1125,7 +1129,7 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(tabBounds(*layout->items(), 1), second, fixture_wait_ms);
     }
 
-    Q_SLOT static void aHiddenTabCounterSelectsTheNearestTab() {
+    [[qt::slot]] static void aHiddenTabCounterSelectsTheNearestTab() {
       QQuickWindow window;
       QQmlEngine engine;
       ListModel tabs;
@@ -1169,7 +1173,7 @@ namespace {
       QCOMPARE(layout->counter().value(QStringLiteral("key")).toString(), QStringLiteral("tab:1"));
     }
 
-    Q_SLOT static void destroyingThePreviousTabModelPreservesTheNewBinding() {
+    [[qt::slot]] static void destroyingThePreviousTabModelPreservesTheNewBinding() {
       QQuickWindow window;
       QQmlEngine engine;
       auto previous = std::make_unique<ListModel>();
@@ -1194,7 +1198,7 @@ namespace {
       QCOMPARE(layout->items()->rowCount(), 1);
     }
 
-    Q_SLOT static void prefixNumbersPreserveCompressedTabGeometry() {
+    [[qt::slot]] static void prefixNumbersPreserveCompressedTabGeometry() {
       QQuickWindow window;
       QQmlEngine engine;
       ListModel tabs;
@@ -1232,7 +1236,7 @@ namespace {
       QCOMPARE(tabBounds(*layout->items(), 0), bounds);
     }
 
-    Q_SLOT static void workspaceTrackShortensToItsRoomAndKeepsTheSelectionInView() {
+    [[qt::slot]] static void workspaceTrackShortensToItsRoomAndKeepsTheSelectionInView() {
       QQuickWindow window;
       QQmlEngine engine;
       ListModel workspaces;
@@ -1347,7 +1351,7 @@ namespace {
       QVERIFY(!track->isVisible());
     }
 
-    Q_SLOT static void tabsShowThePointingCursor() {
+    [[qt::slot]] static void tabsShowThePointingCursor() {
       QQuickWindow window;
       QQmlEngine engine;
       ListModel tabs;
@@ -1379,14 +1383,14 @@ namespace {
     }
 
     // NOLINTNEXTLINE(readability-identifier-naming): Qt requires the _data suffix.
-    Q_SLOT static void buttonsShowThePointingCursorOnlyWhileEnabled_data() {
+    [[qt::slot]] static void buttonsShowThePointingCursorOnlyWhileEnabled_data() {
       QTest::addColumn<QString>("type");
       QTest::addColumn<QByteArray>("availability");
       QTest::newRow("chrome") << QStringLiteral("ChromeButton") << QByteArrayLiteral("enabled");
       QTest::newRow("form") << QStringLiteral("FormButton") << QByteArrayLiteral("interactive");
     }
 
-    Q_SLOT static void buttonsShowThePointingCursorOnlyWhileEnabled() {
+    [[qt::slot]] static void buttonsShowThePointingCursorOnlyWhileEnabled() {
       QFETCH(const QString, type);
       QFETCH(const QByteArray, availability);
       QQuickWindow window;
@@ -1432,7 +1436,7 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::ArrowCursor, fixture_wait_ms);
     }
 
-    Q_SLOT static void aWorkspaceClickEmitsOnlyItsWorkspaceIdentity() {
+    [[qt::slot]] static void aWorkspaceClickEmitsOnlyItsWorkspaceIdentity() {
       QQuickWindow window;
       QQmlEngine engine;
       ListModel workspaces;
@@ -1467,4 +1471,6 @@ namespace {
 }
 
 QTEST_MAIN(ChromeTest)
+#ifndef TELAR_MOC_RUN
 #include "chrome_test.moc"
+#endif

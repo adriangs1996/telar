@@ -2,35 +2,8 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "agent_report_fixture.hpp"
-#include "appearance_fixture.hpp"
-#include "clipboard_fixture.hpp"
-#include "frame_fixture.hpp"
-#include "frame_pacing_fixture.hpp"
-#include "gui_wait.hpp"
-#include "history_card_wait_trace.hpp"
-#include "history_presentation_fixture.hpp"
 #include "platform/window.hpp"
 #include "platform/window_activation.hpp"
-#include "qml_fixture.hpp"
-#include "screen_fixture.hpp"
-#include "terminal_cursor_fixture.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/app/chrome/mode_bar/native_mode_layout.hpp"
-#include "ui/app/overlays/notifications/notification_layout.hpp"
-#include "ui/app/panes/nvim/nvim_item.hpp"
-#include "ui/app/panes/pane_motion_layout.hpp"
-#include "ui/app/panes/terminal/terminal_item.hpp"
-#include "ui/design/controls/modal_reveal_layout.hpp"
-#include "ui/design/controls/native_form_field.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/input/key_adapter.hpp"
-#include "ui/kit/machines/runtime_connection.hpp"
-#include "ui/kit/models/list_model.hpp"
-#include "ui/kit/models/pane_attention_value.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "ui/kit/scene/window_animation_clock.hpp"
 #include <QAccessible>
 #include <QByteArray>
 #include <QClipboard>
@@ -141,6 +114,38 @@ import telar.wire.vocabulary;
 import telar.wire.clients;
 import telar.wire.runtime;
 import telar.base.memory.allocators;
+import telar.gui.ui.app;
+import telar.gui.ui.app.chrome.mode_bar;
+import telar.gui.ui.app.overlays.notifications;
+import telar.gui.ui.app.panes.nvim;
+import telar.gui.ui.app.panes;
+import telar.gui.ui.app.panes.terminal;
+import telar.gui.ui.design.controls;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.input;
+import telar.gui.ui.kit.machines;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.scene;
+import telar.gui.tests.agent_report_fixture;
+import telar.gui.tests.appearance_fixture;
+import telar.gui.tests.clipboard_fixture;
+import telar.gui.tests.frame_fixture;
+import telar.gui.tests.frame_pacing_fixture;
+import telar.gui.tests.gui_wait;
+import telar.gui.tests.history_card_wait_trace;
+import telar.gui.tests.history_presentation_fixture;
+import telar.gui.tests.qml_fixture;
+import telar.gui.tests.screen_fixture;
+import telar.gui.tests.terminal_cursor_fixture;
+import telar.gui.foundation.actions;
+import telar.gui.foundation.system;
+import telar.gui.foundation.text;
+import telar.gui.qt;
+import telar.gui.ui.app.chrome.components;
+import telar.gui.ui.app.overlays.machine_wizard;
+import telar.gui.ui.app.panes.attachments;
+import telar.gui.ui.app.panes.terminal.history;
+import telar.gui.ui.kit.store;
 
 namespace telar::gui::test {
 
@@ -553,11 +558,17 @@ return {api_version = 2, client = {
 
   constexpr auto plugin_catalog_configuration = "return {api_version=2,plugins={{path='missing-disabled',enabled=false},{path='example'}}}";
 
-  class QuickTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] QuickTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT void initTestCase() {
+  private:
+    [[qt::slot]] void initTestCase() {
       const auto executable = qEnvironmentVariable("TELAR_GUI_TEST_RUNTIME");
 
       QVERIFY2(!executable.isEmpty() && QFileInfo::exists(executable), "Set TELAR_GUI_TEST_RUNTIME to a Telar runtime executable");
@@ -614,7 +625,7 @@ return {api_version = 2, client = {
       seedHistory();
     }
 
-    Q_SLOT void nativeWindowClosesAndReopens() {
+    [[qt::slot]] void nativeWindowClosesAndReopens() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const auto pane_id = firstPane()->id;
       const auto quit_on_close = QGuiApplication::quitOnLastWindowClosed();
@@ -654,7 +665,7 @@ return {api_version = 2, client = {
       QCOMPARE(errors_, QString{});
     }
 
-    Q_SLOT void terminalInputAndRendering() {
+    [[qt::slot]] void terminalInputAndRendering() {
       auto* terminal = terminalIn(window_->contentItem());
       if (terminal == nullptr) {
         QFAIL("Required terminal fixture is missing");
@@ -693,7 +704,7 @@ return {api_version = 2, client = {
     // An editor in a tab of its own: the window draws what Neovim shows, grid by grid, and what
     // is typed into the view reaches Neovim as keys. With TELAR_EDITOR_SHOTS set to a directory,
     // the window as it shows each step is saved there.
-    Q_SLOT void editorPaneDrawsNeovim() {
+    [[qt::slot]] void editorPaneDrawsNeovim() {
       if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
         QSKIP("Neovim is not installed on this host");
       }
@@ -1641,7 +1652,7 @@ return {api_version = 2, client = {
     // on escape. Choosing one saves it for every window and runs the configured command with its
     // name; a window follows the saved choice when another one changes it, and the configuration's
     // slot forgets it. With TELAR_THEME_PICKER_SHOT naming a directory, each step is saved there.
-    Q_SLOT void themePickerPreviewsChoosesAndReverts() {
+    [[qt::slot]] void themePickerPreviewsChoosesAndReverts() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const QTemporaryDir directory;
       QVERIFY(directory.isValid());
@@ -1777,7 +1788,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
     // The monitor lists every process its runtime reads, says which ones telar runs, and shows the
     // detail of the one selected; with TELAR_MONITOR_SHOT set, the window as it shows them is saved
     // there, and its tree and owner listings beside it.
-    Q_SLOT void monitorListsTheRuntimeProcesses() {
+    [[qt::slot]] void monitorListsTheRuntimeProcesses() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       auto* monitor = client_->monitor();
       const auto shot = qEnvironmentVariable("TELAR_MONITOR_SHOT");
@@ -1865,7 +1876,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
     // them; `:Telar explore` shows that file in the explorer; a file the explorer renames is
     // followed by its buffer, with its changes; and the focus leaves the editor's last window
     // for the pane the explorer stands as.
-    Q_SLOT void editorAndExplorerKnowOfEachOther() {
+    [[qt::slot]] void editorAndExplorerKnowOfEachOther() {
       // The whole program runs close to the time its test is given: this case runs when it is
       // asked for by its name, as the test `gui-quick-explorer` asks.
       if (!QCoreApplication::arguments().contains(QStringLiteral("editorAndExplorerKnowOfEachOther"))) {
@@ -2012,7 +2023,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QTRY_VERIFY_WITH_TIMEOUT(!explorer->showing() && focusedPaneId() == editor_pane, runtime_wait_ms);
     }
 
-    Q_SLOT void explorerListsAndChangesFiles() {
+    [[qt::slot]] void explorerListsAndChangesFiles() {
       // As the case of the editor and the explorer above: it runs when it is named.
       if (!QCoreApplication::arguments().contains(QStringLiteral("explorerListsAndChangesFiles"))) {
         QSKIP("Runs when asked for by its name, as the test gui-quick-explorer does");
@@ -2827,7 +2838,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
 
     // A program in a pane hands the window a document: it covers the pane while the program
     // runs, scrolls by key, and goes away when the program quits.
-    Q_SLOT void nativeDocumentCoversThePane() {
+    [[qt::slot]] void nativeDocumentCoversThePane() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       auto* terminal = terminalIn(window_->contentItem());
 
@@ -2878,7 +2889,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
 
     // A program prints a document's text between the sequences that begin and end it: the window
     // draws the document in place of those rows, in the rows it takes, and the shell goes on below.
-    Q_SLOT void inlineDocumentTakesThePlaceOfItsRows() {
+    [[qt::slot]] void inlineDocumentTakesThePlaceOfItsRows() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       auto* terminal = terminalIn(window_->contentItem());
 
@@ -2943,7 +2954,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void keyRestoresCursorBlinkPhase() {
+    [[qt::slot]] void keyRestoresCursorBlinkPhase() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       auto* terminal = terminalIn(window_->contentItem());
 
@@ -2985,7 +2996,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       }
     }
 
-    Q_SLOT void singlePaneIsFramedInsideTheWorkbench() {
+    [[qt::slot]] void singlePaneIsFramedInsideTheWorkbench() {
       const auto* terminal = terminalIn(window_->contentItem());
       if (terminal == nullptr) {
         QFAIL("Required terminal fixture is missing");
@@ -3018,7 +3029,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
 
     // The user's layer, ~/.config/telar/editor/init.lua, loads over telar's own configuration,
     // and a plugin that cannot work in the window is inert there, which the person is told.
-    Q_SLOT void editorPaneLoadsTheUserLayer() {
+    [[qt::slot]] void editorPaneLoadsTheUserLayer() {
       if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
         QSKIP("Neovim is not installed on this host");
       }
@@ -3070,7 +3081,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
 
     // A language Neovim ships no parser for is highlighted by the one telar brings beside its
     // programs, with nothing installed by the person.
-    Q_SLOT void editorPaneHighlightsWithTheParsersTelarBrings() {
+    [[qt::slot]] void editorPaneHighlightsWithTheParsersTelarBrings() {
       if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
         QSKIP("Neovim is not installed on this host");
       }
@@ -3111,7 +3122,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
 
     // Away to another tab and back, an editor's view is made again: it takes the keys at once,
     // and a notice already gone from sight does not come back.
-    Q_SLOT void editorPaneTakesKeysBackFromAnotherTab() {
+    [[qt::slot]] void editorPaneTakesKeysBackFromAnotherTab() {
       if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
         QSKIP("Neovim is not installed on this host");
       }
@@ -3188,7 +3199,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
 
     // A picker left open while another tab is shown is still the one with the keys when its tab
     // comes back: Escape closes it, and the keys return to the editor.
-    Q_SLOT void editorPickerKeepsTheKeysAcrossTabs() {
+    [[qt::slot]] void editorPickerKeepsTheKeysAcrossTabs() {
       if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
         QSKIP("Neovim is not installed on this host");
       }
@@ -3258,7 +3269,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
 
     // A file chosen in the picker is shown in the window the keys were in, though the picker's
     // preview, a window of Neovim's too, already shows it.
-    Q_SLOT void editorPickerShowsTheFileItOpens() {
+    [[qt::slot]] void editorPickerShowsTheFileItOpens() {
       if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
         QSKIP("Neovim is not installed on this host");
       }
@@ -3322,7 +3333,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
     // An editor's windows show the pane's own background, at the pane's opacity, as a
     // terminal's cells do: nothing Neovim left on the default grid under a window is drawn, not
     // even the separator of a split that closed.
-    Q_SLOT void editorPaneKeepsThePaneOpacity() {
+    [[qt::slot]] void editorPaneKeepsThePaneOpacity() {
       if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
         QSKIP("Neovim is not installed on this host");
       }
@@ -3393,7 +3404,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       verify(cell.left(), cell.right(), "the separator the closed split left");
     }
 
-    Q_SLOT void editorTabStripListsBuffers() {
+    [[qt::slot]] void editorTabStripListsBuffers() {
       if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
         QSKIP("Neovim is not installed on this host");
       }
@@ -3474,7 +3485,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
 
     // The cursor takes another row at once, as the row Neovim highlights under it does: it never
     // slides after that row, however far the jump.
-    Q_SLOT void editorCursorTakesAnotherRowAtOnce() {
+    [[qt::slot]] void editorCursorTakesAnotherRowAtOnce() {
       if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
         QSKIP("Neovim is not installed on this host");
       }
@@ -3535,7 +3546,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
     // What Neovim says of its mode has no row of its own under the windows: it is written on the
     // status line of the whole editor, apart from both of its sides, and without that line at
     // the end of the last row.
-    Q_SLOT void editorSaysItsModeApartFromTheStatusLine() {
+    [[qt::slot]] void editorSaysItsModeApartFromTheStatusLine() {
       if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
         QSKIP("Neovim is not installed on this host");
       }
@@ -3602,7 +3613,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
 
     // The status line telar's configuration gives the editor opens with the mode, which the
     // window writes in the theme's color for it, and follows the mode as it changes.
-    Q_SLOT void editorStatusLineOpensWithTheMode() {
+    [[qt::slot]] void editorStatusLineOpensWithTheMode() {
       if (QStandardPaths::findExecutable(QStringLiteral("nvim")).isEmpty()) {
         QSKIP("Neovim is not installed on this host");
       }
@@ -3648,7 +3659,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QTRY_COMPARE_WITH_TIMEOUT(mode(), QStringLiteral("NORMAL"), runtime_wait_ms);
     }
 
-    Q_SLOT void tabSwitchKeepsTerminalViewport() {
+    [[qt::slot]] void tabSwitchKeepsTerminalViewport() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       const auto original_id = firstPane()->id;
@@ -3693,7 +3704,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       }
     }
 
-    Q_SLOT void componentOwnership() {
+    [[qt::slot]] void componentOwnership() {
       TerminalItem terminal;
 
       {
@@ -3706,7 +3717,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QCOMPARE(terminal.controller(), nullptr);
     }
 
-    Q_SLOT void promptDialogRenamesTab() {
+    [[qt::slot]] void promptDialogRenamesTab() {
       const auto tab_label = [&] {
         return client_->tabs()->rows()->data(client_->tabs()->rows()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("label")).toString();
       };
@@ -3764,7 +3775,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void workspaceFormCompletesFoldersAndCreatesMissingOnes() {
+    [[qt::slot]] void workspaceFormCompletesFoldersAndCreatesMissingOnes() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -3866,7 +3877,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void qmlActionBindings() {
+    [[qt::slot]] void qmlActionBindings() {
       const auto original_tabs = client_->tabs()->rows()->rowCount();
       const auto cleanup = qScopeGuard([this, original_tabs] {
         closeExtraTabs(original_tabs);
@@ -3925,7 +3936,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QTRY_VERIFY_WITH_TIMEOUT(firstPane() != nullptr && firstPane()->screen.frameId() > 0, runtime_wait_ms);
     }
 
-    Q_SLOT void workspaceListVisibility() {
+    [[qt::slot]] void workspaceListVisibility() {
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QTRY_VERIFY(!client_->display()->geometry().value(QStringLiteral("rail")).toBool());
       QVERIFY(window_->findChild<QQuickItem*>(QStringLiteral("workspaceList")) == nullptr);
@@ -3959,7 +3970,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
 
     // A selection the pointer made reaches the clipboard by the platform's copy key, which
     // copies it whether or not letting go did (gui.copy_on_select).
-    Q_SLOT void pointerSelection() {
+    [[qt::slot]] void pointerSelection() {
       auto* clipboard = QGuiApplication::clipboard();
       auto saved_clipboard = test::copyClipboard();
       const auto restore_clipboard = qScopeGuard([clipboard, saved = std::move(saved_clipboard)] mutable {
@@ -4031,7 +4042,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void detectedLinkHoverAndCopy() {
+    [[qt::slot]] void detectedLinkHoverAndCopy() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       QTRY_VERIFY_WITH_TIMEOUT(window_->isExposed(), runtime_wait_ms);
       if (!window_->isActive()) {
@@ -4101,7 +4112,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void wheelReportingAndCopyOwnership() {
+    [[qt::slot]] void wheelReportingAndCopyOwnership() {
       const auto original_tabs = client_->tabs()->rows()->rowCount();
       const auto* original_pane = firstPane();
 
@@ -4159,7 +4170,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       restore.dismiss();
     }
 
-    Q_SLOT void simultaneousChildMouseButtons() {
+    [[qt::slot]] void simultaneousChildMouseButtons() {
       constexpr std::string_view expected = "\x1b[<0;1;1M\x1b[<1;1;1M\x1b[<0;1;1m\x1b[<33;2;1M\x1b[<1;2;1m";
 
       verifyChildMouse(expected, [](QQuickWindow& window, TerminalItem& terminal) {
@@ -4174,7 +4185,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       });
     }
 
-    Q_SLOT void cancelChildMouseButtons() {
+    [[qt::slot]] void cancelChildMouseButtons() {
       constexpr std::string_view expected = "\x1b[<0;1;1M\x1b[<1;1;1M\x1b[<32;2;2M\x1b[<33;2;2M\x1b[<0;2;2m\x1b[<1;2;2m";
 
       verifyChildMouse(expected, [](QQuickWindow& window, TerminalItem& terminal) {
@@ -4191,7 +4202,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       });
     }
 
-    Q_SLOT void legacyChildTrackingIsIgnored() {
+    [[qt::slot]] void legacyChildTrackingIsIgnored() {
       verifyChildMouse({}, [](QQuickWindow& window, TerminalItem& terminal) {
         const auto position = cellCenter(terminal, {});
 
@@ -4206,7 +4217,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
           ChildMouseEncoding::legacy);
     }
 
-    Q_SLOT void childMouseSurvivesPaneFocusChange() {
+    [[qt::slot]] void childMouseSurvivesPaneFocusChange() {
       constexpr std::string_view expected = "\x1b[<0;1;1M\x1b[<1;1;1M\x1b[<32;2;2M\x1b[<33;2;2M\x1b[<0;2;2m\x1b[<1;2;2m";
 
       verifyChildMouse(expected, [this](QQuickWindow& window, TerminalItem& terminal) {
@@ -4228,7 +4239,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       });
     }
 
-    Q_SLOT void childMouseAcrossPanes() {
+    [[qt::slot]] void childMouseAcrossPanes() {
       constexpr std::string_view expected = "\x1b[<0;1;1M\x1b[<32;2;2M\x1b[<0;2;2m";
 
       verifyChildMouse(expected, [this](QQuickWindow& window, TerminalItem& terminal) {
@@ -4260,7 +4271,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       });
     }
 
-    Q_SLOT void cancelChildMouseAcrossPanes() {
+    [[qt::slot]] void cancelChildMouseAcrossPanes() {
       constexpr std::string_view expected = "\x1b[<0;1;1M\x1b[<0;1;1m";
 
       verifyChildMouse(expected, [this](QQuickWindow& window, TerminalItem& terminal) {
@@ -4286,7 +4297,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       });
     }
 
-    Q_SLOT void childMouseSurvivesHiddenView() {
+    [[qt::slot]] void childMouseSurvivesHiddenView() {
       constexpr std::string_view expected = "\x1b[<0;1;1M\x1b[<32;2;2M\x1b[<0;2;2m";
 
       verifyChildMouse(expected, [](QQuickWindow& window, TerminalItem& terminal) {
@@ -4305,7 +4316,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       });
     }
 
-    Q_SLOT void closingOnePointerOwnerPreservesAnother() {
+    [[qt::slot]] void closingOnePointerOwnerPreservesAnother() {
       constexpr std::string_view expected = "\x1b[<0;1;1M\x1b[<32;2;2M\x1b[<0;2;2m";
 
       verifyChildMouse(expected, [this, expected](QQuickWindow& window, TerminalItem& terminal) {
@@ -4340,7 +4351,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       });
     }
 
-    Q_SLOT void copyModeKeyboardSearch() {
+    [[qt::slot]] void copyModeKeyboardSearch() {
       auto* clipboard = QGuiApplication::clipboard();
       auto saved_clipboard = test::copyClipboard();
       const auto restore_clipboard = qScopeGuard([clipboard, saved = std::move(saved_clipboard)] mutable {
@@ -4395,7 +4406,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
     }
 
 #ifdef TELAR_GUI_CUSTOM_LINK_HOST
-    Q_SLOT void pointerLinkOpening() {
+    [[qt::slot]] void pointerLinkOpening() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const RecordedLinks recorder{directory_.filePath(QStringLiteral("pointer links.txt"))};
       auto* terminal = terminalIn(window_->contentItem());
@@ -4445,7 +4456,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void pointerLinkRevalidation() {
+    [[qt::slot]] void pointerLinkRevalidation() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const RecordedLinks recorder{directory_.filePath(QStringLiteral("revalidated links.txt"))};
       auto* terminal = terminalIn(window_->contentItem());
@@ -4487,7 +4498,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void textualAndRoutedLinks() {
+    [[qt::slot]] void textualAndRoutedLinks() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const RecordedLinks recorder{directory_.filePath(QStringLiteral("opened links ñ.txt"))};
       const auto* pane = firstPane();
@@ -4529,7 +4540,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void configuredComponentUrlsAndActions() {
+    [[qt::slot]] void configuredComponentUrlsAndActions() {
       const RecordedLinks recorder{directory_.filePath(QStringLiteral("configured links λ.txt"))};
       const auto cleanup = qScopeGuard([this] {
         client_->components()->closePanel();
@@ -4589,7 +4600,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
 
 #endif
 
-    Q_SLOT void configuredFileEditor() {
+    [[qt::slot]] void configuredFileEditor() {
       const auto original_tabs = client_->tabs()->rows()->rowCount();
       const auto* original = firstPane();
 
@@ -4684,7 +4695,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       restore.dismiss();
     }
 
-    Q_SLOT void kittyKeyboardInput() {
+    [[qt::slot]] void kittyKeyboardInput() {
       const auto original_tabs = client_->tabs()->rows()->rowCount();
       const auto* original_pane = firstPane();
 
@@ -4730,7 +4741,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       restore.dismiss();
     }
 
-    Q_SLOT void runtimeNotificationDeliveryAndRoutedDismissal() {
+    [[qt::slot]] void runtimeNotificationDeliveryAndRoutedDismissal() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       CommandPeer peer{memory_};
 
@@ -4807,7 +4818,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QTRY_VERIFY_WITH_TIMEOUT(client_->notifications()->center().items().empty(), runtime_wait_ms);
     }
 
-    Q_SLOT void routedDismissalOfFocusedNotificationReturnsToTerminal() {
+    [[qt::slot]] void routedDismissalOfFocusedNotificationReturnsToTerminal() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       CommandPeer peer{memory_};
 
@@ -4856,7 +4867,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QTRY_VERIFY2_WITH_TIMEOUT(restored_output(), qPrintable(screenText(firstPane()->screen, ScreenTextLayout::logical)), runtime_wait_ms);
     }
 
-    Q_SLOT void removingFocusedNotificationWithoutDisabledFrameReturnsToTerminal() {
+    [[qt::slot]] void removingFocusedNotificationWithoutDisabledFrameReturnsToTerminal() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       client_->notifications()->publish({.level = telar::NotificationLevel::info, .title = "Removed delivered control", .message = "No intermediate disabled record", .link = {}, .duration_ns = telar::max_notification_duration_ms * NotificationInput::nanoseconds_per_millisecond});
       const auto closes = [&] {
@@ -4897,7 +4908,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QCoreApplication::processEvents();
     }
 
-    Q_SLOT void configuredBindings() {
+    [[qt::slot]] void configuredBindings() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -5011,7 +5022,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QVERIFY2(after_consume == before_consume, qPrintable(QStringLiteral("Before consume:\n%1\nAfter consume:\n%2\n%3").arg(before_consume, after_consume, windowObservation(*window_))));
     }
 
-    Q_SLOT void bindingReloadOwnership() {
+    [[qt::slot]] void bindingReloadOwnership() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -5046,7 +5057,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void paneSurfacesShareTheChromeStyle() {
+    [[qt::slot]] void paneSurfacesShareTheChromeStyle() {
       client_->commands()->execute(window_actions::Action::split_horizontal);
       QTRY_COMPARE_WITH_TIMEOUT(client_->panes()->rows()->rowCount(), 2, runtime_wait_ms);
       client_->commands()->execute(window_actions::Action::split_vertical);
@@ -5119,7 +5130,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void paneTransitionsResizeTheTerminalOnlyOnce() {
+    [[qt::slot]] void paneTransitionsResizeTheTerminalOnlyOnce() {
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       const QPointer<TerminalItem> terminal{terminalIn(window_->contentItem())};
 
@@ -5161,7 +5172,7 @@ for i in 0 1 2 3 4 5 6 7; do printf '\033[10%sm    ' "$i"; done; printf '\033[0m
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void splitCloseAndTabs() {
+    [[qt::slot]] void splitCloseAndTabs() {
       auto* terminal = terminalIn(window_->contentItem());
       if (terminal == nullptr) {
         QFAIL("Required terminal fixture is missing");
@@ -5242,7 +5253,7 @@ return {api_version=2, client={keybindings={
     // One change of the dialog that moves the line search to another pane and another kind
     // reaches every prompt line as one value: the line it leaves never hosts the new kind, not even
     // between the kind and the pane.
-    Q_SLOT void lineSearchMovesBetweenPanesAtOnce() {
+    [[qt::slot]] void lineSearchMovesBetweenPanesAtOnce() {
       auto* terminal = terminalIn(window_->contentItem());
       if (terminal == nullptr) {
         QFAIL("Required terminal fixture is missing");
@@ -5299,7 +5310,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void kittyGraphicsRendering() {
+    [[qt::slot]] void kittyGraphicsRendering() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       auto const* pane = firstPane();
       if (pane == nullptr) {
@@ -5367,7 +5378,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void paletteModesKeepQueriesAndRejectStaleChoices() {
+    [[qt::slot]] void paletteModesKeepQueriesAndRejectStaleChoices() {
       const auto original_panes = client_->panes()->rows()->rowCount();
 
       client_->commands()->execute(window_actions::Action::palette);
@@ -5395,7 +5406,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void paletteSearchesEveryKindWithoutPrefix() {
+    [[qt::slot]] void paletteSearchesEveryKindWithoutPrefix() {
       const auto rows = [&] {
         return client_->palette()->geometry().value(QStringLiteral("rows")).toList();
       };
@@ -5420,7 +5431,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void suggestionPaletteKeepsUnavailableRequestsEditable() {
+    [[qt::slot]] void suggestionPaletteKeepsUnavailableRequestsEditable() {
       client_->commands()->execute(window_actions::Action::suggest_command);
       const auto restore = qScopeGuard([this] {
         client_->commands()->execute(window_actions::Action::cancel);
@@ -5455,7 +5466,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void suggestionBackRestoresItsActionQueryAndEditorSelection() {
+    [[qt::slot]] void suggestionBackRestoresItsActionQueryAndEditorSelection() {
       client_->commands()->execute(window_actions::Action::palette);
       const auto restore = qScopeGuard([this] {
         client_->commands()->execute(window_actions::Action::cancel);
@@ -5490,7 +5501,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void paletteNavigationChoosesAnExistingTab() {
+    [[qt::slot]] void paletteNavigationChoosesAnExistingTab() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const auto original_pane = firstPane()->id;
       const auto original_tab = firstPane()->location.tab_id;
@@ -5528,7 +5539,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void pathPickerBrowsesAndInsertsWithoutExecuting() {
+    [[qt::slot]] void pathPickerBrowsesAndInsertsWithoutExecuting() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && !firstPane()->cwd.empty(), runtime_wait_ms);
       const QTemporaryDir directory;
 
@@ -5603,7 +5614,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void pathPickerQueryLimitPreservesCompleteUtf8() {
+    [[qt::slot]] void pathPickerQueryLimitPreservesCompleteUtf8() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady() && !firstPane()->cwd.empty(), runtime_wait_ms);
       client_->commands()->execute(window_actions::Action::path_picker);
       const auto restore = qScopeGuard([this] {
@@ -5640,7 +5651,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(client_->notifications()->center().find(identity) == nullptr, runtime_wait_ms);
     }
 
-    Q_SLOT void staleTabHitsDoNotCaptureConfiguredWidgets() {
+    [[qt::slot]] void staleTabHitsDoNotCaptureConfiguredWidgets() {
       telar::ds::Option<QPoint> held;
       const auto cleanup = qScopeGuard([this, &held] {
         if (held) {
@@ -5692,7 +5703,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->components()->panel().value(QStringLiteral("title")).toString(), QStringLiteral("Tab-safe action"));
     }
 
-    Q_SLOT void tabDragReordersOnlyAfterRelease() {
+    [[qt::slot]] void tabDragReordersOnlyAfterRelease() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const auto original = QString::number(firstPane()->location.tab_id);
       QStringList created;
@@ -5736,7 +5747,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void tabDragEscapeRetiresHeldRelease() {
+    [[qt::slot]] void tabDragEscapeRetiresHeldRelease() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const auto original = QString::number(firstPane()->location.tab_id);
       QStringList created;
@@ -5798,7 +5809,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void tabDragRetiresWhenTheCapturedSourceCloses() {
+    [[qt::slot]] void tabDragRetiresWhenTheCapturedSourceCloses() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const auto original = QString::number(firstPane()->location.tab_id);
       QStringList created;
@@ -5835,19 +5846,19 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void tabDragCancelsWhenViewportChanges() {
+    [[qt::slot]] void tabDragCancelsWhenViewportChanges() {
       verifyTabDragCancellation(TabDragInterruption::viewport);
     }
 
-    Q_SLOT void tabDragCancelsWhenModalOpens() {
+    [[qt::slot]] void tabDragCancelsWhenModalOpens() {
       verifyTabDragCancellation(TabDragInterruption::modal);
     }
 
-    Q_SLOT void tabDragCancelsWhenTheWindowLosesFocus() {
+    [[qt::slot]] void tabDragCancelsWhenTheWindowLosesFocus() {
       verifyTabDragCancellation(TabDragInterruption::focus);
     }
 
-    Q_SLOT void hiddenCounterPressRetainsItsSourceThroughRevealAndDrop() {
+    [[qt::slot]] void hiddenCounterPressRetainsItsSourceThroughRevealAndDrop() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const auto original = QString::number(firstPane()->location.tab_id);
       const auto size = window_->size();
@@ -5922,7 +5933,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void paletteActionsUseOriginalLabelsAndReorderExistingTabs() {
+    [[qt::slot]] void paletteActionsUseOriginalLabelsAndReorderExistingTabs() {
       const auto commands = client_->commands()->list();
 
       QCOMPARE(commands.size(), qsizetype{48});
@@ -5993,7 +6004,7 @@ return {api_version=2, client={keybindings={
       restore.dismiss();
     }
 
-    Q_SLOT void machinePickerKeyboardRenamesAndRemovesSavedRows() {
+    [[qt::slot]] void machinePickerKeyboardRenamesAndRemovesSavedRows() {
       const auto path = directory_.filePath(QStringLiteral("machines.json"));
       QFile profiles{path};
 
@@ -6045,7 +6056,7 @@ return {api_version=2, client={keybindings={
     // The wizard pairs a machine, sets it up and signs its agents in through the telar it runs,
     // here a stand-in that answers as `machine add` and `machine setup --events` do. With
     // TELAR_GUI_TEST_WIZARD_SCREENSHOTS naming a directory, it saves the window at each step.
-    Q_SLOT void machineWizardPairsSetsUpAndSignsIn() {
+    [[qt::slot]] void machineWizardPairsSetsUpAndSignsIn() {
       const QTemporaryDir stand_in;
 
       QVERIFY(stand_in.isValid());
@@ -6149,7 +6160,7 @@ return {api_version=2, client={keybindings={
 
     // The wizard's address field takes the window's focus, keeps a composition until it is
     // committed, and passes what is committed to the wizard.
-    Q_SLOT void machineWizardKeepsComposition() {
+    [[qt::slot]] void machineWizardKeepsComposition() {
       client_->commands()->execute(window_actions::Action::add_machine);
       const auto cleanup = qScopeGuard([this] {
         client_->commands()->execute(window_actions::Action::cancel);
@@ -6175,7 +6186,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(client_->dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none, runtime_wait_ms);
     }
 
-    Q_SLOT void paletteCompositionAndUtf8LimitsKeepTheEditorOwned() {
+    [[qt::slot]] void paletteCompositionAndUtf8LimitsKeepTheEditorOwned() {
       client_->commands()->execute(window_actions::Action::goto_picker);
       auto* search = window_->findChild<QQuickItem*>(QStringLiteral("commandSearch"));
 
@@ -6214,7 +6225,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void dialogsAndHistory() {
+    [[qt::slot]] void dialogsAndHistory() {
       client_->commands()->execute(window_actions::Action::palette);
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::palette);
       QTest::qWait(frame_settle_ms);
@@ -6226,7 +6237,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void historyKeyboardSubmission() {
+    [[qt::slot]] void historyKeyboardSubmission() {
       const auto* pane = firstPane();
 
       QVERIFY(pane != nullptr);
@@ -6266,7 +6277,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void historyPointerSelectionNeverSubmits() {
+    [[qt::slot]] void historyPointerSelectionNeverSubmits() {
       const telar::ds::Array entries{
           telar::ImportHistoryEntry{.started_at_ms = 100, .command = "echo GUI_HISTORY_POINTER_FIRST"},
           telar::ImportHistoryEntry{.started_at_ms = 101, .command = "echo GUI_HISTORY_POINTER_SECOND"},
@@ -6344,7 +6355,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->dialogs()->kind(), telar::gui::qt::ApplicationController::Dialog::history);
     }
 
-    Q_SLOT void historyCardActionsSurviveSelectionChanges() {
+    [[qt::slot]] void historyCardActionsSurviveSelectionChanges() {
       importRetainedHistory();
       const auto restore = qScopeGuard([this] {
         client_->commands()->execute(window_actions::Action::cancel);
@@ -6478,7 +6489,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(QGuiApplication::clipboard()->text(), sentinel);
     }
 
-    Q_SLOT void historySelectionLeavesTheWorkbenchProjectionsAlone() {
+    [[qt::slot]] void historySelectionLeavesTheWorkbenchProjectionsAlone() {
       importRetainedHistory();
       const auto restore = qScopeGuard([this] {
         client_->commands()->execute(window_actions::Action::cancel);
@@ -6519,7 +6530,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(element_bars.count(), 0);
     }
 
-    Q_SLOT void historyCardPressCannotFollowAReplacedRecord() {
+    [[qt::slot]] void historyCardPressCannotFollowAReplacedRecord() {
       const telar::ds::Array entries{
           telar::ImportHistoryEntry{.started_at_ms = 100, .command = "echo GUI_REUSE_PRESS_A_FIRST"},
           telar::ImportHistoryEntry{.started_at_ms = 101, .command = "echo GUI_REUSE_PRESS_A_SECOND"},
@@ -6588,7 +6599,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(clipboard->text(), sentinel);
     }
 
-    Q_SLOT void historySelectionProgressesInEventLoops() {
+    [[qt::slot]] void historySelectionProgressesInEventLoops() {
       const bool native_loop = !qEnvironmentVariableIsSet("TELAR_GUI_TEST_MANUAL_EVENT_LOOP_CONTROL");
 
       importRetainedHistory();
@@ -6665,7 +6676,7 @@ return {api_version=2, client={keybindings={
       }
     }
 
-    Q_SLOT void historyFooterHintsUseCurrentActions() {
+    [[qt::slot]] void historyFooterHintsUseCurrentActions() {
       client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
       const auto restore = qScopeGuard([this] {
@@ -6718,7 +6729,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(screenText(pane->screen, ScreenTextLayout::logical).contains(QLatin1StringView("echo GUI_HISTORY_FIXTURE")), runtime_wait_ms);
     }
 
-    Q_SLOT void historyFooterRequiresDeliveredChoices() {
+    [[qt::slot]] void historyFooterRequiresDeliveredChoices() {
       const telar::ds::Array entries{
           telar::ImportHistoryEntry{.started_at_ms = 100, .command = "echo GUI_HISTORY_DELIVERY_FIRST"},
           telar::ImportHistoryEntry{.started_at_ms = 101, .command = "echo GUI_HISTORY_DELIVERY_SECOND"},
@@ -6808,7 +6819,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void historyRowsRequireTheDeliveredContentRevision() {
+    [[qt::slot]] void historyRowsRequireTheDeliveredContentRevision() {
       const telar::ds::Array entries{
           telar::ImportHistoryEntry{.started_at_ms = 100, .command = "echo GUI_ROW_PRESENTATION_A_FIRST"},
           telar::ImportHistoryEntry{.started_at_ms = 101, .command = "echo GUI_ROW_PRESENTATION_A_SECOND"},
@@ -6898,11 +6909,11 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->history()->state().value(QStringLiteral("error")).toString(), QString{});
     }
 
-    Q_SLOT void historyReplacementNeedsDeliveryAfterWindowShown() {
+    [[qt::slot]] void historyReplacementNeedsDeliveryAfterWindowShown() {
       verifyHistoryReplacementAfterRestore(false);
     }
 
-    Q_SLOT void historyReplacementNeedsDeliveryAfterWindowUnminimized() {
+    [[qt::slot]] void historyReplacementNeedsDeliveryAfterWindowUnminimized() {
       if (QGuiApplication::platformName() == QLatin1StringView("offscreen")) {
         QSKIP("Native minimization requires a window-system plugin");
       }
@@ -6974,24 +6985,24 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void historyFooterPastesInPasteMode() {
+    [[qt::slot]] void historyFooterPastesInPasteMode() {
       // Disjoint digit suffixes keep fuzzy queries separate from earlier shell input.
       verifyPresentedHistorySubmitMode(false, false, QStringLiteral("paste-primary-00000000"));
     }
 
-    Q_SLOT void historyFooterRunsTheAlternateInPasteMode() {
+    [[qt::slot]] void historyFooterRunsTheAlternateInPasteMode() {
       verifyPresentedHistorySubmitMode(false, true, QStringLiteral("paste-alternate-11111111"));
     }
 
-    Q_SLOT void historyFooterRunsInRunMode() {
+    [[qt::slot]] void historyFooterRunsInRunMode() {
       verifyPresentedHistorySubmitMode(true, false, QStringLiteral("run-primary-22222222"));
     }
 
-    Q_SLOT void historyFooterPastesTheAlternateInRunMode() {
+    [[qt::slot]] void historyFooterPastesTheAlternateInRunMode() {
       verifyPresentedHistorySubmitMode(true, true, QStringLiteral("run-alternate-33333333"));
     }
 
-    Q_SLOT void historyFooterCaptureSurvivesPresentedEnterModeChanges() {
+    [[qt::slot]] void historyFooterCaptureSurvivesPresentedEnterModeChanges() {
       for (const bool enter_runs : {false, true}) {
         for (const bool alternate : {false, true}) {
           verifyPresentedHistorySubmitMode(enter_runs, alternate, QStringLiteral("held-%1-%2").arg(static_cast<int>(enter_runs)).arg(static_cast<int>(alternate)), true);
@@ -7132,7 +7143,7 @@ return {api_version=2, client={keybindings={
       }
     }
 
-    Q_SLOT void historyPagesAndActions() {
+    [[qt::slot]] void historyPagesAndActions() {
       seedHistoryPages();
       client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_BROWSER_PAGE"));
@@ -7209,7 +7220,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void historyScopeLabelsFollowTheFocusedContext() {
+    [[qt::slot]] void historyScopeLabelsFollowTheFocusedContext() {
       QTRY_VERIFY_WITH_TIMEOUT(firstPane() != nullptr && !firstPane()->cwd.empty(), runtime_wait_ms);
       const auto pane_id = firstPane()->id;
       const auto original_directory = QFileInfo{toQString(firstPane()->cwd)}.canonicalFilePath();
@@ -7250,7 +7261,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(toQString(firstPane()->cwd), original_directory, runtime_wait_ms);
     }
 
-    Q_SLOT void historyControllerUpdatesKeepTheVisibleQuerySynchronized() {
+    [[qt::slot]] void historyControllerUpdatesKeepTheVisibleQuerySynchronized() {
       client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
         client_->commands()->execute(window_actions::Action::cancel);
@@ -7284,7 +7295,7 @@ return {api_version=2, client={keybindings={
 
     // The failed chip shows and controls the filter a leading ! turned on: turning it off takes
     // the ! out of the search.
-    Q_SLOT void historyFailedChipControlsTheMarker() {
+    [[qt::slot]] void historyFailedChipControlsTheMarker() {
       client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
         client_->commands()->execute(window_actions::Action::cancel);
@@ -7304,7 +7315,7 @@ return {api_version=2, client={keybindings={
 
     // While the history is open its ages move on, and a running command is read again; closing
     // it stops both.
-    Q_SLOT void historyAgesMoveOnWhileOpen() {
+    [[qt::slot]] void historyAgesMoveOnWhileOpen() {
       client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
@@ -7323,7 +7334,7 @@ return {api_version=2, client={keybindings={
     }
 
     // Closing the history stops the search its debounce still held: none goes out after it.
-    Q_SLOT void historyCloseStopsThePendingSearch() {
+    [[qt::slot]] void historyCloseStopsThePendingSearch() {
       client_->commands()->execute(window_actions::Action::history);
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
       client_->history()->search(QStringLiteral("GUI_HISTORY_CLOSED_BEFORE_SENT"));
@@ -7336,7 +7347,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void historyQueryOverflowPublishesTheExistingLimitNotice() {
+    [[qt::slot]] void historyQueryOverflowPublishesTheExistingLimitNotice() {
       client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
         client_->commands()->execute(window_actions::Action::cancel);
@@ -7379,7 +7390,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->history()->state().value(QStringLiteral("editorText")).toString(), retained);
     }
 
-    Q_SLOT void historyMalformedUtf16UsesTheEncodedByteLimit() {
+    [[qt::slot]] void historyMalformedUtf16UsesTheEncodedByteLimit() {
       client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
         const auto notices = client_->notifications()->center().items();
@@ -7416,7 +7427,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(retained.toUtf8().size() <= maximum);
     }
 
-    Q_SLOT void historyShiftTabCyclesAuthorsForBothQtKeyForms() {
+    [[qt::slot]] void historyShiftTabCyclesAuthorsForBothQtKeyForms() {
       client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
         client_->commands()->execute(window_actions::Action::cancel);
@@ -7438,7 +7449,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(search->hasActiveFocus());
     }
 
-    Q_SLOT void historyEmptyRecoveryPreservesQueryAndFocus() {
+    [[qt::slot]] void historyEmptyRecoveryPreservesQueryAndFocus() {
       seedHistoryScroll();
       client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
@@ -7475,7 +7486,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(window_->findChild<QQuickItem*>(QStringLiteral("historyEmptyTitle")) == nullptr, runtime_wait_ms);
     }
 
-    Q_SLOT void historyWheelMovesSelectionAcrossTheWholeModal() {
+    [[qt::slot]] void historyWheelMovesSelectionAcrossTheWholeModal() {
       seedHistoryScroll();
       client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
@@ -7541,7 +7552,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), selected);
     }
 
-    Q_SLOT void historyWheelKeepsFractionThroughAnEmptyPresentedPage() {
+    [[qt::slot]] void historyWheelKeepsFractionThroughAnEmptyPresentedPage() {
       seedHistoryScroll();
       client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
@@ -7570,7 +7581,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1, runtime_wait_ms);
     }
 
-    Q_SLOT void historyWheelScrollsInspectionFromEveryBand() {
+    [[qt::slot]] void historyWheelScrollsInspectionFromEveryBand() {
       std::string command;
       constexpr int command_lines = 80;
 
@@ -7629,7 +7640,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(inspector->property("scroll").toInt(), expected_scroll + 1, runtime_wait_ms);
     }
 
-    Q_SLOT void historyWheelWaitsForPresentedRowsAndDialogGeneration() {
+    [[qt::slot]] void historyWheelWaitsForPresentedRowsAndDialogGeneration() {
       seedHistoryScroll();
       client_->commands()->execute(window_actions::Action::history);
       const auto restore = qScopeGuard([this] {
@@ -7679,7 +7690,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(client_->history()->state().value(QStringLiteral("selection")).toInt(), 1, runtime_wait_ms);
     }
 
-    Q_SLOT void historyWheelStopsAtPageAdmission() {
+    [[qt::slot]] void historyWheelStopsAtPageAdmission() {
       constexpr auto page_count = application::history::HistoryLimits::page_entries;
       constexpr auto entry_count = page_count + 2;
       telar::ds::Array<std::string, entry_count> commands;
@@ -7718,15 +7729,15 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->history()->state().value(QStringLiteral("selection")).toInt(), page_count - 1);
     }
 
-    Q_SLOT void historyCompositionConsumesTheFirstEscape() {
+    [[qt::slot]] void historyCompositionConsumesTheFirstEscape() {
       verifyHistoryCompositionEscape(HistoryView::results);
     }
 
-    Q_SLOT void historyInspectionCompositionConsumesTheFirstEscape() {
+    [[qt::slot]] void historyInspectionCompositionConsumesTheFirstEscape() {
       verifyHistoryCompositionEscape(HistoryView::inspector);
     }
 
-    Q_SLOT void historyInspectionTracksTabRenamingAndPaneClosure() {
+    [[qt::slot]] void historyInspectionTracksTabRenamingAndPaneClosure() {
       const auto original_tabs = client_->tabs()->rows()->rowCount();
       const auto* original = firstPane();
 
@@ -7810,15 +7821,15 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void historyEmptyReplyRetiresPendingDelegatesBeforeTheirRows() {
+    [[qt::slot]] void historyEmptyReplyRetiresPendingDelegatesBeforeTheirRows() {
       verifyHistoryDelegateRetirement(QStringLiteral("GUI_HISTORY_GEOMETRY_NO_MATCH"), 0);
     }
 
-    Q_SLOT void historyFilteredReplyRetiresPendingDelegatesBeforeTheirRows() {
+    [[qt::slot]] void historyFilteredReplyRetiresPendingDelegatesBeforeTheirRows() {
       verifyHistoryDelegateRetirement(QStringLiteral("GUI_BROWSER_PAGE_DELEGATE_SINGLE_TARGET"), 1);
     }
 
-    Q_SLOT void historyEqualSizedReplyUpdatesPendingDelegates() {
+    [[qt::slot]] void historyEqualSizedReplyUpdatesPendingDelegates() {
       constexpr auto entry_count = application::history::HistoryLimits::page_entries;
       telar::ds::Array<std::string, entry_count> commands;
       telar::ds::Array<telar::ImportHistoryEntry, entry_count> entries{};
@@ -7832,7 +7843,7 @@ return {api_version=2, client={keybindings={
       verifyHistoryDelegateRetirement(QStringLiteral("GUI_REPLACEMENT_TARGET"), static_cast<int>(entry_count));
     }
 
-    Q_SLOT void historyGeometryAndFocusSurviveInspection() {
+    [[qt::slot]] void historyGeometryAndFocusSurviveInspection() {
       const auto previous_size = window_->size();
       const auto restore = qScopeGuard([this, previous_size] {
         client_->commands()->execute(window_actions::Action::cancel);
@@ -7902,7 +7913,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(search->hasActiveFocus());
     }
 
-    Q_SLOT void historyValidationFeedback() {
+    [[qt::slot]] void historyValidationFeedback() {
       client_->commands()->execute(window_actions::Action::history);
       client_->history()->search(QStringLiteral("GUI_HISTORY_FIXTURE"));
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading() && client_->history()->rows()->rowCount() > 0, runtime_wait_ms);
@@ -7946,7 +7957,7 @@ return {api_version=2, client={keybindings={
 
     // Enter while the search is still loading runs the best match of what was typed once its
     // page arrives, as fzf does; typing again first cancels it.
-    Q_SLOT void historyEnterWhileLoading() {
+    [[qt::slot]] void historyEnterWhileLoading() {
       client_->commands()->execute(window_actions::Action::history);
       QTRY_VERIFY_WITH_TIMEOUT(!client_->history()->loading(), runtime_wait_ms);
 
@@ -7968,7 +7979,7 @@ return {api_version=2, client={keybindings={
       client_->terminals()->input(pane->id, "\x15");
     }
 
-    Q_SLOT void historyLongCommands() {
+    [[qt::slot]] void historyLongCommands() {
       using Storage = application::history::HistoryLimits;
       constexpr std::size_t command_bytes = std::size_t{48} * 1024;
       constexpr auto cached_entries = Storage::command_cache_bytes / command_bytes;
@@ -8050,7 +8061,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void routedGoto() {
+    [[qt::slot]] void routedGoto() {
       const auto cleanup = qScopeGuard([this] {
         client_->commands()->execute(window_actions::Action::cancel);
       });
@@ -8101,7 +8112,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void routedHistory() {
+    [[qt::slot]] void routedHistory() {
       CommandPeer peer{memory_};
 
       peer.open(socket_);
@@ -8117,7 +8128,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void routedSidebarResize() {
+    [[qt::slot]] void routedSidebarResize() {
       CommandPeer peer{memory_};
 
       peer.open(socket_);
@@ -8153,7 +8164,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(peer.error(), QString{});
     }
 
-    Q_SLOT void translucentWindowBackgroundPreservesColor() {
+    [[qt::slot]] void translucentWindowBackgroundPreservesColor() {
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
       const auto restore = qScopeGuard([this] {
@@ -8189,7 +8200,7 @@ return {api_version=2, client={keybindings={
       }
     }
 
-    Q_SLOT void independentSurfaceOpacityDoesNotStack() {
+    [[qt::slot]] void independentSurfaceOpacityDoesNotStack() {
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
       const auto restore = qScopeGuard([this] {
@@ -8238,7 +8249,7 @@ return {api_version=2, client={keybindings={
       captureArtifact(QStringLiteral("chrome-independent-opacity"));
     }
 
-    Q_SLOT void appearanceChangesPreserveInputAndLayout() {
+    [[qt::slot]] void appearanceChangesPreserveInputAndLayout() {
       const telar::gui::test::AppearanceFixture appearance;
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
@@ -8280,7 +8291,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void sidebarLayoutLeavesTheConfigurationAlone() {
+    [[qt::slot]] void sidebarLayoutLeavesTheConfigurationAlone() {
       const auto visible = client_->display()->sidebarVisible();
       const auto width = client_->display()->sidebarWidth();
       const auto collapsed = client_->display()->workspaceListCollapsed();
@@ -8321,7 +8332,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(configuration.count(), 0);
     }
 
-    Q_SLOT void newTabsRecoverTheFullGridAfterNestedSplits() {
+    [[qt::slot]] void newTabsRecoverTheFullGridAfterNestedSplits() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const TabRestorePoint before{.count = client_->tabs()->rows()->rowCount(), .pane_id = firstPane()->id};
       const auto restore = qScopeGuard([this, before] {
@@ -8378,7 +8389,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void zoomCapsuleSwitchesHiddenPanesAndRestoresTiling() {
+    [[qt::slot]] void zoomCapsuleSwitchesHiddenPanesAndRestoresTiling() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const TabRestorePoint before{.count = client_->tabs()->rows()->rowCount(), .pane_id = firstPane()->id};
       const auto restore = qScopeGuard([this, before] {
@@ -8453,7 +8464,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(title_report.exitCode(), 0);
     }
 
-    Q_SLOT void attentionRingsFollowUnfocusedAttachedPanes() {
+    [[qt::slot]] void attentionRingsFollowUnfocusedAttachedPanes() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const TabRestorePoint before{.count = client_->tabs()->rows()->rowCount(), .pane_id = firstPane()->id};
       const auto original_window_size = window_->size();
@@ -8554,7 +8565,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void configuredCommandsOpenAndCloseTheirOwnTabs() {
+    [[qt::slot]] void configuredCommandsOpenAndCloseTheirOwnTabs() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       const TabRestorePoint before{.count = client_->tabs()->rows()->rowCount(), .pane_id = firstPane()->id};
       const QTemporaryDir directory;
@@ -8640,7 +8651,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void routedPluginOverrides() {
+    [[qt::slot]] void routedPluginOverrides() {
       const auto cleanup = qScopeGuard([this] {
         client_->loadConfiguration({}, {}, {});
       });
@@ -8730,7 +8741,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void routedPluginWorker() {
+    [[qt::slot]] void routedPluginWorker() {
       const auto program = QStandardPaths::findExecutable(QString::fromUtf8(system::runtime_endpoint::program().view()));
 
       QVERIFY(!program.isEmpty());
@@ -8841,7 +8852,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(client_->display()->sidebarVisible());
     }
 
-    Q_SLOT void configuredBarsAndPanels() {
+    [[qt::slot]] void configuredBarsAndPanels() {
       const auto cleanup = qScopeGuard([this] {
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
@@ -8965,7 +8976,7 @@ return {api_version=2, client={keybindings={
       }
     }
 
-    Q_SLOT void configuredTooltipsYieldToOpenSurfaces() {
+    [[qt::slot]] void configuredTooltipsYieldToOpenSurfaces() {
       const auto cleanup = qScopeGuard([this] {
         client_->components()->closePick();
         client_->components()->closePanel();
@@ -9070,7 +9081,7 @@ return {api_version=2, client={keybindings={
       return nullptr;
     }
 
-    Q_SLOT void configuredPanelKeyboardActions() {
+    [[qt::slot]] void configuredPanelKeyboardActions() {
       const auto sidebar = client_->display()->sidebarVisible();
       const auto cleanup = qScopeGuard([this, sidebar] {
         client_->components()->closePanel();
@@ -9154,7 +9165,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void configuredAccessibleGroups() {
+    [[qt::slot]] void configuredAccessibleGroups() {
       const bool accessibility = QAccessible::isActive();
       const auto sidebar = client_->display()->sidebarVisible();
       const auto cleanup = qScopeGuard([this, accessibility, sidebar] {
@@ -9213,21 +9224,21 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void configuredPluginCaptionRefresh() {
+    [[qt::slot]] void configuredPluginCaptionRefresh() {
       for (const auto kind : {features::components::Kind::button, features::components::Kind::group}) {
         verifyPluginCaptionRefresh(kind, false);
         QVERIFY(!QTest::currentTestFailed());
       }
     }
 
-    Q_SLOT void configuredPluginCaptureRefresh() {
+    [[qt::slot]] void configuredPluginCaptureRefresh() {
       for (const auto kind : {features::components::Kind::button, features::components::Kind::group}) {
         verifyPluginCaptionRefresh(kind, true);
         QVERIFY(!QTest::currentTestFailed());
       }
     }
 
-    Q_SLOT void configuredPluginRejectsMutatedTarget() {
+    [[qt::slot]] void configuredPluginRejectsMutatedTarget() {
       const auto sidebar = client_->display()->sidebarVisible();
       const auto collapsed = client_->display()->workspaceListCollapsed();
       const auto cleanup = qScopeGuard([this, sidebar, collapsed] {
@@ -9268,7 +9279,7 @@ return {api_version=2, client={keybindings={
       }
     }
 
-    Q_SLOT void configuredPluginUsesValidatedTarget() {
+    [[qt::slot]] void configuredPluginUsesValidatedTarget() {
       const auto sidebar = client_->display()->sidebarVisible();
       const auto collapsed = client_->display()->workspaceListCollapsed();
       const auto cleanup = qScopeGuard([this, sidebar, collapsed] {
@@ -9337,7 +9348,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void configuredDefinitionCaptionRefresh() {
+    [[qt::slot]] void configuredDefinitionCaptionRefresh() {
       for (const auto kind : {features::components::Kind::button, features::components::Kind::group}) {
         for (const bool picker : {false, true}) {
           verifyDefinitionCaptionRefresh(kind, picker, false);
@@ -9346,7 +9357,7 @@ return {api_version=2, client={keybindings={
       }
     }
 
-    Q_SLOT void configuredDefinitionCaptureRefresh() {
+    [[qt::slot]] void configuredDefinitionCaptureRefresh() {
       for (const auto kind : {features::components::Kind::button, features::components::Kind::group}) {
         for (const bool picker : {false, true}) {
           verifyDefinitionCaptionRefresh(kind, picker, true);
@@ -9355,7 +9366,7 @@ return {api_version=2, client={keybindings={
       }
     }
 
-    Q_SLOT void configuredDefinitionRejectsMutatedTarget() {
+    [[qt::slot]] void configuredDefinitionRejectsMutatedTarget() {
       const auto cleanup = qScopeGuard([this] {
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
@@ -9385,7 +9396,7 @@ return {api_version=2, client={keybindings={
       }
     }
 
-    Q_SLOT void configuredDefinitionUsesValidatedTarget() {
+    [[qt::slot]] void configuredDefinitionUsesValidatedTarget() {
       const auto cleanup = qScopeGuard([this] {
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
@@ -9444,7 +9455,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void configuredActionCaptionRefresh() {
+    [[qt::slot]] void configuredActionCaptionRefresh() {
       const auto sidebar = client_->display()->sidebarVisible();
       const auto cleanup = qScopeGuard([this, sidebar] {
         client_->components()->closePanel();
@@ -9500,7 +9511,7 @@ return {api_version=2, client={keybindings={
       }
     }
 
-    Q_SLOT void configuredBarCaptionRefresh() {
+    [[qt::slot]] void configuredBarCaptionRefresh() {
       const auto sidebar = client_->display()->sidebarVisible();
       const auto cleanup = qScopeGuard([this, sidebar] {
         client_->loadConfiguration({}, {}, {});
@@ -9550,7 +9561,7 @@ return {api_version=2, client={keybindings={
       QTRY_COMPARE_WITH_TIMEOUT(client_->display()->sidebarVisible(), !sidebar, runtime_wait_ms);
     }
 
-    Q_SLOT void configuredActionCaptureRefresh() {
+    [[qt::slot]] void configuredActionCaptureRefresh() {
       const auto sidebar = client_->display()->sidebarVisible();
       const auto collapsed = client_->display()->workspaceListCollapsed();
       const auto cleanup = qScopeGuard([this, sidebar, collapsed] {
@@ -9598,7 +9609,7 @@ return {api_version=2, client={keybindings={
       }
     }
 
-    Q_SLOT void configuredGroupKeyboardActions() {
+    [[qt::slot]] void configuredGroupKeyboardActions() {
       const auto sidebar = client_->display()->sidebarVisible();
       const auto cleanup = qScopeGuard([this, sidebar] {
         client_->components()->closePanel();
@@ -9689,7 +9700,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void configuredOverflowKeyboardActions() {
+    [[qt::slot]] void configuredOverflowKeyboardActions() {
       QPointer<QObject> popup;
       const auto cleanup = qScopeGuard([this, &popup] {
         if (popup != nullptr && popup->property("visible").toBool()) {
@@ -9765,7 +9776,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void configuredBuiltinPriority() {
+    [[qt::slot]] void configuredBuiltinPriority() {
       const auto original_size = window_->size();
       const auto cleanup = qScopeGuard([this, original_size] {
         client_->components()->closePanel();
@@ -9838,7 +9849,7 @@ return {api_version=2, client={keybindings={
       }
     }
 
-    Q_SLOT void configuredGroupPriority() {
+    [[qt::slot]] void configuredGroupPriority() {
       const auto cleanup = qScopeGuard([this] {
         client_->components()->closePanel();
         client_->loadConfiguration({}, {}, {});
@@ -9915,7 +9926,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(!client_->components()->panel().value(QStringLiteral("open")).toBool(), runtime_wait_ms);
     }
 
-    Q_SLOT void configuredGroupChromeAndGaps() {
+    [[qt::slot]] void configuredGroupChromeAndGaps() {
       const auto cleanup = qScopeGuard([this] {
         client_->loadConfiguration({}, {}, {});
       });
@@ -9977,7 +9988,7 @@ return {api_version=2, client={keybindings={
       }
     }
 
-    Q_SLOT void configuredOverflowCombinesSources() {
+    [[qt::slot]] void configuredOverflowCombinesSources() {
       QPointer<QObject> popup;
       const auto cleanup = qScopeGuard([this, &popup] {
         if (popup && popup->property("visible").toBool()) {
@@ -10068,7 +10079,7 @@ return {api_version=2, client={keybindings={
       }
     }
 
-    Q_SLOT void configuredOverflowActionReplacesItsMenu() {
+    [[qt::slot]] void configuredOverflowActionReplacesItsMenu() {
       QPointer<QObject> popup;
       const auto cleanup = qScopeGuard([this, &popup] {
         if (popup && popup->property("visible").toBool()) {
@@ -10147,7 +10158,7 @@ return {api_version=2, client={keybindings={
       QTRY_VERIFY_WITH_TIMEOUT(!popup->property("visible").toBool(), runtime_wait_ms);
     }
 
-    Q_SLOT void configuredBarRetainsFailedHiddenOutput() {
+    [[qt::slot]] void configuredBarRetainsFailedHiddenOutput() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -10212,7 +10223,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     }
 
-    Q_SLOT void configuredBarReportsFirstCommandFailure() {
+    [[qt::slot]] void configuredBarReportsFirstCommandFailure() {
       const auto cleanup = qScopeGuard([this] {
         client_->loadConfiguration({}, {}, {});
       });
@@ -10276,7 +10287,7 @@ return {api_version=2, client={keybindings={
       QVERIFY(test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
     }
 
-    Q_SLOT void configuredPicks() {
+    [[qt::slot]] void configuredPicks() {
       const auto sidebar = client_->display()->sidebarVisible();
       const auto cleanup = qScopeGuard([this, sidebar] {
         client_->components()->closePick();
@@ -10383,7 +10394,7 @@ return {api_version=2, client={keybindings={
       return scope != nullptr && focus != nullptr && (scope == focus || scope->isAncestorOf(focus));
     }
 
-    Q_SLOT void routedPluginCatalog() {
+    [[qt::slot]] void routedPluginCatalog() {
       const auto cleanup = qScopeGuard([this] {
         client_->loadConfiguration({}, {}, {});
       });
@@ -10517,7 +10528,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(peer.result().text, QStringLiteral("StaleConfiguration"));
     }
 
-    Q_SLOT void routedClientConfigurationQuery() {
+    [[qt::slot]] void routedClientConfigurationQuery() {
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
@@ -10566,7 +10577,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void routedBindingConfigurationQuery() {
+    [[qt::slot]] void routedBindingConfigurationQuery() {
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
@@ -10605,7 +10616,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(peer.error(), QString{});
     }
 
-    Q_SLOT void routedThemeConfigurationQuery() {
+    [[qt::slot]] void routedThemeConfigurationQuery() {
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
@@ -10633,7 +10644,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(peer.error(), QString{});
     }
 
-    Q_SLOT void routedGuiAndInputConfigurationQueries() {
+    [[qt::slot]] void routedGuiAndInputConfigurationQueries() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -10679,7 +10690,7 @@ return {api_version=2, client={keybindings={
       client_->loadConfiguration({}, {}, {});
     }
 
-    Q_SLOT void routedRuntimeConfigurationQuery() {
+    [[qt::slot]] void routedRuntimeConfigurationQuery() {
       client_->loadConfiguration({}, {}, {});
       CommandPeer peer{memory_};
 
@@ -10726,7 +10737,7 @@ return {api_version=2, client={keybindings={
       client_->loadConfiguration({}, {}, {});
     }
 
-    Q_SLOT void routedConfigurationReload() {
+    [[qt::slot]] void routedConfigurationReload() {
       const auto uncapped_interval = telar::gui::qt::WindowAnimationClock::forWindow(*window_).frameInterval();
       CommandPeer peer{memory_};
 
@@ -10817,11 +10828,11 @@ return {api_version=2, client={keybindings={
       QCOMPARE(telar::gui::qt::WindowAnimationClock::forWindow(*window_).frameInterval(), uncapped_interval);
     }
 
-    Q_SLOT void hiddenTerminalFramesWaitForVisibleContent() {
+    [[qt::slot]] void hiddenTerminalFramesWaitForVisibleContent() {
       verifyTerminalFrameAdmission(TerminalSuppression::hidden);
     }
 
-    Q_SLOT void outputResumesADeferredWindowFrame() {
+    [[qt::slot]] void outputResumesADeferredWindowFrame() {
       const QTemporaryDir gate_directory;
 
       QVERIFY(gate_directory.isValid());
@@ -10870,7 +10881,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void replacingTheWindowReturnsItsDeferredUpdate() {
+    [[qt::slot]] void replacingTheWindowReturnsItsDeferredUpdate() {
       QTRY_VERIFY_WITH_TIMEOUT(terminalReady(), runtime_wait_ms);
       QVERIFY(telar::gui::test::waitForSynchronizedFrame(*window_, runtime_wait_ms));
       QQuickWindow replacement;
@@ -10903,11 +10914,11 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void terminalFramesWaitForSceneSynchronization() {
+    [[qt::slot]] void terminalFramesWaitForSceneSynchronization() {
       verifyTerminalFrameAdmission(TerminalSuppression::no_contents);
     }
 
-    Q_SLOT void queuedFramesCannotSurviveAWindowBindingChange() {
+    [[qt::slot]] void queuedFramesCannotSurviveAWindowBindingChange() {
       for (const bool restore_before_delivery : telar::ds::Array{false, true}) {
         QQuickWindow replacement;
 
@@ -10982,7 +10993,7 @@ return {api_version=2, client={keybindings={
       }
     }
 
-    Q_SLOT void reopeningRestoresLayout() {
+    [[qt::slot]] void reopeningRestoresLayout() {
       const auto previous_tabs = client_->tabs()->rows()->rowCount();
       const auto previous_pane = firstPane()->id;
 
@@ -11001,7 +11012,7 @@ return {api_version=2, client={keybindings={
       QCOMPARE(client_->status()->error(), QString{});
     }
 
-    Q_SLOT void cleanupTestCase() {
+    [[qt::slot]] void cleanupTestCase() {
       QCOMPARE(errors_, QString{});
       engine_.reset();
       client_.reset();
@@ -12253,4 +12264,6 @@ int main(int argc, char** argv) {
   return QTest::qExec(&test, argc, argv);
 }
 
+#ifndef TELAR_MOC_RUN
 #include "quick_test.moc"
+#endif

@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "ui/kit/machines/remote_bridge.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QIODevice>
@@ -35,6 +34,8 @@ import telar.gui.application;
 import telar.base.ds;
 import telar.platform.primitives;
 import telar.wire.vocabulary;
+import telar.gui.ui.kit.machines;
+import telar.gui.qt;
 
 namespace {
 
@@ -143,15 +144,21 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
     return {.destination = destination, .program = {}, .local_endpoint = directory.filePath(QStringLiteral("runtime.sock"))};
   }
 
-  class RemoteBridgeTest : public QObject {
-    Q_OBJECT
+  class [[qt::object]] RemoteBridgeTest : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void init() {
+  private:
+    [[qt::slot]] static void init() {
       TestGatewayHost::requests.clear();
     }
 
-    Q_SLOT static void discoveryAndDuplexTransport() {
+    [[qt::slot]] static void discoveryAndDuplexTransport() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -183,7 +190,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
       QCOMPARE(observer.failures, std::size_t{0});
     }
 
-    Q_SLOT static void auditedLegacyDiscoveryStartsItsBridge() {
+    [[qt::slot]] static void auditedLegacyDiscoveryStartsItsBridge() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -201,7 +208,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
       bridge.close();
     }
 
-    Q_SLOT static void errors() {
+    [[qt::slot]] static void errors() {
       const telar::ds::Array cases{
           std::pair{"missing", MachineError::remote_program_missing},
           std::pair{"authentication", MachineError::authentication_failed},
@@ -231,7 +238,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
       }
     }
 
-    Q_SLOT static void timeoutAndReplacement() {
+    [[qt::slot]] static void timeoutAndReplacement() {
       const QTemporaryDir directory;
       Observer observer;
       RemoteBridge<ShortDeadlineHost, Observer> bridge{observer};
@@ -248,7 +255,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
       QCOMPARE(observer.discoveries, std::size_t{1});
     }
 
-    Q_SLOT static void cancelledPreparationAndRawPaths() {
+    [[qt::slot]] static void cancelledPreparationAndRawPaths() {
       const QTemporaryDir directory;
       Observer observer;
       RemoteBridge<TestGatewayHost, Observer> bridge{observer};
@@ -263,7 +270,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
       QCOMPARE(TestGatewayHost::requests.front().at(1), QStringLiteral("raw-path"));
     }
 
-    Q_SLOT static void discoveryReplacementCannotLaunchTheOldBridge() {
+    [[qt::slot]] static void discoveryReplacementCannotLaunchTheOldBridge() {
       const QTemporaryDir directory;
       Observer observer;
       RemoteBridge<TestGatewayHost, Observer> bridge{observer};
@@ -280,7 +287,7 @@ printf '/home/test\n/bin/sh\n/run/test/socket\n%s\n' "$3"
       QVERIFY(!observer.failure);
     }
 
-    Q_SLOT static void validation() {
+    [[qt::slot]] static void validation() {
       const QTemporaryDir directory;
       const auto request = target(directory, QStringLiteral("dev@box"));
       Observer observer;
@@ -311,4 +318,6 @@ int main(int argc, char** argv) {
   return QTest::qExec(&test, argc, argv);
 }
 
+#ifndef TELAR_MOC_RUN
 #include "remote_bridge_test.moc"
+#endif

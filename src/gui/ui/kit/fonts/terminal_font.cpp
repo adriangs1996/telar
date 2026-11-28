@@ -1,20 +1,7 @@
-#include "terminal_font.hpp"
-#include "bundled_fonts.hpp"
-#include <QFont>
-#include <QFontDatabase>
-#include <QFontInfo>
-#include <QFontMetricsF>
-#include <QGuiApplication>
-#include <QScreen>
-#include <QVariantMap>
-#include <QtCore/qchar.h>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <stdexcept>
+module telar.gui.ui.kit.fonts;
+
+import std;
+import telar.gui.qt;
 
 namespace telar::gui::qt {
   TerminalFont TerminalFont::resolve(const QVariantMap& settings, qreal scale) {

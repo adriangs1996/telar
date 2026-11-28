@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "assertions.hpp"
-#include "ui/app/panes/attachments/attachment_preview.hpp"
 #include <QBuffer>
 #include <QByteArray>
 #include <QCoreApplication>
@@ -22,6 +21,7 @@ static_assert(true);
 import telar.gui.features.terminal.attachments;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.gui.ui.app.panes.attachments.clipboard;
 
 namespace {
 

@@ -113,6 +113,11 @@ lint-scope: tbc-configure
 tbc-plugin: tbc-configure
     "{{ cpp }}" build tbc -B lib/tbc/out/release -- --target tbc-plugin
 
+# Build the Clang plugin and LibTooling generator for Qt C++23 modules ([[qt::...]]).
+qt-moc:
+    "{{ cpp }}" configure qt-moc -B tools/qt_moc/out/release --config Release
+    "{{ cpp }}" build qt-moc -B tools/qt_moc/out/release -- --target telar-qt-plugin telar-moc
+
 # Build the optimized lifetime checker that the repository's .tbc.json names.
 lifetime-checker: tbc-configure
     "{{ cpp }}" build tbc -B lib/tbc/out/release -- --target tbc-lint
@@ -179,7 +184,7 @@ ebnf-test *args:
     GTEST_COLOR=yes "{{ cpp }}" test ci -- -L lib.ebnf -V "$@"
 
 # Configure the tree of PRESET; a tree with tests runs the GUI's integration tests against the development CLI.
-configure preset="dev": tbc-plugin
+configure preset="dev": tbc-plugin qt-moc
     "{{ cpp }}" configure {{ preset }} -- {{ if preset == "release" { "" } else if preset == "dist" { "" } else { test_options } }}
 
 playground:

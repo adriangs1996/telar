@@ -1,13 +1,8 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.input;
 
-#include "native_pointer_events.hpp"
-#include "tbc/view.hpp"
-#include <QEvent>
-#include <QtGui/qpa/qwindowsysteminterface_p.h>
-
+import telar.gui.qt;
+import telar.gui.qt.private_gui;
+import telar.tbc;
 import telar.gui.foundation.core;
 
 namespace telar::gui::qt {

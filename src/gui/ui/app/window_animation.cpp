@@ -1,20 +1,12 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app;
 
-#include "application_controller.hpp"
-#include "ui/app/chrome/tabs/tab_strip_layout.hpp"
-#include "ui/app/overlays/notifications/notification_layout.hpp"
-#include "ui/app/panes/native_pane_attention.hpp"
-#include "ui/app/panes/pane_motion_layout.hpp"
-#include "ui/app/panes/terminal/history/layout/history_loading_layout.hpp"
-#include "ui/app/panes/terminal/history/layout/history_selection_layout.hpp"
-#include "ui/design/controls/modal_reveal_layout.hpp"
-#include "ui/design/controls/native_agent_status.hpp"
-#include "ui/design/controls/native_tab_activity.hpp"
-#include "ui/design/elements/element_layout.hpp"
-#include "ui/kit/scene/window_animation_clock.hpp"
+import telar.gui.ui.app.chrome.tabs;
+import telar.gui.ui.app.overlays.notifications;
+import telar.gui.ui.app.panes;
+import telar.gui.ui.app.panes.terminal.history.layout;
+import telar.gui.ui.design.controls;
+import telar.gui.ui.design.elements;
+import telar.gui.ui.kit.scene;
 
 namespace telar::gui::qt {
 

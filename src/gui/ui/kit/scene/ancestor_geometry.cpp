@@ -1,6 +1,6 @@
-#include "ancestor_geometry.hpp"
-#include <QObject>
-#include <QQuickItem>
+module telar.gui.ui.kit.scene;
+
+import telar.gui.qt;
 
 namespace telar::gui::qt {
 

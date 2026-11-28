@@ -1,18 +1,13 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.documents;
 
-#include "document_view.hpp"
-#include <QDesktopServices>
-#include <QKeyEvent>
-#include <QUrl>
-#include <span>
-#include <string_view>
-
+import std;
+import telar.gui.qt;
 import telar.render.document;
+import telar.tbc;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
+
   namespace {
 
     using render::Align;
@@ -40,17 +35,17 @@ namespace telar::gui::qt {
     QString kindName(BlockKind kind) {
       switch (kind) {
       case BlockKind::paragraph:
-        return QStringLiteral("paragraph");
+        return u"paragraph"_s;
       case BlockKind::heading:
-        return QStringLiteral("heading");
+        return u"heading"_s;
       case BlockKind::code:
-        return QStringLiteral("code");
+        return u"code"_s;
       case BlockKind::rule:
-        return QStringLiteral("rule");
+        return u"rule"_s;
       case BlockKind::table:
-        return QStringLiteral("table");
+        return u"table"_s;
       case BlockKind::html:
-        return QStringLiteral("html");
+        return u"html"_s;
       case BlockKind::count:
         break;
       }
@@ -61,15 +56,15 @@ namespace telar::gui::qt {
     QString calloutName(Callout callout) {
       switch (callout) {
       case Callout::note:
-        return QStringLiteral("note");
+        return u"note"_s;
       case Callout::tip:
-        return QStringLiteral("tip");
+        return u"tip"_s;
       case Callout::important:
-        return QStringLiteral("important");
+        return u"important"_s;
       case Callout::warning:
-        return QStringLiteral("warning");
+        return u"warning"_s;
       case Callout::caution:
-        return QStringLiteral("caution");
+        return u"caution"_s;
       case Callout::none:
       case Callout::count:
         return {};
@@ -82,15 +77,15 @@ namespace telar::gui::qt {
     QString calloutTitle(Callout callout) {
       switch (callout) {
       case Callout::note:
-        return QStringLiteral("Note");
+        return u"Note"_s;
       case Callout::tip:
-        return QStringLiteral("Tip");
+        return u"Tip"_s;
       case Callout::important:
-        return QStringLiteral("Important");
+        return u"Important"_s;
       case Callout::warning:
-        return QStringLiteral("Warning");
+        return u"Warning"_s;
       case Callout::caution:
-        return QStringLiteral("Caution");
+        return u"Caution"_s;
       case Callout::none:
       case Callout::count:
         return {};
@@ -103,13 +98,13 @@ namespace telar::gui::qt {
     QString marker(const render::Block& block) {
       switch (block.marker) {
       case Marker::bullet:
-        return block.list % 2 == 1 ? QStringLiteral("•") : QStringLiteral("◦");
+        return block.list % 2 == 1 ? u"•"_s : u"◦"_s;
       case Marker::ordered:
         return QString::number(block.number) + QLatin1Char('.');
       case Marker::task_open:
-        return QStringLiteral("☐");
+        return u"☐"_s;
       case Marker::task_done:
-        return QStringLiteral("☑");
+        return u"☑"_s;
       case Marker::footnote:
         return QString::number(block.number) + QLatin1Char(':');
       case Marker::none:
@@ -124,17 +119,17 @@ namespace telar::gui::qt {
     QString alignName(Align align) {
       switch (align) {
       case Align::center:
-        return QStringLiteral("center");
+        return u"center"_s;
       case Align::right:
-        return QStringLiteral("right");
+        return u"right"_s;
       case Align::start:
       case Align::left:
       case Align::count:
-        return QStringLiteral("left");
+        return u"left"_s;
       }
 
       // An alignment outside the enum lays out from the left.
-      return QStringLiteral("left");
+      return u"left"_s;
     }
 
     // A pane's own document (id 0) or one of its inline documents.
@@ -180,9 +175,9 @@ namespace telar::gui::qt {
     public:
       RichText(const Document& document, const QVariantMap& colors, const QString& mono)
           : document_(document),
-            code_style_(QStringLiteral("font-family:'%1'; background-color:%2; color:%3;").arg(mono.toHtmlEscaped(), color(colors, {.name = "surface", .fallback = "#2a2a2a"}), color(colors, {.name = "teal", .fallback = "#8bd5ca"}))),
-            link_style_(QStringLiteral("color:%1; text-decoration:underline;").arg(color(colors, {.name = "accent", .fallback = "#8aadf4"}))),
-            muted_style_(QStringLiteral("color:%1;").arg(color(colors, {.name = "muted", .fallback = "#888888"}))) {}
+            code_style_(u"font-family:'%1'; background-color:%2; color:%3;"_s.arg(mono.toHtmlEscaped(), color(colors, {.name = "surface", .fallback = "#2a2a2a"}), color(colors, {.name = "teal", .fallback = "#8bd5ca"}))),
+            link_style_(u"color:%1; text-decoration:underline;"_s.arg(color(colors, {.name = "accent", .fallback = "#8aadf4"}))),
+            muted_style_(u"color:%1;"_s.arg(color(colors, {.name = "muted", .fallback = "#888888"}))) {}
 
       [[nodiscard]] QString runs(std::span<const render::Run> runs) const {
         QString html;
@@ -195,42 +190,42 @@ namespace telar::gui::qt {
           const bool closes_link = link && (index + 1 == runs.size() || runs[index + 1].target != run.target || (runs[index + 1].style & render::style::link) == 0);
 
           if (opens_link) {
-            html += QStringLiteral("<a href=\"%1\" style=\"%2\">").arg(fromUtf8(document_.view(run.target)).toHtmlEscaped(), link_style_);
+            html += u"<a href=\"%1\" style=\"%2\">"_s.arg(fromUtf8(document_.view(run.target)).toHtmlEscaped(), link_style_);
           }
 
           QString text = escape(fromUtf8(document_.view(run.text)));
 
           if ((style & render::style::image) != 0) {
-            text = QStringLiteral("<span style=\"%1\">[image: %2]</span>").arg(muted_style_, text);
+            text = u"<span style=\"%1\">[image: %2]</span>"_s.arg(muted_style_, text);
           }
 
           if ((style & monospaced_styles) != 0) {
-            text = QStringLiteral("<span style=\"%1\">&nbsp;%2&nbsp;</span>").arg(code_style_, text);
+            text = u"<span style=\"%1\">&nbsp;%2&nbsp;</span>"_s.arg(code_style_, text);
           }
 
           if ((style & render::style::html) != 0) {
-            text = QStringLiteral("<span style=\"%1\">%2</span>").arg(muted_style_, text);
+            text = u"<span style=\"%1\">%2</span>"_s.arg(muted_style_, text);
           }
 
           if ((style & render::style::superscript) != 0) {
-            text = QStringLiteral("<sup>%1</sup>").arg(text);
+            text = u"<sup>%1</sup>"_s.arg(text);
           }
 
           if ((style & render::style::strike) != 0) {
-            text = QStringLiteral("<s>%1</s>").arg(text);
+            text = u"<s>%1</s>"_s.arg(text);
           }
 
           if ((style & render::style::emphasis) != 0) {
-            text = QStringLiteral("<i>%1</i>").arg(text);
+            text = u"<i>%1</i>"_s.arg(text);
           }
 
           if ((style & render::style::strong) != 0) {
-            text = QStringLiteral("<b>%1</b>").arg(text);
+            text = u"<b>%1</b>"_s.arg(text);
           }
 
           html += text;
           if (closes_link) {
-            html += QStringLiteral("</a>");
+            html += u"</a>"_s;
           }
         }
 
@@ -242,7 +237,7 @@ namespace telar::gui::qt {
       static constexpr std::uint16_t monospaced_styles = render::style::code | render::style::math;
 
       static QString escape(const QString& text) {
-        return text.toHtmlEscaped().replace(QLatin1Char('\n'), QStringLiteral("<br/>"));
+        return text.toHtmlEscaped().replace(QLatin1Char('\n'), u"<br/>"_s);
       }
 
       const Document& document_;
@@ -258,8 +253,8 @@ namespace telar::gui::qt {
 
       for (const auto& cell : document.cellsOf(block)) {
         row.append(QVariantMap{
-            {QStringLiteral("html"), rich.runs(document.runsOf(cell))},
-            {QStringLiteral("align"), alignName(cell.align)},
+            {u"html"_s, rich.runs(document.runsOf(cell))},
+            {u"align"_s, alignName(cell.align)},
         });
 
         if (row.size() == block.columns) {
@@ -299,14 +294,14 @@ namespace telar::gui::qt {
 
       connect(controller_, &DocumentsController::scrollRequested, this, [this](qulonglong pane_id, const QString& action) {
         if (pane_id == pane_id_ && document_id_ == 0 && shown_) {
-          emit scrollRequested(action);
+          scrollRequested(action);
         }
       });
     }
 
     stale_ = true;
     refresh();
-    emit controllerChanged();
+    controllerChanged();
   }
 
   QString DocumentView::paneId() const {
@@ -319,7 +314,7 @@ namespace telar::gui::qt {
       pane_id_ = next;
       stale_ = true;
       refresh();
-      emit paneIdChanged();
+      paneIdChanged();
     }
   }
 
@@ -332,7 +327,7 @@ namespace telar::gui::qt {
       colors_ = colors;
       stale_ = true;
       refresh();
-      emit colorsChanged();
+      colorsChanged();
     }
   }
 
@@ -345,7 +340,7 @@ namespace telar::gui::qt {
       mono_family_ = family;
       stale_ = true;
       refresh();
-      emit monoFamilyChanged();
+      monoFamilyChanged();
     }
   }
 
@@ -372,7 +367,7 @@ namespace telar::gui::qt {
       document_id_ = id;
       stale_ = true;
       refresh();
-      emit documentIdChanged();
+      documentIdChanged();
     }
   }
 
@@ -393,7 +388,7 @@ namespace telar::gui::qt {
       blocks_.clear();
     }
 
-    emit documentChanged();
+    documentChanged();
   }
 
   void DocumentView::project() {
@@ -405,30 +400,30 @@ namespace telar::gui::qt {
     blocks_.reserve(static_cast<qsizetype>(document.blocks.size()));
     for (const auto& block : document.blocks) {
       QVariantMap item{
-          {QStringLiteral("kind"), kindName(block.kind)},
-          {QStringLiteral("level"), block.level},
-          {QStringLiteral("quote"), block.quote},
-          {QStringLiteral("list"), block.list},
-          {QStringLiteral("marker"), marker(block)},
-          {QStringLiteral("callout"), calloutName(block.callout)},
-          {QStringLiteral("calloutTitle"), calloutTitle(block.callout)},
-          {QStringLiteral("opensCallout"), (block.flags & render::Block::opens_callout) != 0},
-          {QStringLiteral("tight"), (block.flags & render::Block::tight) != 0},
+          {u"kind"_s, kindName(block.kind)},
+          {u"level"_s, block.level},
+          {u"quote"_s, block.quote},
+          {u"list"_s, block.list},
+          {u"marker"_s, marker(block)},
+          {u"callout"_s, calloutName(block.callout)},
+          {u"calloutTitle"_s, calloutTitle(block.callout)},
+          {u"opensCallout"_s, (block.flags & render::Block::opens_callout) != 0},
+          {u"tight"_s, (block.flags & render::Block::tight) != 0},
       };
 
       switch (block.kind) {
       case BlockKind::paragraph:
       case BlockKind::heading:
-        item.insert(QStringLiteral("html"), rich.runs(document.runsOf(block)));
+        item.insert(u"html"_s, rich.runs(document.runsOf(block)));
         break;
       case BlockKind::code:
       case BlockKind::html:
-        item.insert(QStringLiteral("text"), fromUtf8(document.view(render::Span{.offset = block.first, .size = block.count})));
-        item.insert(QStringLiteral("info"), fromUtf8(document.view(block.info)));
+        item.insert(u"text"_s, fromUtf8(document.view(render::Span{.offset = block.first, .size = block.count})));
+        item.insert(u"info"_s, fromUtf8(document.view(block.info)));
         break;
       case BlockKind::table:
-        item.insert(QStringLiteral("columns"), block.columns);
-        item.insert(QStringLiteral("rows"), tableRows(document, block, rich));
+        item.insert(u"columns"_s, block.columns);
+        item.insert(u"rows"_s, tableRows(document, block, rich));
         break;
       case BlockKind::rule:
       case BlockKind::count:

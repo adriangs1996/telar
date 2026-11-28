@@ -2,12 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "frame_fixture.hpp"
-#include "gui_wait.hpp"
-#include "qml_fixture.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/kit/plugins/plugin_worker.hpp"
 #include <QByteArray>
 #include <QColor>
 #include <algorithm>
@@ -28,10 +22,8 @@ static_assert(true);
 #include <tuple>
 #include <utility>
 #ifdef __APPLE__
-#include "ui/app/panes/attachments/attachment_shelf.hpp"
 #endif
 #ifdef __APPLE__
-#include "ui/kit/input/key_adapter.hpp"
 #endif
 #ifdef __APPLE__
 #include "platform/private_clipboard.hpp"
@@ -64,13 +56,6 @@ static_assert(true);
 #ifdef __APPLE__
 #include <QtGui/qtestsupport_gui.h>
 #endif
-#include "ui/app/chrome/components/machine_chrome/machine_chrome_layout.hpp"
-#include "ui/app/panes/terminal/terminal_item.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/links/external_link_opener.hpp"
-#include "ui/kit/machines/machine_client.hpp"
-#include "ui/kit/models/list_model.hpp"
-#include "wire_runtime.hpp"
 #include <QAbstractItemModel>
 #include <QCoreApplication>
 #include <QEvent>
@@ -115,13 +100,14 @@ static_assert(true);
 #ifdef __APPLE__
 #endif
 
+#ifdef __APPLE__
+#endif
+
 import telar.gui.tests.activity_fixture;
 import telar.gui.tests.metrics_fixture;
 import telar.gui.application;
 import telar.gui.features.plugins;
 import telar.gui.features.machines;
-#ifdef __APPLE__
-#endif
 import telar.gui.features.notifications;
 import telar.wire.agents;
 import telar.wire.content;
@@ -134,6 +120,22 @@ import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 import telar.wire.pane_io;
 import telar.wire.runtime;
+import telar.gui.ui.app;
+import telar.gui.ui.kit.plugins;
+import telar.gui.ui.app.panes.attachments;
+import telar.gui.ui.kit.input;
+import telar.gui.ui.app.chrome.components.machine_chrome;
+import telar.gui.ui.app.panes.terminal;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.links;
+import telar.gui.ui.kit.machines;
+import telar.gui.ui.kit.models;
+import telar.gui.tests.frame_fixture;
+import telar.gui.tests.gui_wait;
+import telar.gui.tests.qml_fixture;
+import telar.gui.tests.wire_runtime;
+import telar.gui.foundation.model;
+import telar.gui.qt;
 
 namespace telar::gui::test {
 
@@ -599,10 +601,16 @@ namespace {
     std::unique_ptr<QLocalSocket> remote_socket_;
   };
 
-  class MachineWindowTest : public QObject {
-    Q_OBJECT
+  class [[qt::object]] MachineWindowTest : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
-    Q_SLOT static void pluginCompletionStaysWithItsExecutionMachineAndRuntime() {
+  private:
+    [[qt::slot]] static void pluginCompletionStaysWithItsExecutionMachineAndRuntime() {
       MachineFixture fixture;
 
       QVERIFY(fixture.start());
@@ -643,7 +651,7 @@ namespace {
     }
 
 #ifdef __APPLE__
-    Q_SLOT static void clipboardCaptureFinishesWhileLocalClientIsHidden() {
+    [[qt::slot]] static void clipboardCaptureFinishesWhileLocalClientIsHidden() {
       PrivateClipboard board;
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
@@ -805,7 +813,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void clipboardImagesReservePaneRowsAndOwnModalKeys() {
+    [[qt::slot]] static void clipboardImagesReservePaneRowsAndOwnModalKeys() {
       PrivateClipboard board;
       MachineFixture fixture;
       auto& application = fixture.application;
@@ -902,7 +910,7 @@ namespace {
     }
 #endif
 
-    Q_SLOT static void attachmentShelfAndModalLoadFromTheRegisteredQmlModule() {
+    [[qt::slot]] static void attachmentShelfAndModalLoadFromTheRegisteredQmlModule() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController application{memory};
@@ -934,19 +942,19 @@ namespace {
       closed_workspace,
     };
 
-    Q_SLOT static void terminalRemoteKeepsItsSummaryUntilReselection() {
+    [[qt::slot]] static void terminalRemoteKeepsItsSummaryUntilReselection() {
       verifyTerminalSession(TerminalStatus::stopping, true);
     }
 
-    Q_SLOT static void lastRemoteTabFinishesItsReceiveLoop() {
+    [[qt::slot]] static void lastRemoteTabFinishesItsReceiveLoop() {
       verifyTerminalSession(TerminalStatus::last_tab, true);
     }
 
-    Q_SLOT static void closedRemoteWorkspaceFinishesItsReceiveLoop() {
+    [[qt::slot]] static void closedRemoteWorkspaceFinishesItsReceiveLoop() {
       verifyTerminalSession(TerminalStatus::closed_workspace, true);
     }
 
-    Q_SLOT static void hiddenTerminalRemoteKeepsItsSummaryUntilSelection() {
+    [[qt::slot]] static void hiddenTerminalRemoteKeepsItsSummaryUntilSelection() {
       verifyTerminalSession(TerminalStatus::stopping, false);
     }
 
@@ -1019,7 +1027,7 @@ namespace {
       QCOMPARE(fixture.local_runtime->count(ClientTag::pane_input), 0);
     }
 
-    Q_SLOT static void remoteRuntimeStoppingReturnsToLocalWithoutClosingWindow() {
+    [[qt::slot]] static void remoteRuntimeStoppingReturnsToLocalWithoutClosingWindow() {
       MachineFixture fixture;
       QQuickWindow window;
       constexpr QSize size{800, 600};
@@ -1054,11 +1062,11 @@ namespace {
       QCOMPARE(fixture.remote_runtime->count(ClientTag::pane_input), 0);
     }
 
-    Q_SLOT static void lastRemoteTabReturnsToLocal() {
+    [[qt::slot]] static void lastRemoteTabReturnsToLocal() {
       verifyRemoteWorkspaceClosure(false);
     }
 
-    Q_SLOT static void remoteWorkspaceResyncReturnsToLocal() {
+    [[qt::slot]] static void remoteWorkspaceResyncReturnsToLocal() {
       verifyRemoteWorkspaceClosure(true);
     }
 
@@ -1093,7 +1101,7 @@ namespace {
       fixture.local_runtime->send(PaneOpened{.request_id = opening.request_id, .pane_id = pane_id, .location = location, .pane_generation = 1});
     }
 
-    Q_SLOT static void localRuntimeStoppingClosesItsWindow() {
+    [[qt::slot]] static void localRuntimeStoppingClosesItsWindow() {
       MachineFixture fixture;
       QQuickWindow window;
       constexpr QSize size{800, 600};
@@ -1106,7 +1114,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!window.isVisible(), wait_ms);
     }
 
-    Q_SLOT static void hiddenRemoteRuntimeStoppingPreservesLocalPresentation() {
+    [[qt::slot]] static void hiddenRemoteRuntimeStoppingPreservesLocalPresentation() {
       MachineFixture fixture;
       QQuickWindow window;
       constexpr QSize size{800, 600};
@@ -1130,7 +1138,7 @@ namespace {
       QCOMPARE(fixture.remote_runtime->count(ClientTag::pane_input), 0);
     }
 
-    Q_SLOT static void transientRemoteLossPreservesItsSelectedPresentation() {
+    [[qt::slot]] static void transientRemoteLossPreservesItsSelectedPresentation() {
       MachineFixture fixture;
       QQuickWindow window;
       constexpr QSize size{800, 600};
@@ -1153,7 +1161,7 @@ namespace {
       QVERIFY(window.isVisible());
     }
 
-    Q_SLOT static void metricProjectionFollowsSelectionLossAndReplacement() {
+    [[qt::slot]] static void metricProjectionFollowsSelectionLossAndReplacement() {
       MachineFixture fixture;
       QQuickWindow window;
       constexpr QSize size{800, 600};
@@ -1206,7 +1214,7 @@ namespace {
       QCOMPARE(percent(), local_cpu);
     }
 
-    Q_SLOT static void machineListShowsOtherMachinesWithTheirAgentStack() {
+    [[qt::slot]] static void machineListShowsOtherMachinesWithTheirAgentStack() {
       MachineFixture fixture;
       QQuickWindow window;
       QQmlEngine engine;
@@ -1267,7 +1275,7 @@ namespace {
     // The top bar reads machine, workspaces, tabs; the sidebar lists no machine; and every card
     // fills its three rows whatever its agent or process does. TELAR_GUI_TEST_CHROME_SCREENSHOTS
     // names a directory that receives the window as each assertion finds it.
-    Q_SLOT static void chromeOrdersMachineWorkspacesAndTabsAndFillsEveryCardRow() {
+    [[qt::slot]] static void chromeOrdersMachineWorkspacesAndTabsAndFillsEveryCardRow() {
       MachineFixture fixture;
       auto& application = fixture.application;
       QQmlApplicationEngine engine;
@@ -1554,7 +1562,7 @@ namespace {
       QVERIFY(capture("chrome-narrow.png"));
     }
 
-    Q_SLOT static void machineInlineFactsTrackHiddenSources() {
+    [[qt::slot]] static void machineInlineFactsTrackHiddenSources() {
       QTest::failOnWarning(QRegularExpression{QStringLiteral("^qrc:.*")});
       MachineFixture fixture;
       QQuickWindow window;
@@ -1654,7 +1662,7 @@ namespace {
       QCOMPARE(row(1).value(QStringLiteral("cpu")).toString(), QString{});
     }
 
-    Q_SLOT static void machineSegmentCarriesAttentionAndProfileInk() {
+    [[qt::slot]] static void machineSegmentCarriesAttentionAndProfileInk() {
       MachineFixture fixture;
       QQuickWindow window;
       QQmlEngine engine;
@@ -1700,7 +1708,7 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(layout->items()->rowCount(), 1, wait_ms);
     }
 
-    Q_SLOT static void machineControlsRejectRetiredAdmissionsAndWindows() {
+    [[qt::slot]] static void machineControlsRejectRetiredAdmissionsAndWindows() {
       MachineFixture fixture;
       QQuickWindow window;
       QQuickWindow replacement;
@@ -1747,7 +1755,7 @@ namespace {
       QVERIFY(!fixture.application.status()->connected());
     }
 
-    Q_SLOT static void activityButtonsRoutePrimaryAndSecondaryOnPress() {
+    [[qt::slot]] static void activityButtonsRoutePrimaryAndSecondaryOnPress() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController application{memory};
@@ -1789,7 +1797,7 @@ namespace {
       QCOMPARE(selected.count(), 1);
     }
 
-    Q_SLOT static void remotePeekReadsAndSubmitsOnlyToItsOwnedSource() {
+    [[qt::slot]] static void remotePeekReadsAndSubmitsOnlyToItsOwnedSource() {
       MachineFixture fixture;
       QQuickWindow window;
       QQmlEngine engine;
@@ -1872,7 +1880,7 @@ namespace {
       QVERIFY(application.peek()->state().value(QStringLiteral("lines")).toStringList().isEmpty());
     }
 
-    Q_SLOT static void peekSubmissionsRejectRetiredWindowsAndDialogRevisions() {
+    [[qt::slot]] static void peekSubmissionsRejectRetiredWindowsAndDialogRevisions() {
       MachineFixture fixture;
       QQuickWindow window;
       QQuickWindow replacement;
@@ -1917,7 +1925,7 @@ namespace {
       QCOMPARE(fixture.local_runtime->last<InterruptAgent>().pane_id, pane_id);
     }
 
-    Q_SLOT static void aPointerMoveWhilePeekWaitsDoesNotRestoreOldHover() {
+    [[qt::slot]] static void aPointerMoveWhilePeekWaitsDoesNotRestoreOldHover() {
       MachineFixture fixture;
       QQuickWindow window;
       constexpr QSize size{800, 600};
@@ -1944,11 +1952,11 @@ namespace {
       QVERIFY(application.activity()->hovered().isEmpty());
     }
 
-    Q_SLOT static void restoredRootReceivesTheLatestWindowAndSidebarGeometry() {
+    [[qt::slot]] static void restoredRootReceivesTheLatestWindowAndSidebarGeometry() {
       verifyRestoredRootGeometry(false);
     }
 
-    Q_SLOT static void hiddenRestoredRootReceivesTheLatestWindowAndSidebarGeometry() {
+    [[qt::slot]] static void hiddenRestoredRootReceivesTheLatestWindowAndSidebarGeometry() {
       verifyRestoredRootGeometry(true);
     }
 
@@ -2046,7 +2054,7 @@ namespace {
       QCOMPARE(application.status()->error(), QString{});
     }
 
-    Q_SLOT static void activityHoverChangesOnlyDuringDeliveredPointerInput() {
+    [[qt::slot]] static void activityHoverChangesOnlyDuringDeliveredPointerInput() {
       MachineFixture fixture;
       QQuickWindow window;
       constexpr QSize size{800, 600};
@@ -2095,7 +2103,7 @@ namespace {
       QVERIFY(application.activity()->hovered().isEmpty());
     }
 
-    Q_SLOT static void activityHoverRejectsCardsOutsideDeliveredPointer() {
+    [[qt::slot]] static void activityHoverRejectsCardsOutsideDeliveredPointer() {
       constexpr QSize window_size{800, 600};
       constexpr QPointF card_origin{20, 40};
       constexpr QSizeF clip_size{80, 80};
@@ -2178,7 +2186,7 @@ namespace {
       QVERIFY(application.activity()->hovered().isEmpty());
     }
 
-    Q_SLOT static void resizingPeekShowsTheRecentTailAndRetiresItsHiddenEditor() {
+    [[qt::slot]] static void resizingPeekShowsTheRecentTailAndRetiresItsHiddenEditor() {
       MachineFixture fixture;
       QQuickWindow window;
       QQmlEngine engine;
@@ -2234,7 +2242,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT((application.dialogs()->kind() == telar::gui::qt::ApplicationController::Dialog::none), wait_ms);
     }
 
-    Q_SLOT static void activityCombinesSourcesWithoutOpeningHiddenScreens() {
+    [[qt::slot]] static void activityCombinesSourcesWithoutOpeningHiddenScreens() {
       MachineFixture fixture;
 
       QVERIFY(fixture.start());
@@ -2307,7 +2315,7 @@ namespace {
       QCOMPARE(application.pane(pane_id)->attached, true);
     }
 
-    Q_SLOT static void activityRejectsReusedSessionsAndWaitsForCanonicalSnapshots() {
+    [[qt::slot]] static void activityRejectsReusedSessionsAndWaitsForCanonicalSnapshots() {
       MachineFixture fixture;
 
       QVERIFY(fixture.start());
@@ -2354,7 +2362,7 @@ namespace {
       QCOMPARE(fixture.remote_runtime->count(ClientTag::open_pane), 2);
     }
 
-    Q_SLOT static void commandTargetsRejectWorkspaceReuseDuringHandoff() {
+    [[qt::slot]] static void commandTargetsRejectWorkspaceReuseDuringHandoff() {
       MachineFixture fixture;
 
       QVERIFY(fixture.start());
@@ -2407,7 +2415,7 @@ namespace {
       QCOMPARE(fixture.remote_runtime->count(ClientTag::create_pane), 0);
     }
 
-    Q_SLOT static void aLaterInteractionCancelsPendingActivity() {
+    [[qt::slot]] static void aLaterInteractionCancelsPendingActivity() {
       MachineFixture fixture;
 
       QVERIFY(fixture.start());
@@ -2431,7 +2439,7 @@ namespace {
       QCOMPARE(application.pane(pane_id)->id, pane_id);
     }
 
-    Q_SLOT static void reconnectingRuntimeInvalidatesActivityWithRestartedRevisions() {
+    [[qt::slot]] static void reconnectingRuntimeInvalidatesActivityWithRestartedRevisions() {
       MachineFixture fixture;
 
       QVERIFY(fixture.start());
@@ -2475,7 +2483,7 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(fixture.remote_runtime->count(ClientTag::open_pane), 1, wait_ms);
     }
 
-    Q_SLOT static void retiredNotificationFocusKeepsItsWindowAndMachine() {
+    [[qt::slot]] static void retiredNotificationFocusKeepsItsWindowAndMachine() {
       MachineFixture fixture;
       auto& application = fixture.application;
       QQuickWindow previous;
@@ -2545,7 +2553,7 @@ namespace {
       QCOMPARE(current.activeFocusItem(), &terminal);
     }
 
-    Q_SLOT static void heldKeysCannotRepeatOnAnotherMachine() {
+    [[qt::slot]] static void heldKeysCannotRepeatOnAnotherMachine() {
       MachineFixture fixture;
 
       QVERIFY(fixture.start());
@@ -2579,7 +2587,7 @@ namespace {
       QCOMPARE(textView(input.bytes), std::string_view{"a"});
     }
 
-    Q_SLOT static void hiddenSessionsAndOldFramesKeepTheirMachine() {
+    [[qt::slot]] static void hiddenSessionsAndOldFramesKeepTheirMachine() {
       MachineFixture fixture;
 
       QVERIFY(fixture.start());
@@ -2615,7 +2623,7 @@ namespace {
       QCOMPARE(fixture.local_runtime->count(ClientTag::frame_ack), 0);
     }
 
-    Q_SLOT static void notificationsRejectCallbacksFromAnotherPresentation() {
+    [[qt::slot]] static void notificationsRejectCallbacksFromAnotherPresentation() {
       MachineFixture fixture;
 
       QVERIFY(fixture.start());
@@ -2638,7 +2646,7 @@ namespace {
       QCOMPARE(application.notifications()->center().items().front().phase, NotificationItem::Phase::exiting);
     }
 
-    Q_SLOT static void rebuildingAClientRejectsItsPreviousAdmission() {
+    [[qt::slot]] static void rebuildingAClientRejectsItsPreviousAdmission() {
       MachineFixture fixture;
 
       QVERIFY(fixture.start());
@@ -2651,7 +2659,7 @@ namespace {
       QVERIFY(MachineWindow::contains(fixture.application, replacement));
     }
 
-    Q_SLOT static void linkFailuresStayWithTheirOriginalClient() {
+    [[qt::slot]] static void linkFailuresStayWithTheirOriginalClient() {
       MachineFixture fixture;
 
       QVERIFY(fixture.start());
@@ -2674,7 +2682,7 @@ namespace {
     // the filter's field; on a machine of many cores the table keeps its rows with the detail open.
     // Another machine runs the window's editor configuration: the window brings it there when it
     // connects, and keeps it from the machine it runs on, whose runtime reads the same directory.
-    Q_SLOT static void editorConfigurationIsBroughtToAnotherMachine() {
+    [[qt::slot]] static void editorConfigurationIsBroughtToAnotherMachine() {
       const QDir editor{qEnvironmentVariable("XDG_CONFIG_HOME") + QStringLiteral("/telar/editor")};
       const auto removed = qScopeGuard([&] {
         QDir{editor}.removeRecursively();
@@ -2702,7 +2710,7 @@ namespace {
       QCOMPARE(fixture.local_runtime->count(ClientTag::nvim_configuration), std::size_t{0});
     }
 
-    Q_SLOT static void monitorShowsAnotherMachineWithItsFilter() {
+    [[qt::slot]] static void monitorShowsAnotherMachineWithItsFilter() {
       MachineFixture fixture;
       auto& application = fixture.application;
       QQmlApplicationEngine engine;
@@ -2770,7 +2778,7 @@ namespace {
 
     // A confirmation acts on the process and the machine it named: moving to another process or
     // machine cancels it, and the palette's TERM asks as the monitor's key does.
-    Q_SLOT static void monitorConfirmsOnTheProcessItNamed() {
+    [[qt::slot]] static void monitorConfirmsOnTheProcessItNamed() {
       MachineFixture fixture;
       QQuickWindow window;
       auto& application = fixture.application;
@@ -2825,7 +2833,7 @@ namespace {
     // The explorer with a window on each of two machines: each lists what its own runtime
     // answers and asks the other for nothing, and one plan is sent to both. With
     // TELAR_EXPLORER_MACHINE_SHOTS it takes pictures of them into that directory.
-    Q_SLOT static void explorerShowsWindowsOnTwoMachines() {
+    [[qt::slot]] static void explorerShowsWindowsOnTwoMachines() {
       MachineFixture fixture;
       auto& application = fixture.application;
       QQmlApplicationEngine engine;
@@ -3482,4 +3490,6 @@ int main(int argc, char** argv) {
   return QTest::qExec(&test, argc, argv);
 }
 
+#ifndef TELAR_MOC_RUN
 #include "machine_window_test.moc"
+#endif

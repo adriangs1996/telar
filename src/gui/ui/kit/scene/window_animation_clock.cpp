@@ -1,35 +1,14 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.scene;
 
-#include "window_animation_clock.hpp"
-#include <QEvent>
-#include <QObject>
-#include <QPointer>
-#include <QQuickWindow>
-#include <QScreen>
-#include <QString>
-#include <QTimer>
-#include <QWindow>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qstringliteral.h>
-#include <algorithm>
-#include <chrono>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <limits>
-#include <memory>
-#include <optional>
-#include <span>
-
+import std;
+import telar.gui.qt;
 import telar.gui.foundation.core;
 import telar.gui.foundation.system;
 import telar.gui.application;
 import telar.base.ds;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -54,7 +33,7 @@ namespace telar::gui::qt {
       lanes_.push(make(adapter_));
     }
 
-    timer_.setObjectName(QStringLiteral("agentStatusAnimation"));
+    timer_.setObjectName(u"agentStatusAnimation"_s);
     timer_.setSingleShot(true);
     timer_.setTimerType(Qt::PreciseTimer);
     connect(&timer_, &QTimer::timeout, this, [this] {

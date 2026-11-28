@@ -1,26 +1,15 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.chrome.tabs;
 
-#include "tabs_controller.hpp"
-#include "tab_strip_layout.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QList>
-#include <QtCore/qnamespace.h>
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <functional>
-#include <span>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
 import telar.wire.vocabulary;
 import telar.base.ds;
 import telar.base.memory.allocators;
+import telar.gui.foundation.model;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   TabsController::TabsController(Store& store, ElementSlots& elements, QObject* parent)
       : QObject(parent),
@@ -92,7 +81,7 @@ namespace telar::gui::qt {
       auto record = tabRecord(*tab, pane, session.panes, std::span<const Agent<Memory>>{session.agents()}, tab == active);
 
       if (elements_.active()) {
-        record.insert(QStringLiteral("elements"), elements_.elements(ElementSlots::tab_slots, record.value(QStringLiteral("key")).toString(), ElementSlots::tabItem(record, static_cast<int>(tabs.size()))));
+        record.insert(u"elements"_s, elements_.elements(ElementSlots::tab_slots, record.value(u"key"_s).toString(), ElementSlots::tabItem(record, static_cast<int>(tabs.size()))));
       }
 
       tabs.append(std::move(record));
@@ -137,7 +126,7 @@ namespace telar::gui::qt {
     if (std::ranges::any_of(session.tabs, [&](const auto& tab) {
           return tab->location.tab_id == id && tab->location.workspace.kind == surface.workspace.kind && tab->location.workspace.id == surface.workspace.id;
         })) {
-      emit selectRequested(id);
+      selectRequested(id);
     }
   }
 

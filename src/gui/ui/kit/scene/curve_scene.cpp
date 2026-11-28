@@ -1,34 +1,8 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.scene;
 
-#include "curve_scene.hpp"
-#include "curve_mask.hpp"
-#include "curve_mask_node.hpp"
-#include "qt_buffers.hpp"
-#include "scene_nodes.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QImage>
-#include <QPainter>
-#include <QRectF>
-#include <QSGNode>
-#include <QSGRendererInterface>
-#include <QSGSimpleTextureNode>
-#include <QSGTexture>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <limits>
-#include <memory>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
 import telar.base.ds;
 
 namespace telar::gui::qt {
@@ -43,6 +17,8 @@ namespace telar::gui::qt {
 
   CurveScene::CurveScene(QQuickWindow& window) noexcept
       : window_(window) {}
+
+  CurveScene::~CurveScene() = default;
 
   ds::Option<CurveMaskRef> CurveScene::createMask(glyphs::BoxCurve::Shape shape, Rect cell, float thickness) {
     if (cell.width > Cache::raster_limit || cell.height > Cache::raster_limit || cell.empty()) {

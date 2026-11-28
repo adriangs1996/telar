@@ -1,46 +1,15 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.cell_scene;
 
-#include "terminal_scene.hpp"
-#include "terminal_decorations.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "ui/kit/scene/cell_glyphs.hpp"
-#include "ui/kit/scene/scene_nodes.hpp"
-#include "ui/kit/scene/text_scene.hpp"
-#include <QMatrix4x4>
-#include <QPointF>
-#include <QRectF>
-#include <QString>
-#include <QTextCharFormat>
-#include <QtCore/qchar.h>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qtypes.h>
-#include <QtGui/qcolor.h>
-#include <QtQuick/qquickwindow.h>
-#include <QtQuick/qsggeometry.h>
-#include <QtQuick/qsgnode.h>
-#include <QtQuick/qsgsimplerectnode.h>
-#include <algorithm>
-#include <array>
-#include <bit>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <functional>
-#include <limits>
-#include <memory>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.scene;
 import telar.gui.foundation.core;
 import telar.gui.application;
 import telar.base.ds;
 import telar.wire.vocabulary;
+import telar.gui.foundation.fonts;
+import telar.gui.foundation.text;
 
 namespace telar::gui::qt {
 

@@ -1,43 +1,16 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.cell_scene;
 
-#include "window_images.hpp"
-#include "graphics_scene.hpp"
-#include "image_resource.hpp"
-#include "ui/kit/scene/scene_nodes.hpp"
-#include "ui/kit/timing/deadline_timer.hpp"
-#include <QEvent>
-#include <QImage>
-#include <QObject>
-#include <QPointer>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QString>
-#include <QTimer>
-#include <QWindow>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <bit>
-#include <cstddef>
-#include <cstdint>
-#include <limits>
-#include <memory>
-#include <optional>
-#include <span>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.scene;
+import telar.gui.ui.kit.timing;
 import telar.gui.application;
 import telar.gui.foundation.system;
 import telar.base.ds;
 import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   void WindowImages::Resources::release(application::terminal::graphics::ImageTextureHandle handle) noexcept {
     images.atMut(handle - 1).clear();
@@ -49,7 +22,7 @@ namespace telar::gui::qt {
         timer_(this) {
     requested_visible_.store(window_.isVisible() && window_.visibility() != QWindow::Minimized, std::memory_order_relaxed);
     window_.installEventFilter(this);
-    timer_.setObjectName(QStringLiteral("imageResidencyDeadline"));
+    timer_.setObjectName(u"imageResidencyDeadline"_s);
     timer_.setSingleShot(true);
     timer_.setTimerType(Qt::PreciseTimer);
     connect(&timer_, &QTimer::timeout, this, [this] {

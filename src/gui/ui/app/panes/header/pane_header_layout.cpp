@@ -1,25 +1,11 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.header;
 
-#include "pane_header_layout.hpp"
-#include "pane_chrome_style.hpp"
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QString>
-#include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <cmath>
-#include <functional>
-
+import std;
+import telar.gui.qt;
 import telar.gui.application;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   PaneHeaderLayout::PaneHeaderLayout(QQuickItem* parent)
       : QQuickItem(parent) {}
@@ -31,7 +17,7 @@ namespace telar::gui::qt {
   void PaneHeaderLayout::setMeasurements(const QVariantMap& measurements) {
     if (measurements_ != measurements) {
       measurements_ = measurements;
-      emit measurementsChanged();
+      measurementsChanged();
       polish();
     }
   }
@@ -43,7 +29,7 @@ namespace telar::gui::qt {
   void PaneHeaderLayout::setRatio(qreal ratio) {
     if (std::isfinite(ratio) && ratio > 0 && std::not_equal_to<>{}(ratio_, ratio)) {
       ratio_ = ratio;
-      emit metricsChanged();
+      metricsChanged();
       polish();
     }
   }
@@ -55,7 +41,7 @@ namespace telar::gui::qt {
   void PaneHeaderLayout::setBandHeight(qreal height) {
     if (std::isfinite(height) && height >= 0 && std::not_equal_to<>{}(band_height_, height)) {
       band_height_ = height;
-      emit metricsChanged();
+      metricsChanged();
       polish();
     }
   }
@@ -101,21 +87,21 @@ namespace telar::gui::qt {
     };
 
     const application::workbench::PaneHeaderMeasurements measurements{
-        .index = advance(QStringLiteral("index")),
-        .name = advance(QStringLiteral("name")),
-        .chip = advance(QStringLiteral("chip")),
-        .paused = advance(QStringLiteral("paused")),
-        .progress = advance(QStringLiteral("progress")),
-        .compact_progress = advance(QStringLiteral("compactProgress")),
-        .needs_attention = measurements_.value(QStringLiteral("needsAttention")).toBool(),
+        .index = advance(u"index"_s),
+        .name = advance(u"name"_s),
+        .chip = advance(u"chip"_s),
+        .paused = advance(u"paused"_s),
+        .progress = advance(u"progress"_s),
+        .compact_progress = advance(u"compactProgress"_s),
+        .needs_attention = measurements_.value(u"needsAttention"_s).toBool(),
     };
 
     const auto layout = application::workbench::PaneHeaderGeometry::derive({.width = static_cast<float>(width() * density), .height = static_cast<float>(height() * density)}, {.ratio = static_cast<float>(ratio_ * density), .maximum_band_height = static_cast<float>(band_height_ * density)}, measurements);
     if (layout != layout_ || std::not_equal_to<>{}(density_, density)) {
       layout_ = layout;
       density_ = density;
-      emit metricsChanged();
-      emit layoutChanged();
+      metricsChanged();
+      layoutChanged();
     }
   }
 

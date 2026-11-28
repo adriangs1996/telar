@@ -1,11 +1,9 @@
 telar_add_qml_sources(gui-quick
   SOURCES
     pane_header_layout.cpp
-    pane_header_layout.hpp
   QML_FILES
     PaneHeader.qml
     PaneProgress.qml
     PaneStatusChip.qml
   FP_CONTRACT_OFF
-    pane_header_layout.cpp
-  REGISTERS)
+    pane_header_layout.cpp)

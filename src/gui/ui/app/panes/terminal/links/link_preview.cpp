@@ -1,23 +1,8 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal.links;
 
-#include "link_preview.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QFontMetricsF>
-#include <QPointF>
-#include <QTextLayout>
-#include <QTextOption>
-#include <QtCore/qchar.h>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <optional>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
 import telar.gui.application;
 import telar.base.ds;
 

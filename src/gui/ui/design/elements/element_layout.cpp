@@ -1,27 +1,13 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.design.elements;
 
-#include "element_layout.hpp"
-
-#include "ui/kit/scene/window_animation_clock.hpp"
-
-#include <QQuickWindow>
-#include <QVariantMap>
-
-#include <QList>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <functional>
-#include <limits>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.scene;
 import telar.base.ds;
 import telar.tbc;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -207,7 +193,7 @@ namespace telar::gui::qt {
     }
 
     AxisSpan crossSpan(const Child& child, const LayoutPass& pass) {
-      const auto alignment = child.element.contains(QStringLiteral("alignSelf")) ? child.element.value(QStringLiteral("alignSelf")).toInt() : pass.align;
+      const auto alignment = child.element.contains(u"alignSelf"_s) ? child.element.value(u"alignSelf"_s).toInt() : pass.align;
       // A child never overflows the cross axis: text inside it elides instead.
       const auto cross = alignment == align_stretch ? pass.available_cross : std::min(child.cross, std::max<qreal>(0, pass.available_cross));
 
@@ -261,7 +247,7 @@ namespace telar::gui::qt {
   void ElementLayout::setDirection(int direction) {
     if (direction != direction_) {
       direction_ = direction;
-      emit layoutChanged();
+      layoutChanged();
       polish();
     }
   }
@@ -273,7 +259,7 @@ namespace telar::gui::qt {
   void ElementLayout::setGap(qreal gap) {
     if (!std::equal_to<>{}(gap, gap_)) {
       gap_ = gap;
-      emit layoutChanged();
+      layoutChanged();
       polish();
     }
   }
@@ -287,7 +273,7 @@ namespace telar::gui::qt {
       padding_.atMut(static_cast<std::size_t>(index)) = index < padding.size() ? padding[index].toReal() : 0;
     }
 
-    emit layoutChanged();
+    layoutChanged();
     polish();
   }
 
@@ -298,7 +284,7 @@ namespace telar::gui::qt {
   void ElementLayout::setAlign(int align) {
     if (align != align_) {
       align_ = align;
-      emit layoutChanged();
+      layoutChanged();
       polish();
     }
   }
@@ -310,7 +296,7 @@ namespace telar::gui::qt {
   void ElementLayout::setJustify(int justify) {
     if (justify != justify_) {
       justify_ = justify;
-      emit layoutChanged();
+      layoutChanged();
       polish();
     }
   }
@@ -322,7 +308,7 @@ namespace telar::gui::qt {
   void ElementLayout::setRatio(qreal ratio) {
     if (!std::equal_to<>{}(ratio, ratio_)) {
       ratio_ = ratio;
-      emit layoutChanged();
+      layoutChanged();
       polish();
     }
   }
@@ -372,8 +358,10 @@ namespace telar::gui::qt {
     connect(child, &QQuickItem::implicitWidthChanged, this, &ElementLayout::relayout);
     connect(child, &QQuickItem::implicitHeightChanged, this, &ElementLayout::relayout);
     connect(child, &QQuickItem::visibleChanged, this, &ElementLayout::relayout);
-    if (child->metaObject()->indexOfSignal("elementChanged()") >= 0) {
-      connect(child, SIGNAL(elementChanged()), this, SLOT(relayout()));
+    if (const int signal_index = child->metaObject()->indexOfSignal("elementChanged()"); signal_index >= 0) {
+      const int slot_index = metaObject()->indexOfSlot("relayout()");
+
+      connect(child, child->metaObject()->method(signal_index), this, metaObject()->method(slot_index));
     }
   }
 
@@ -494,7 +482,7 @@ namespace telar::gui::qt {
           .opacity = number(child.element, "opacity", 1),
       };
 
-      const auto shown = animate(child.element.value(QStringLiteral("key")).toString(), target, number(child.element, "transition", 0), easingOf(child.element.value(QStringLiteral("easing")).toInt()), now_ns);
+      const auto shown = animate(child.element.value(u"key"_s).toString(), target, number(child.element, "transition", 0), easingOf(child.element.value(u"easing"_s).toInt()), now_ns);
 
       item->setSize({std::max<qreal>(0, pass.horizontal() ? main.length : cross.length), std::max<qreal>(0, pass.horizontal() ? cross.length : main.length)});
       item->setPosition({shown.x, shown.y});

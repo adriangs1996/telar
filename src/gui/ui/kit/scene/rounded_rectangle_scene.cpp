@@ -1,35 +1,13 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.scene;
 
-#include "rounded_rectangle_scene.hpp"
-#include "physical_pixel_matrix.hpp"
-#include "qt_buffers.hpp"
-#include <QByteArray>
-#include <QSGGeometry>
-#include <QSGGeometryNode>
-#include <QSGMaterial>
-#include <QSGMaterialShader>
-#include <QSGNode>
-#include <QSGRendererInterface>
-#include <QString>
-#include <QtCore/qlogging.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtypes.h>
-#include <QtQuick/qsgmaterialtype.h>
-#include <array>
-#include <cstddef>
-#include <functional>
-#include <memory>
-#include <span>
-#include <stdexcept>
-#include <utility>
-
+import std;
+import telar.gui.qt;
 import telar.gui.foundation.core;
 import telar.base.ds;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
+
   namespace {
 
     struct ShapeUniforms {
@@ -44,15 +22,15 @@ namespace telar::gui::qt {
       ShapeShader(bool physical_coordinates, bool replace_background)
           : physical_coordinates_(physical_coordinates),
             replace_background_(replace_background) {
-        setShaderFileName(VertexStage, QStringLiteral(":/telar/shaders/rounded_rectangle.vert.qsb"));
-        setShaderFileName(FragmentStage, QStringLiteral(":/telar/shaders/rounded_rectangle.frag.qsb"));
+        setShaderFileName(VertexStage, u":/telar/shaders/rounded_rectangle.vert.qsb"_s);
+        setShaderFileName(FragmentStage, u":/telar/shaders/rounded_rectangle.frag.qsb"_s);
         setFlag(UpdatesGraphicsPipelineState);
       }
 
       bool updateUniformData(RenderState& state, [[maybe_unused]] QSGMaterial* material, QSGMaterial* last) override {
         auto& buffer = *state.uniformData();
         if (buffer.size() < static_cast<qsizetype>(sizeof(ShapeUniforms))) {
-          qFatal("Rounded rectangle uniform buffer is too small");
+          telar::qt::fatal("Rounded rectangle uniform buffer is too small");
         }
 
         bool changed = false;
@@ -60,7 +38,7 @@ namespace telar::gui::qt {
         if (last == nullptr) {
           const float replace = replace_background_ ? 1 : 0;
 
-          writeUniform<offsetof(ShapeUniforms, replace_background)>(buffer, std::as_bytes(std::span<const float, 1>{&replace, 1}));
+          writeUniform<__builtin_offsetof(ShapeUniforms, replace_background)>(buffer, std::as_bytes(std::span<const float, 1>{&replace, 1}));
           changed = true;
         }
 
@@ -73,14 +51,14 @@ namespace telar::gui::qt {
             matrix.scale(inverse_density, inverse_density);
           }
 
-          writeUniform<offsetof(ShapeUniforms, matrix)>(buffer, std::as_bytes(matrixValues(matrix)));
+          writeUniform<__builtin_offsetof(ShapeUniforms, matrix)>(buffer, std::as_bytes(matrixValues(matrix)));
           changed = true;
         }
 
         if (state.isOpacityDirty() || last == nullptr) {
           const auto opacity = state.opacity();
 
-          writeUniform<offsetof(ShapeUniforms, opacity)>(buffer, std::as_bytes(std::span<const float, 1>{&opacity, 1}));
+          writeUniform<__builtin_offsetof(ShapeUniforms, opacity)>(buffer, std::as_bytes(std::span<const float, 1>{&opacity, 1}));
           changed = true;
         }
 

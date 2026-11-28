@@ -2,13 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "qml_fixture.hpp"
-#include "ui/app/chrome/activity/agent_projection.hpp"
-#include "ui/app/chrome/sidebar_projection.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/models/list_model.hpp"
-#include "ui/kit/models/projection.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QGuiApplication>
@@ -47,6 +40,13 @@ import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
+import telar.gui.ui.app.chrome.activity;
+import telar.gui.ui.app.chrome;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
+import telar.gui.tests.qml_fixture;
+import telar.gui.foundation.model;
+import telar.gui.qt;
 
 namespace {
 
@@ -84,15 +84,21 @@ namespace {
     };
   }
 
-  class AgentCardTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] AgentCardTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void initTestCase() {
+  private:
+    [[qt::slot]] static void initTestCase() {
       bundledFonts();
     }
 
-    Q_SLOT static void projectionKeepsOriginalLabelsAndBlockedReasons() {
+    [[qt::slot]] static void projectionKeepsOriginalLabelsAndBlockedReasons() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -147,7 +153,7 @@ namespace {
       QCOMPARE(record.value(QStringLiteral("glyph")).toString(), QStringLiteral("!"));
     }
 
-    Q_SLOT static void cardRowsAndSelectionNeedNoController() {
+    [[qt::slot]] static void cardRowsAndSelectionNeedNoController() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -215,7 +221,7 @@ namespace {
       QCOMPARE(selected.front().front().toString(), QStringLiteral("42"));
     }
 
-    Q_SLOT static void offlineCardsRetireTheirHoveredBackground() {
+    [[qt::slot]] static void offlineCardsRetireTheirHoveredBackground() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -244,7 +250,7 @@ namespace {
       QVERIFY(!background.front()->isVisible());
     }
 
-    Q_SLOT static void onlyEnabledCardsShowThePointingCursor() {
+    [[qt::slot]] static void onlyEnabledCardsShowThePointingCursor() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -272,7 +278,7 @@ namespace {
       QTRY_COMPARE_WITH_TIMEOUT(window.cursor().shape(), Qt::ArrowCursor, wait_ms);
     }
 
-    Q_SLOT static void deliveredHoverIdentityOverridesGeometricHover() {
+    [[qt::slot]] static void deliveredHoverIdentityOverridesGeometricHover() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -301,7 +307,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!background.front()->isVisible(), wait_ms);
     }
 
-    Q_SLOT static void attentionOrdersTheInboxAcrossProjects() {
+    [[qt::slot]] static void attentionOrdersTheInboxAcrossProjects() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -339,7 +345,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void statusDropsDurationBeforeItsWord() {
+    [[qt::slot]] static void statusDropsDurationBeforeItsWord() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -374,7 +380,7 @@ namespace {
       QCOMPARE(status->property("usedWidth").toReal(), qreal{0});
     }
 
-    Q_SLOT static void activityCreatesOnlyVisibleCards() {
+    [[qt::slot]] static void activityCreatesOnlyVisibleCards() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -412,4 +418,6 @@ namespace {
 }
 
 QTEST_MAIN(AgentCardTest)
+#ifndef TELAR_MOC_RUN
 #include "agent_card_test.moc"
+#endif

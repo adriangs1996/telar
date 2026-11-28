@@ -1,30 +1,13 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.fonts;
 
-#include "font_source.hpp"
-#include "platform/font.h"
-#include <QByteArray>
-#include <QFile>
-#include <QFileDevice>
-#include <QFileInfo>
-#include <QString>
-#include <QStringLiteral>
-#include <QtCore/qiodevicebase.h>
-#include <QtCore/qnamespace.h>
-#include <cstddef>
-#include <cstring>
-#include <exception>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.foundation.fonts;
 import telar.wire.vocabulary;
 import telar.base.ds;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -58,20 +41,20 @@ namespace telar::gui::qt {
   }
 
   FontData loadFontData(const FontConfiguration& font) {
-    const auto family = font.family.view().empty() ? QStringLiteral("Telar Forma") : QString::fromUtf8(font.family.view());
+    const auto family = font.family.view().empty() ? u"Telar Forma"_s : QString::fromUtf8(font.family.view());
     const auto style = QString::fromUtf8(font.style.view());
-    const auto regular_style = style.isEmpty() || style.compare(QStringLiteral("Regular"), Qt::CaseInsensitive) == 0;
+    const auto regular_style = style.isEmpty() || style.compare(u"Regular"_s, Qt::CaseInsensitive) == 0;
     FontData data;
     QString path;
 
-    if (family.compare(QStringLiteral("JetBrains Mono"), Qt::CaseInsensitive) == 0 && regular_style) {
-      path = QStringLiteral(":/telar/fonts/JetBrainsMono-Regular.ttf");
-    } else if (family.compare(QStringLiteral("Telar Forma"), Qt::CaseInsensitive) == 0) {
+    if (family.compare(u"JetBrains Mono"_s, Qt::CaseInsensitive) == 0 && regular_style) {
+      path = u":/telar/fonts/JetBrainsMono-Regular.ttf"_s;
+    } else if (family.compare(u"Telar Forma"_s, Qt::CaseInsensitive) == 0) {
       if (!regular_style) {
         throw std::runtime_error{"FontStyleNotFound"};
       }
 
-      path = QStringLiteral(":/telar/fonts/TelarForma-Regular.ttf");
+      path = u":/telar/fonts/TelarForma-Regular.ttf"_s;
     } else {
       const auto family_bytes = family.toUtf8();
       const auto style_bytes = style.toUtf8();

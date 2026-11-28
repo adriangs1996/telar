@@ -4,13 +4,6 @@ static_assert(true);
 #endif
 
 #include "platform/font.h"
-#include "qt_case.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/fonts/font_cache.hpp"
-#include "ui/kit/fonts/font_resolver.hpp"
-#include "ui/kit/fonts/font_source.hpp"
-#include "ui/kit/fonts/resident_fonts.hpp"
-#include "ui/kit/fonts/terminal_font.hpp"
 #include <QByteArray>
 #include <QFile>
 #include <QFont>
@@ -42,8 +35,14 @@ static_assert(true);
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 import telar.base.ds;
+import telar.gui.ui.kit.fonts;
+import telar.gui.tests.qt_case;
+import telar.gui.foundation.fonts;
+import telar.gui.foundation.terminal;
+import telar.gui.qt;
 
 namespace {
+  using Qt::StringLiterals::operator""_s;
 
   using namespace telar::gui;
   using namespace telar::gui::qt;
@@ -73,15 +72,21 @@ namespace {
     return count;
   }
 
-  class FontResolverTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] FontResolverTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void initTestCase() {
+  private:
+    [[qt::slot]] static void initTestCase() {
       bundledFonts();
     }
 
-    Q_SLOT static void fallbackFacesCanBeRasterized() {
+    [[qt::slot]] static void fallbackFacesCanBeRasterized() {
       std::size_t checked = 0;
 
       for (const auto* text : {"λ", "á", "漢", "字", "中"}) {
@@ -110,7 +115,7 @@ namespace {
       QVERIFY(checked > 0);
     }
 
-    Q_SLOT static void nativeFallbackHonorsClientValidation() {
+    [[qt::slot]] static void nativeFallbackHonorsClientValidation() {
       fonts::FontMatch expected{};
 
       QVERIFY(telarGuiFindFallbackFont("λ", &expected) == telar_font_found);
@@ -132,7 +137,7 @@ namespace {
       QVERIFY(rejected > 0);
     }
 
-    Q_SLOT static void preservesPhysicalBaseline() {
+    [[qt::slot]] static void preservesPhysicalBaseline() {
       SystemAllocator memory;
       const FontConfiguration configuration;
       const FontSource source{memory, configuration};
@@ -146,7 +151,7 @@ namespace {
       QCOMPARE(font.baseline, static_cast<qreal>(grid.baseline));
     }
 
-    Q_SLOT static void preservesFractionalScaleAndLineSpacing() {
+    [[qt::slot]] static void preservesFractionalScaleAndLineSpacing() {
       SystemAllocator memory;
       FontConfiguration configuration;
       constexpr telar::ds::Array sizes{6.0F, 7.5F, 15.0F, 18.5F, 48.0F, 96.0F};
@@ -170,7 +175,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void respectsAllocatorOwnershipAndFailure() {
+    [[qt::slot]] static void respectsAllocatorOwnershipAndFailure() {
       SystemAllocator system;
       const FontConfiguration configuration;
       BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
@@ -192,7 +197,7 @@ namespace {
       QCOMPARE(exhausted.liveBytes(), std::size_t{0});
     }
 
-    Q_SLOT static void preservesShapingAndRasterAfterSizeCacheEviction() {
+    [[qt::slot]] static void preservesShapingAndRasterAfterSizeCacheEviction() {
       SystemAllocator memory;
       const FontSource source{memory, FontConfiguration{}};
       fonts::Face face{source.bytes(), source.match()};
@@ -249,7 +254,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void thickeningChangesInkWithoutChangingShapingOrMetrics() {
+    [[qt::slot]] static void thickeningChangesInkWithoutChangingShapingOrMetrics() {
       SystemAllocator memory;
       const FontSource source{memory, FontConfiguration{}};
       fonts::Face face{source.bytes(), source.match()};
@@ -300,7 +305,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void retainsOneSourceAcrossPanelsAndScales() {
+    [[qt::slot]] static void retainsOneSourceAcrossPanelsAndScales() {
       SystemAllocator system;
       BudgetAllocator memory{system, std::numeric_limits<std::size_t>::max()};
 
@@ -333,7 +338,7 @@ namespace {
       QCOMPARE(memory.liveBytes(), std::size_t{0});
     }
 
-    Q_SLOT static void matchesCaseInsensitiveBundledNames() {
+    [[qt::slot]] static void matchesCaseInsensitiveBundledNames() {
       SystemAllocator memory;
       FontConfiguration configuration;
       const auto original = FontResolver::resolve(memory, configuration, 1);
@@ -357,16 +362,16 @@ namespace {
       QCOMPARE(FontResolver::resolve(memory, configuration, 1).font.faces, jetbrains.font.faces);
     }
 
-    Q_SLOT static void defaultsToBundledFormaAcrossRenderers() {
-      const auto expected = loadFontBytes(QStringLiteral(":/telar/fonts/TelarForma-Regular.ttf"));
+    [[qt::slot]] static void defaultsToBundledFormaAcrossRenderers() {
+      const auto expected = loadFontBytes(u":/telar/fonts/TelarForma-Regular.ttf"_s);
       const FontConfiguration configuration;
 
       QCOMPARE(loadFontData(configuration).bytes, expected);
-      QCOMPARE(bundledFonts().front(), QStringLiteral("Telar Forma"));
+      QCOMPARE(bundledFonts().front(), u"Telar Forma"_s);
 
       const auto source = ResidentFonts::resolveSource({}, {});
 
-      QCOMPARE(source, ResidentFonts::resolveSource(QStringLiteral("Telar Forma"), {}));
+      QCOMPARE(source, ResidentFonts::resolveSource(u"Telar Forma"_s, {}));
       QVERIFY(std::ranges::equal(source->bytes(), telar::byteView({expected.constData(), static_cast<std::size_t>(expected.size())})));
       const auto resident = ResidentFonts::shared(source);
 
@@ -375,18 +380,18 @@ namespace {
 
       const auto terminal = TerminalFont::resolve({}, 1);
 
-      QCOMPARE(QRawFont::fromFont(terminal.faces.front()).familyName(), QStringLiteral("Telar Forma"));
+      QCOMPARE(QRawFont::fromFont(terminal.faces.front()).familyName(), u"Telar Forma"_s);
 
       SystemAllocator memory;
       const auto resolved = FontResolver::resolve(memory, configuration, 1);
 
-      QCOMPARE(QRawFont::fromFont(resolved.font.faces.front()).familyName(), QStringLiteral("Telar Forma"));
+      QCOMPARE(QRawFont::fromFont(resolved.font.faces.front()).familyName(), u"Telar Forma"_s);
     }
 
-    Q_SLOT static void loadsBundledFormaFromResources() {
-      const auto expected = loadFontBytes(QStringLiteral(":/telar/fonts/TelarForma-Regular.ttf"));
+    [[qt::slot]] static void loadsBundledFormaFromResources() {
+      const auto expected = loadFontBytes(u":/telar/fonts/TelarForma-Regular.ttf"_s);
 
-      QVERIFY(QFontDatabase::hasFamily(QStringLiteral("Telar Forma")));
+      QVERIFY(QFontDatabase::hasFamily(u"Telar Forma"_s));
 
       for (const auto* family : {"Telar Forma", "tElAr FoRmA"}) {
         FontConfiguration configuration;
@@ -409,7 +414,7 @@ namespace {
           const auto resolved = FontResolver::resolve(face, configuration, 1);
           const auto raw = QRawFont::fromFont(resolved.font.faces.front());
 
-          QCOMPARE(raw.familyName(), QStringLiteral("Telar Forma"));
+          QCOMPARE(raw.familyName(), u"Telar Forma"_s);
           QVERIFY(resolved.font.fixed_pitch);
           QVERIFY(resolved.font.cell.width() > 0);
           QVERIFY(resolved.font.cell.height() > 0);
@@ -417,7 +422,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void rejectsUnavailableBundledFormaStyles() {
+    [[qt::slot]] static void rejectsUnavailableBundledFormaStyles() {
       FontConfiguration configuration;
 
       configuration.family.assign("Telar Forma");
@@ -427,13 +432,13 @@ namespace {
         static_cast<void>(loadFontData(configuration));
         QFAIL("A missing bundled style must not depend on installed fonts");
       } catch (const std::runtime_error& error) {
-        QCOMPARE(QString::fromUtf8(error.what()), QStringLiteral("FontStyleNotFound"));
+        QCOMPARE(QString::fromUtf8(error.what()), u"FontStyleNotFound"_s);
       }
     }
 
-    Q_SLOT static void appliesVariableMetricsAndNamedInstances() {
+    [[qt::slot]] static void appliesVariableMetricsAndNamedInstances() {
       const FontConfiguration configuration;
-      QFile file{QStringLiteral(":/telar/test-fonts/metrics-variable.ttf")};
+      QFile file{u":/telar/test-fonts/metrics-variable.ttf"_s};
 
       QVERIFY(file.open(QIODeviceBase::ReadOnly));
       const auto data = file.readAll();
@@ -471,8 +476,8 @@ namespace {
       QVERIFY(!wide_raw.fontTable("MVAR").isEmpty());
       const auto narrow = FontResolver::resolve(original, configuration, 2);
       const auto narrow_raw = QRawFont::fromFont(narrow.font.faces.front());
-      const auto wide_glyph = wide_raw.glyphIndexesForString(QStringLiteral("M"));
-      const auto narrow_glyph = narrow_raw.glyphIndexesForString(QStringLiteral("M"));
+      const auto wide_glyph = wide_raw.glyphIndexesForString(u"M"_s);
+      const auto narrow_glyph = narrow_raw.glyphIndexesForString(u"M"_s);
 
       QVERIFY(wide_raw.advancesForGlyphIndexes(wide_glyph).front().x() > narrow_raw.advancesForGlyphIndexes(narrow_glyph).front().x());
       constexpr unsigned named_instance_shift = 16;
@@ -491,8 +496,8 @@ namespace {
       QVERIFY_THROWS_EXCEPTION(std::invalid_argument, (fonts::Face{bytes, match}));
     }
 
-    Q_SLOT static void sizesCellsByAsciiInsteadOfWidestGlyph() {
-      QFile file{QStringLiteral(":/telar/test-fonts/metrics-wide-glyph.ttf")};
+    [[qt::slot]] static void sizesCellsByAsciiInsteadOfWidestGlyph() {
+      QFile file{u":/telar/test-fonts/metrics-wide-glyph.ttf"_s};
 
       QVERIFY(file.open(QIODeviceBase::ReadOnly));
       const auto data = file.readAll();
@@ -506,8 +511,8 @@ namespace {
       QCOMPARE(FontGrid::resolve(face.metrics(height), FontConfiguration{}, 1).width, cell);
     }
 
-    Q_SLOT static void selectsCollectionFacesAndRejectsMissingNames() {
-      QFile file{QStringLiteral(":/telar/test-fonts/metrics-collection.ttc")};
+    [[qt::slot]] static void selectsCollectionFacesAndRejectsMissingNames() {
+      QFile file{u":/telar/test-fonts/metrics-collection.ttc"_s};
 
       QVERIFY(file.open(QIODeviceBase::ReadOnly));
       const auto data = file.readAll();
@@ -553,4 +558,6 @@ namespace {
 
 }
 
+#ifndef TELAR_MOC_RUN
 #include "font_resolver_test.moc"
+#endif

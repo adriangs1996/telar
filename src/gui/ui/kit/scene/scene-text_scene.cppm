@@ -1,0 +1,101 @@
+export module telar.gui.ui.kit.scene:text_scene;
+
+import std;
+import telar.gui.qt;
+import telar.tbc;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.scene.optical_text;
+import telar.gui.foundation.core;
+import telar.base.memory.allocators;
+import telar.gui.foundation.fonts;
+import telar.gui.foundation.terminal;
+import telar.base.ds;
+import telar.wire.vocabulary;
+
+#ifdef Q_OS_MACOS
+#endif
+
+#ifdef Q_OS_MACOS
+#endif
+
+export namespace telar::gui::qt {
+
+  template <fonts::FontProvider FontSet, bool optical>
+  class ChromeGlyphImages;
+
+  struct ChromeTextPaint;
+
+  struct TextPlacement {
+    QPointF origin;
+    qreal baseline = 0;
+    fonts::GlyphStyle style{};
+  };
+
+  class TextScene {
+  public:
+    // The scene paints through the window, region `a`.
+    explicit TextScene(tbc::mut_a<QQuickWindow> window);
+    ~TextScene() = default;
+    // The layouts allocate from memory_, so the scene keeps its address.
+    TextScene(const TextScene&) = delete;
+    TextScene& operator=(const TextScene&) = delete;
+    TextScene(TextScene&&) = delete;
+    TextScene& operator=(TextScene&&) = delete;
+
+    void configure(const FontConfiguration& font, FontGrid grid, const std::shared_ptr<const FontCollection>& collection);
+    void begin(const QRectF& bounds, qreal scale, const QRectF& clip, std::unique_ptr<QSGNode> previous = {});
+    // A prepared row's cells are lent again to each call that may paint them, so the scene keeps no
+    // view of them.
+    bool prepare(std::span<const CellValue> cells, fonts::RowTextRequest request);
+    void addCell(std::span<const CellValue> cells, std::size_t column, const QFont& font, Color foreground, fonts::GlyphStyle style);
+    void appendInline(std::span<const CellValue> cells, std::unique_ptr<QSGNode> node);
+    void add(const QString& text, const QFont& font, const QTextCharFormat& format, TextPlacement placement);
+    // The result is the text's node, now a child of the parent.
+    tbc::val_a<QSGNode*> append(tbc::mut_a<QSGNode> parent, std::span<const CellValue> cells = {});
+
+  private:
+    struct Batch {
+      std::size_t first_column = 0;
+      std::size_t last_column = 0;
+      std::size_t first_span = 0;
+      std::size_t span_count = 0;
+      Color foreground;
+      fonts::GlyphStyle style;
+      QFont font;
+    };
+
+    std::unique_ptr<QSGNode> takeChunk();
+    void appendChunk(std::unique_ptr<QSGNode> node);
+    static void appendChunk(QSGNode& text, QSGNode* next_chunk, std::unique_ptr<QSGNode> node);
+    // Paints one chunk through the scene's chunk cursor alone, as Rust splits a borrow of self: what it
+    // paints views the row layout beside it. The result is the node to append, or none when the
+    // previous chunk was painted in place.
+    static std::unique_ptr<QSGNode> paintChunk(QSGNode*& next_chunk, QQuickWindow& window, const std::shared_ptr<const FontCollection>& collection, fonts::GlyphRasterization rasterization, const ChromeTextPaint& paint);
+    void flushCells(std::span<const CellValue> cells);
+    void addFallbackCells(const Batch& batch, std::span<const CellValue> cells);
+    void addQtText(const QString& text, const QFont& font, const QTextCharFormat& format, TextPlacement placement);
+
+    tbc::mut_a<QQuickWindow> window_;
+    SystemAllocator memory_;
+    MemoryAdapter<SystemAllocator> adapter_{memory_};
+    fonts::TextLayout<ConcurrentMemory> layout_;
+    fonts::RowTextLayout<ConcurrentMemory> row_;
+    ds::Option<Batch> batch_;
+    std::shared_ptr<const FontCollection> collection_;
+    std::shared_ptr<ResidentFonts> fonts_;
+    tbc::val_a<std::shared_ptr<ChromeGlyphImages<ResidentFonts, false>>> resident_glyphs_;
+    tbc::val_a<std::shared_ptr<ChromeGlyphImages<ResidentFonts, true>>> optical_glyphs_;
+    FontGrid grid_;
+    fonts::GlyphRasterization rasterization_;
+    QRectF bounds_;
+    QRectF clip_;
+    qreal scale_ = 1;
+#ifdef Q_OS_MACOS
+    std::unique_ptr<OpticalText> optical_;
+#endif
+    std::unique_ptr<QSGNode> text_;
+    QSGNode* next_chunk_ = nullptr;
+    std::uint64_t revision_ = 0;
+  };
+
+}

@@ -1,8 +1,7 @@
-#include "form_composition_events.hpp"
-#include "native_form_field.hpp"
-#include <QCoreApplication>
-#include <QtCore/qtypes.h>
-#include <cstddef>
+module telar.gui.ui.design.controls;
+
+import std;
+import telar.gui.qt;
 
 namespace telar::gui::qt {
 

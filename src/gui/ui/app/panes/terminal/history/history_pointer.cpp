@@ -1,41 +1,16 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal.history;
 
-#include "history_controller.hpp"
-#include "ui/app/panes/terminal/history/layout/history_filters_layout.hpp"
-#include "ui/app/panes/terminal/history/layout/history_footer_layout.hpp"
-#include "ui/app/panes/terminal/history/layout/history_inspection_layout.hpp"
-#include "ui/app/panes/terminal/history/layout/history_meta_layout.hpp"
-#include "ui/app/panes/terminal/history/layout/history_row_layout.hpp"
-#include "ui/kit/input/scroll_event.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QString>
-#include <QStringView>
-#include <QWheelEvent>
-#include <QtCore/qobject.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <initializer_list>
-#include <optional>
-#include <span>
-#include <utility>
-#include <variant>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.app.panes.terminal.history.layout;
+import telar.gui.ui.kit.input;
+import telar.gui.ui.kit.models;
 import telar.gui.application;
 import telar.base.ds;
 import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   void HistoryController::registerPanel(QQuickItem* panel) {
     panel_ = panel;
@@ -69,11 +44,11 @@ namespace telar::gui::qt {
 
     switch (*action) {
     case application::history::HistoryCardAction::copy:
-      return QStringLiteral("copy");
+      return u"copy"_s;
     case application::history::HistoryCardAction::erase:
-      return QStringLiteral("erase");
+      return u"erase"_s;
     case application::history::HistoryCardAction::visit:
-      return QStringLiteral("visit");
+      return u"visit"_s;
     }
 
     return {};
@@ -92,15 +67,15 @@ namespace telar::gui::qt {
 
     switch (inspection->action) {
     case application::history::HistoryInspectionAction::submit:
-      return QStringLiteral("submit");
+      return u"submit"_s;
     case application::history::HistoryInspectionAction::alternate:
-      return QStringLiteral("alternate");
+      return u"alternate"_s;
     case application::history::HistoryInspectionAction::copy:
-      return QStringLiteral("copy");
+      return u"copy"_s;
     case application::history::HistoryInspectionAction::erase:
-      return QStringLiteral("erase");
+      return u"erase"_s;
     case application::history::HistoryInspectionAction::visit:
-      return QStringLiteral("visit");
+      return u"visit"_s;
     }
 
     return {};
@@ -133,21 +108,21 @@ namespace telar::gui::qt {
 
     switch (*action) {
     case application::history::HistoryFilterAction::global:
-      return QStringLiteral("global");
+      return u"global"_s;
     case application::history::HistoryFilterAction::workspace:
-      return QStringLiteral("workspace");
+      return u"workspace"_s;
     case application::history::HistoryFilterAction::cwd:
-      return QStringLiteral("cwd");
+      return u"cwd"_s;
     case application::history::HistoryFilterAction::pane:
-      return QStringLiteral("pane");
+      return u"pane"_s;
     case application::history::HistoryFilterAction::human:
-      return QStringLiteral("human");
+      return u"human"_s;
     case application::history::HistoryFilterAction::agent:
-      return QStringLiteral("agent");
+      return u"agent"_s;
     case application::history::HistoryFilterAction::all:
-      return QStringLiteral("all");
+      return u"all"_s;
     case application::history::HistoryFilterAction::failed:
-      return QStringLiteral("failed");
+      return u"failed"_s;
     }
 
     return {};
@@ -166,13 +141,13 @@ namespace telar::gui::qt {
 
     switch (footer->action) {
     case application::history::HistoryFooterAction::submit:
-      return QStringLiteral("submit");
+      return u"submit"_s;
     case application::history::HistoryFooterAction::alternate:
-      return QStringLiteral("alternate");
+      return u"alternate"_s;
     case application::history::HistoryFooterAction::inspect:
-      return QStringLiteral("inspect");
+      return u"inspect"_s;
     case application::history::HistoryFooterAction::visit:
-      return QStringLiteral("visit");
+      return u"visit"_s;
     case application::history::HistoryFooterAction::none:
       return {};
     }
@@ -393,7 +368,7 @@ namespace telar::gui::qt {
     const auto steps = scroll_.consume(state, surface, physical, sample);
     if (steps != 0) {
       if (view.inspecting) {
-        emit inspectionScrolled(steps);
+        inspectionScrolled(steps);
       } else {
         interact([&] {
           moveRows(steps);
@@ -447,7 +422,7 @@ namespace telar::gui::qt {
       hover_revision_ = QString::number(row->revision);
     }
 
-    emit hoverChanged();
+    hoverChanged();
   }
 
   void HistoryController::retireHover() {
@@ -480,18 +455,18 @@ namespace telar::gui::qt {
     };
 
     return {
-        {QStringLiteral("bounds"), toQRectF(geometry.bounds, density)},
-        {QStringLiteral("header"), local(geometry.header)},
-        {QStringLiteral("results"), local(geometry.results)},
-        {QStringLiteral("inspection"), local(geometry.inspection)},
-        {QStringLiteral("search"), local(geometry.search)},
-        {QStringLiteral("footer"), local(geometry.footer)},
-        {QStringLiteral("inspectionContent"), local(geometry.inspectionContent(metrics_.chrome))},
-        {QStringLiteral("inspectionActions"), local(geometry.inspectionActions(metrics_.chrome))},
-        {QStringLiteral("rowHeight"), static_cast<qreal>(geometry.row_height) / density},
-        {QStringLiteral("groupHeight"), static_cast<qreal>(geometry.group_height) / density},
-        {QStringLiteral("compact"), geometry.compact},
-        {QStringLiteral("density"), density},
+        {u"bounds"_s, toQRectF(geometry.bounds, density)},
+        {u"header"_s, local(geometry.header)},
+        {u"results"_s, local(geometry.results)},
+        {u"inspection"_s, local(geometry.inspection)},
+        {u"search"_s, local(geometry.search)},
+        {u"footer"_s, local(geometry.footer)},
+        {u"inspectionContent"_s, local(geometry.inspectionContent(metrics_.chrome))},
+        {u"inspectionActions"_s, local(geometry.inspectionActions(metrics_.chrome))},
+        {u"rowHeight"_s, static_cast<qreal>(geometry.row_height) / density},
+        {u"groupHeight"_s, static_cast<qreal>(geometry.group_height) / density},
+        {u"compact"_s, geometry.compact},
+        {u"density"_s, density},
     };
   }
 

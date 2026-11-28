@@ -3,7 +3,6 @@
 static_assert(true);
 #endif
 
-#include "ui/app/panes/attachments/clipboard_images.hpp"
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QClipboard>
@@ -34,6 +33,8 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.base.ds;
+
+import telar.gui.ui.app.panes.attachments.clipboard;
 
 namespace {
 

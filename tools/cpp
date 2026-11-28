@@ -27,6 +27,7 @@ PRESETS_FILE = ROOT / 'CMakePresets.json'
 PRESETS = tuple(preset['name'] for preset in json.loads(PRESETS_FILE.read_text())['configurePresets']
                 if not preset.get('hidden'))
 TBC = 'tbc'
+QT_MOC = 'qt-moc'
 CACHE = ROOT / '.toolchain'
 # The builds of every checkout of this user take their slots here.
 SLOTS = Path(os.environ.get('XDG_CACHE_HOME') or Path.home() / '.cache') / 'telar/build-slots'
@@ -147,8 +148,8 @@ def main():
         os.execvp(extra[0], extra)
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('command', choices=('bootstrap', 'vt', 'configure', 'build', 'test', 'exec'))
-    parser.add_argument('preset', nargs='?', choices=(*PRESETS, TBC),
-                        help='a configure preset of CMakePresets.json (default dev), or tbc for the linter project')
+    parser.add_argument('preset', nargs='?', choices=(*PRESETS, TBC, QT_MOC),
+                        help='a configure preset of CMakePresets.json (default dev), tbc for the linter, or qt-moc for the Qt module generator')
     parser.add_argument('-B', '--build-dir', type=Path, help='the tree; out/<preset> by default')
     parser.add_argument('--config', choices=('Debug', 'Release', 'RelWithDebInfo'), default='Debug',
                         help='the build type of the tbc project; a preset names its own')
@@ -170,11 +171,14 @@ def main():
     if preset == TBC:
         source = ROOT / 'lib/tbc'
         build = (args.build_dir or source / 'out').resolve()
+    elif preset == QT_MOC:
+        source = ROOT / 'tools/qt_moc'
+        build = (args.build_dir or source / 'out/release').resolve()
     else:
         source = ROOT
         build = (args.build_dir or ROOT / 'out' / preset).resolve()
     if args.command == 'configure':
-        if preset == TBC:
+        if preset in (TBC, QT_MOC):
             llvm = (CACHE / 'bin/clang').resolve().parents[1]
             options = ['-G', 'Ninja', '-DCMAKE_BUILD_TYPE=' + args.config, '-DCMAKE_TOOLCHAIN_FILE=' + str(chain),
                        '-DLLVM_DIR=' + str(llvm / 'lib/cmake/llvm'), '-DClang_DIR=' + str(llvm / 'lib/cmake/clang')]
@@ -185,6 +189,11 @@ def main():
                 tbc_build = ROOT / 'lib/tbc/out/release'
                 run(sys.executable, __file__, 'configure', TBC, '-B', str(tbc_build), '--config', 'Release', '--', '-DBUILD_TESTING=OFF')
                 run(sys.executable, __file__, 'build', TBC, '-B', str(tbc_build), '--', '--target', 'tbc-plugin')
+            gui_disabled = args.headless or any(arg.startswith(('-DTELAR_BUILD_GUI=OFF', '-DTELAR_GUI_NATIVE=OFF')) for arg in extra)
+            qt_moc_build = ROOT / 'tools/qt_moc/out/release'
+            if not gui_disabled and not ((qt_moc_build / 'telar-qt-plugin.so').is_file() and (qt_moc_build / 'telar-moc').is_file()):
+                run(sys.executable, __file__, 'configure', QT_MOC, '-B', str(qt_moc_build), '--config', 'Release')
+                run(sys.executable, __file__, 'build', QT_MOC, '-B', str(qt_moc_build))
             options = ['--preset', preset]
             if not any(arg.startswith('-DGHOSTTY_VT_ROOT=') for arg in extra):
                 options.append('-DGHOSTTY_VT_ROOT=' + str(vt()))

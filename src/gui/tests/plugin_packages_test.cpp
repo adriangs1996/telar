@@ -4,7 +4,6 @@ static_assert(true);
 #endif
 
 #include "telar_platform/open_directory.h"
-#include "ui/kit/config/plugin_packages.hpp"
 #include <algorithm>
 #include <array>
 #include <cerrno>
@@ -38,6 +37,9 @@ static_assert(true);
 #include <iostream>
 #include <utility>
 
+#ifdef __APPLE__
+#endif
+
 import telar.base.text;
 import telar.gui.tests.plugin_catalog_cases;
 import telar.gui.tests.plugin_effect_cases;
@@ -48,8 +50,7 @@ import telar.gui.foundation.core;
 import telar.platform.primitives;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
-#ifdef __APPLE__
-#endif
+import telar.gui.ui.kit.config;
 
 namespace {
 

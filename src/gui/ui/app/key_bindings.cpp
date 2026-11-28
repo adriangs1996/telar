@@ -1,46 +1,10 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app;
 
-#include "key_bindings.hpp"
-#include "ui/app/chrome/components/components_controller.hpp"
-#include "ui/app/panes/attachments/attachments_controller.hpp"
-#include "ui/app/panes/terminal/copy_controller.hpp"
-#include "ui/app/panes/terminal/terminal_controller.hpp"
-#include "ui/kit/store/store.hpp"
-#include "window_commands.hpp"
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <chrono>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <limits>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <tuple>
-#include <utility>
-#include <variant>
-
-#include "ui/app/panes/terminal/terminal_item.hpp"
-#include "ui/kit/input/key_adapter.hpp"
-#include "ui/kit/input/key_encoding.hpp"
-#include <QCoreApplication>
-#include <QScopedValueRollback>
-#include <QtCore/qchar.h>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qobject.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtGui/qevent.h>
-#include <QtQuick/qquickitem.h>
-#include <QtQuick/qquickwindow.h>
-#include <cstring>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.app.panes.terminal;
+import telar.gui.ui.kit.store;
+import telar.gui.ui.kit.input;
 import telar.gui.application;
 import telar.base.ds;
 import telar.gui.foundation.core;
@@ -202,7 +166,7 @@ namespace telar::gui::qt {
     } catch (const std::exception& error) {
       router_.eventFailed(input);
       schedule();
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
 
       return true;
     }
@@ -338,7 +302,7 @@ namespace telar::gui::qt {
     const auto prefix_pending = router_.prefixPending();
     if (prefix_shown_ != prefix_pending) {
       prefix_shown_ = prefix_pending;
-      emit prefixChanged();
+      prefixChanged();
     }
 
     timeout_.stop();
@@ -357,7 +321,7 @@ namespace telar::gui::qt {
       static_cast<void>(apply(router_.expire(nowNanoseconds())));
       schedule();
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
   }
 

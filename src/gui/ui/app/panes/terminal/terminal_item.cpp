@@ -1,79 +1,22 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal;
 
-#include "terminal_item.hpp"
-#include "platform/font.h"
-#include "platform/text_input.hpp"
-#include "platform/window.hpp"
-#include "tbc/view.hpp"
-#include "ui/app/panes/terminal/prompt/prompt_keys.hpp"
-#include "ui/kit/cell_scene/graphics_scene.hpp"
-#include "ui/kit/cell_scene/terminal_scene.hpp"
-#include "ui/kit/cell_scene/window_images.hpp"
-#include "ui/kit/fonts/resident_fonts.hpp"
-#include "ui/kit/fonts/terminal_font.hpp"
-#include "ui/kit/fonts/window_font_catalog.hpp"
-#include "ui/kit/input/key_adapter.hpp"
-#include "ui/kit/input/key_encoding.hpp"
-#include <QClipboard>
-#include <QDebug>
-#include <QGuiApplication>
-#include <QHoverEvent>
-#include <QInputMethod>
-#include <QInputMethodEvent>
-#include <QKeyEvent>
-#include <QSGSimpleRectNode>
-#include <QSGTextNode>
-#include <QSGTransformNode>
-#include <QTextLayout>
-#include <QtCore/qbytearrayview.h>
-#include <QtCore/qchar.h>
-#include <QtCore/qcoreevent.h>
-#include <QtCore/qlogging.h>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qobject.h>
-#include <QtCore/qpoint.h>
-#include <QtCore/qsize.h>
-#include <QtCore/qtimer.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <QtCore/qvariant.h>
-#include <QtGui/qtextformat.h>
-#include <QtQuick/qquickitem.h>
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <bit>
-#include <chrono>
-#include <cmath>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <freetype/freetype.h>
-#include <functional>
-#include <hb.h>
-#include <limits>
-#include <memory>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <tuple>
-#include <type_traits>
-#include <utility>
-#include <variant>
-
+import std;
+import telar.gui.qt;
+import telar.gui.qt.platform;
+import telar.tbc;
+import telar.gui.ui.app.panes.terminal.prompt;
+import telar.gui.ui.kit.cell_scene;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.input;
 import telar.gui.foundation.core;
 import telar.gui.foundation.terminal;
 import telar.gui.application;
 import telar.base.ds;
 import telar.wire.vocabulary;
+import telar.gui.foundation.fonts;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   TerminalItem::TerminalItem(QQuickItem* parent)
       : QQuickItem(parent) {
@@ -139,7 +82,7 @@ namespace telar::gui::qt {
       releaseKeys();
       releaseMouse();
     } catch (const std::exception& error) {
-      qWarning() << "Unable to release terminal input:" << error.what();
+      telar::qt::warning() << "Unable to release terminal input:" << error.what();
     }
   }
 
@@ -166,7 +109,7 @@ namespace telar::gui::qt {
       connect(controller_, &QObject::destroyed, this, [this] {
         controller_ = nullptr;
         update();
-        emit controllerChanged();
+        controllerChanged();
       });
 
       connect(controller_, &TerminalController::terminalChanged, this, [this](qulonglong pane_id) {
@@ -209,7 +152,7 @@ namespace telar::gui::qt {
       controller_->registerTerminal(*this);
     }
 
-    emit controllerChanged();
+    controllerChanged();
   }
 
   QString TerminalItem::paneId() const {
@@ -249,7 +192,7 @@ namespace telar::gui::qt {
 
     ++appearance_;
     refresh();
-    emit paneIdChanged();
+    paneIdChanged();
   }
 
   const application::Pane<Memory>* TerminalItem::pane() const noexcept {
@@ -278,7 +221,7 @@ namespace telar::gui::qt {
       update();
       refreshLinkHover();
     } catch (const std::exception& error) {
-      qWarning() << "Terminal font:" << error.what();
+      telar::qt::warning() << "Terminal font:" << error.what();
     }
   }
 
@@ -441,7 +384,7 @@ namespace telar::gui::qt {
         QGuiApplication::inputMethod()->update(Qt::ImCursorRectangle);
       }
 
-      emit promptCaretChanged();
+      promptCaretChanged();
     }
   }
 
@@ -515,18 +458,18 @@ namespace telar::gui::qt {
     QString blockState(CommandBlockState state) {
       switch (state) {
       case CommandBlockState::running:
-        return QStringLiteral("running");
+        return u"running"_s;
       case CommandBlockState::succeeded:
-        return QStringLiteral("succeeded");
+        return u"succeeded"_s;
       case CommandBlockState::failed:
-        return QStringLiteral("failed");
+        return u"failed"_s;
       case CommandBlockState::session:
-        return QStringLiteral("session");
+        return u"session"_s;
       case CommandBlockState::interrupted:
         break;
       }
 
-      return QStringLiteral("interrupted");
+      return u"interrupted"_s;
     }
 
     // The rows drawn: the screen's own, or a view's, scrolled by pixels and folded.
@@ -671,21 +614,21 @@ namespace telar::gui::qt {
       const auto [output_first, output_end] = GuiSession::blockRows(pane, index);
 
       return QVariantMap{
-          {QStringLiteral("row"), row},
-          {QStringLiteral("command"), QString::fromUtf8(block.command.data(), static_cast<qsizetype>(block.command.size()))},
-          {QStringLiteral("lines"), static_cast<int>(block.lines)},
-          {QStringLiteral("state"), blockState(block.state)},
-          {QStringLiteral("status"), block.status},
-          {QStringLiteral("duration"), static_cast<qulonglong>(block.duration_ms)},
-          {QStringLiteral("index"), static_cast<int>(index)},
-          {QStringLiteral("key"), static_cast<qulonglong>(GuiSession::blockKey(pane, index))},
-          {QStringLiteral("selected"), context.selected == index},
-          {QStringLiteral("folded"), context.session.folded({.pane_id = context.pane_id, .index = index})},
-          {QStringLiteral("rows"), static_cast<int>(output_end - output_first)},
-          {QStringLiteral("commandRows"), static_cast<int>(std::max<std::uint32_t>(block.rows, 1))},
-          {QStringLiteral("foldable"), context.mapped && output_end > output_first},
-          {QStringLiteral("remote"), block.nest == CommandBlockNest::inside},
-          {QStringLiteral("host"), index >= context.live_session ? context.host : QString{}},
+          {u"row"_s, row},
+          {u"command"_s, QString::fromUtf8(block.command.data(), static_cast<qsizetype>(block.command.size()))},
+          {u"lines"_s, static_cast<int>(block.lines)},
+          {u"state"_s, blockState(block.state)},
+          {u"status"_s, block.status},
+          {u"duration"_s, static_cast<qulonglong>(block.duration_ms)},
+          {u"index"_s, static_cast<int>(index)},
+          {u"key"_s, static_cast<qulonglong>(GuiSession::blockKey(pane, index))},
+          {u"selected"_s, context.selected == index},
+          {u"folded"_s, context.session.folded({.pane_id = context.pane_id, .index = index})},
+          {u"rows"_s, static_cast<int>(output_end - output_first)},
+          {u"commandRows"_s, static_cast<int>(std::max<std::uint32_t>(block.rows, 1))},
+          {u"foldable"_s, context.mapped && output_end > output_first},
+          {u"remote"_s, block.nest == CommandBlockNest::inside},
+          {u"host"_s, index >= context.live_session ? context.host : QString{}},
       };
     }
 
@@ -707,7 +650,7 @@ namespace telar::gui::qt {
       for (std::size_t index = 0; index < pane.blocks.size(); ++index) {
         const auto& block = pane.blocks[index];
 
-        lists.rail.push_back(QVariantMap{{QStringLiteral("state"), blockState(block.state)}, {QStringLiteral("index"), static_cast<int>(index)}, {QStringLiteral("key"), static_cast<qulonglong>(GuiSession::blockKey(pane, index))}, {QStringLiteral("selected"), context.selected == index}});
+        lists.rail.push_back(QVariantMap{{u"state"_s, blockState(block.state)}, {u"index"_s, static_cast<int>(index)}, {u"key"_s, static_cast<qulonglong>(GuiSession::blockKey(pane, index))}, {u"selected"_s, context.selected == index}});
         // On the command's first row, which the separator stands in for; the rows of a command
         // that runs on past it, wrapped or on lines of its own, show the rest of it.
         const auto separator = GuiSession::separatorRow(pane, index);
@@ -782,7 +725,7 @@ namespace telar::gui::qt {
         if (inside && run_first < 0) {
           run_first = static_cast<int>(index);
         } else if (!inside && run_first >= 0) {
-          runs.push_back(QVariantMap{{QStringLiteral("row"), run_first}, {QStringLiteral("rows"), static_cast<int>(index) - run_first}});
+          runs.push_back(QVariantMap{{u"row"_s, run_first}, {u"rows"_s, static_cast<int>(index) - run_first}});
           run_first = -1;
         }
       }
@@ -816,7 +759,7 @@ namespace telar::gui::qt {
           return span.first == first && span.shown != 0;
         });
 
-        lists.documents.push_back(QVariantMap{{QStringLiteral("id"), id}, {QStringLiteral("rows"), placed ? static_cast<int>(document.view_rows) : 0}, {QStringLiteral("placed"), placed}});
+        lists.documents.push_back(QVariantMap{{u"id"_s, id}, {u"rows"_s, placed ? static_cast<int>(document.view_rows) : 0}, {u"placed"_s, placed}});
         if (!placed) {
           continue;
         }
@@ -911,7 +854,7 @@ namespace telar::gui::qt {
 
     if (const auto& note = controller_->session().lastBlockCopy(); note.serial != block_copy_serial_ && note.pane_id == pane_id_) {
       block_copy_serial_ = note.serial;
-      emit blockCopied(static_cast<int>(note.index), note.what == application::BlockCopy::command ? QStringLiteral("command") : QStringLiteral("output"), note.copied);
+      blockCopied(static_cast<int>(note.index), note.what == application::BlockCopy::command ? u"command"_s : u"output"_s, note.copied);
     }
   }
 
@@ -976,12 +919,12 @@ namespace telar::gui::qt {
       cursor_row_ = places.cursor_row;
       rows_ = places.screen_rows;
       rows_below_ = places.rows_below;
-      emit placeChanged();
+      placeChanged();
     }
 
     if (lists.documents != documents_) {
       documents_ = std::move(lists.documents);
-      emit documentsChanged();
+      documentsChanged();
     }
 
     if (lists.separators != separators_) {
@@ -991,7 +934,7 @@ namespace telar::gui::qt {
       for (const auto& separator : lists.separators) {
         auto row = separator.toMap();
 
-        row.insert(QStringLiteral("key"), row.value(QStringLiteral("index")));
+        row.insert(u"key"_s, row.value(u"index"_s));
         rows.append(std::move(row));
       }
 
@@ -1005,7 +948,7 @@ namespace telar::gui::qt {
       remote_rows_ = std::move(lists.remote_rows);
       prompt_row_ = places.prompt_row;
       shown_cell_ = font_.cell;
-      emit blocksChanged();
+      blocksChanged();
     }
 
     refreshScrollViews();
@@ -1060,7 +1003,7 @@ namespace telar::gui::qt {
     if (background_provided_ != provided) {
       background_provided_ = provided;
       update();
-      emit backgroundProvidedChanged();
+      backgroundProvidedChanged();
     }
   }
 
@@ -1350,7 +1293,7 @@ namespace telar::gui::qt {
     }
 
     if (std::exchange(preedit_, event->preeditString()) != preedit_) {
-      emit preeditChanged();
+      preeditChanged();
     }
 
     polish();

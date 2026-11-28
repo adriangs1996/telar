@@ -1,7 +1,3 @@
-#include "qt_case.hpp"
-#include "shape_atlas.hpp"
-#include "ui/design/controls/native_rounded_rectangle.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
 #include <QColor>
 #include <QDebug>
 #include <QFile>
@@ -41,7 +37,14 @@
 #include <utility>
 #include <vector>
 
+import telar.gui.ui.design.controls;
+import telar.gui.ui.kit.fonts;
+import telar.gui.tests.qt_case;
+import telar.gui.tests.shape_atlas;
+import telar.gui.qt;
+
 namespace {
+  using Qt::StringLiterals::operator""_s;
 
   using telar::gui::qt::NativeRoundedRectangle;
 
@@ -66,7 +69,7 @@ namespace {
   }
 
   QJsonObject fixture() {
-    QFile source{QStringLiteral(":/telar/test-shapes/cases.json")};
+    QFile source{u":/telar/test-shapes/cases.json"_s};
     if (!source.open(QFile::ReadOnly)) {
       qFatal("Could not open rounded rectangle cases");
     }
@@ -80,21 +83,21 @@ namespace {
 
   std::vector<std::unique_ptr<NativeRoundedRectangle>> createShapes(QQuickItem& parent, qreal density) {
     std::vector<std::unique_ptr<NativeRoundedRectangle>> shapes;
-    const auto records = fixture().value(QStringLiteral("shapes")).toArray();
+    const auto records = fixture().value(u"shapes"_s).toArray();
 
     shapes.reserve(static_cast<std::size_t>(records.size()));
     for (const auto& value : records) {
       const auto record = value.toObject();
-      const auto rect = record.value(QStringLiteral("rect")).toArray();
+      const auto rect = record.value(u"rect"_s).toArray();
       auto item = std::make_unique<NativeRoundedRectangle>(&parent);
 
       item->setPosition({rect[0].toDouble() / density, rect[1].toDouble() / density});
       item->setSize({rect[2].toDouble() / density, rect[3].toDouble() / density});
-      item->setRadius(record.value(QStringLiteral("radius")).toDouble() / density);
-      item->setBorderWidth(record.value(QStringLiteral("borderWidth")).toDouble() / density);
-      item->setColor(color(record.value(QStringLiteral("fill")).toArray()));
-      item->setBorderColor(color(record.value(QStringLiteral("border")).toArray()));
-      item->setOpacity(record.value(QStringLiteral("opacity")).toDouble());
+      item->setRadius(record.value(u"radius"_s).toDouble() / density);
+      item->setBorderWidth(record.value(u"borderWidth"_s).toDouble() / density);
+      item->setColor(color(record.value(u"fill"_s).toArray()));
+      item->setBorderColor(color(record.value(u"border"_s).toArray()));
+      item->setOpacity(record.value(u"opacity"_s).toDouble());
       shapes.push_back(std::move(item));
     }
 
@@ -105,20 +108,26 @@ namespace {
     return telar::gui::test::compareShapeImages(actual, {.pixels = expected, .budget = telar::gui::test::shapeCompositingBudget(fixture(), cross_backend_error_per_layer)});
   }
 
-  class RoundedRectangleTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] RoundedRectangleTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void initTestCase() {
+  private:
+    [[qt::slot]] static void initTestCase() {
       telar::gui::qt::bundledFonts();
-      QGuiApplication::setFont(QFont{QStringLiteral("IBM Plex Sans")});
+      QGuiApplication::setFont(QFont{u"IBM Plex Sans"_s});
     }
 
-    Q_SLOT static void init() {
-      QTest::failOnWarning(QRegularExpression{QStringLiteral(".*")});
+    [[qt::slot]] static void init() {
+      QTest::failOnWarning(QRegularExpression{u".*"_s});
     }
 
-    Q_SLOT static void originalShaderAtlas() {
+    [[qt::slot]] static void originalShaderAtlas() {
       QQuickWindow window;
       const auto density = window.effectiveDevicePixelRatio();
 
@@ -132,7 +141,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed(), wait_ms);
       qInfo() << "Scene graph API:" << window.rendererInterface()->graphicsApi();
       const auto actual = window.grabWindow();
-      const QImage expected{QStringLiteral(":/telar/test-shapes/rounded-rectangles.png")};
+      const QImage expected{u":/telar/test-shapes/rounded-rectangles.png"_s};
 
       QVERIFY(!actual.isNull() && !expected.isNull());
       QCOMPARE(actual.size(), expected.size());
@@ -176,7 +185,7 @@ namespace {
       QCOMPARE(window.grabWindow(), actual);
     }
 
-    Q_SLOT static void backgroundReplacementKeepsFinalAlphaAndOpaqueInk() {
+    [[qt::slot]] static void backgroundReplacementKeepsFinalAlphaAndOpaqueInk() {
       // A white base, a surface over it that replaces the background, and blue ink on the surface.
       constexpr QSize window_size{240, 180};
       constexpr QRectF surface_rect{20, 20, 160, 120};
@@ -232,7 +241,7 @@ namespace {
       QCOMPARE(blended.pixelColor(qRound(40 * density), qRound(40 * density)).alpha(), 255);
     }
 
-    Q_SLOT static void projectiveParentUsesHomogeneousOrigin() {
+    [[qt::slot]] static void projectiveParentUsesHomogeneousOrigin() {
       QQuickWindow window;
 
       window.resize(fixture_width, fixture_height);
@@ -260,7 +269,7 @@ namespace {
       QCOMPARE(actual.pixelColor(qRound(outside.x()), qRound(outside.y())), background());
     }
 
-    Q_SLOT static void mutationsAndEmptyGeometry() {
+    [[qt::slot]] static void mutationsAndEmptyGeometry() {
       QQuickWindow window;
 
       window.resize(fixture_width, fixture_height);
@@ -318,7 +327,7 @@ namespace {
       QCOMPARE(window.grabWindow(), original);
     }
 
-    Q_SLOT static void geometricClipAndReset() {
+    [[qt::slot]] static void geometricClipAndReset() {
       constexpr int left = 16;
       constexpr int top = 16;
       constexpr int shape_width = 6;
@@ -402,4 +411,6 @@ namespace {
 
 }
 
+#ifndef TELAR_MOC_RUN
 #include "rounded_rectangle_test.moc"
+#endif

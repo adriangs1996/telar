@@ -1,26 +1,17 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.links;
 
-#include "links_controller.hpp"
-#include "ui/kit/machines/machine_client.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "ui/kit/process/environment.hpp"
-#include <QStringList>
-#include <QTimer>
-#include <algorithm>
-#include <chrono>
-#include <exception>
-#include <memory>
-#include <string_view>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.machines;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.process;
 import telar.gui.application;
 import telar.gui.foundation.system;
 import telar.base.ds;
 import telar.base.text;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   LinksController::LinksController(Store& store, QObject* parent)
       : QObject(parent),
@@ -40,7 +31,7 @@ namespace telar::gui::qt {
         opener_.request(target, store_.client(store_.machines().active()).key);
       }
     } catch (const std::exception& error) {
-      emit openingFailed(QStringLiteral("Could not open link: ") + toQString(error.what()));
+      openingFailed(u"Could not open link: "_s + toQString(error.what()));
 
       return false;
     }
@@ -84,7 +75,7 @@ namespace telar::gui::qt {
     }
 
     if (!vacant) {
-      emit openingFailed(QStringLiteral("Could not open link: this window already forwards as many ports as it keeps"));
+      openingFailed(u"Could not open link: this window already forwards as many ports as it keeps"_s);
       return true;
     }
 
@@ -127,7 +118,7 @@ namespace telar::gui::qt {
 
     forward->process.start(
         QString::fromUtf8(program.view().data(), static_cast<qsizetype>(program.view().size())),
-        {QStringLiteral("forward"), QString::fromUtf8(forward->destination), QString::number(port), QStringLiteral("a link opened in a window")},
+        {u"forward"_s, QString::fromUtf8(forward->destination), QString::number(port), u"a link opened in a window"_s},
         QIODevice::ReadOnly
     );
   }
@@ -166,7 +157,7 @@ namespace telar::gui::qt {
       const auto said = QString::fromUtf8(ended->errors).trimmed();
 
       ended->pending.reset();
-      emit openingFailed(QStringLiteral("Could not open link: ") + (said.isEmpty() ? QStringLiteral("the port could not be forwarded from that machine") : said));
+      openingFailed(u"Could not open link: "_s + (said.isEmpty() ? u"the port could not be forwarded from that machine"_s : said));
     }
 
     // The process is let go once its own signal has returned.
@@ -216,7 +207,7 @@ namespace telar::gui::qt {
 
     application::notifications::publish(client->session, {.title = "Telar", .message = message, .link = {}});
     if (source.machine.slot == store_.machines().active()) {
-      emit notificationPublished();
+      notificationPublished();
     }
   }
 

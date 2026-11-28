@@ -1,29 +1,15 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app;
 
-#include "window_display.hpp"
-#include "platform/window.hpp"
-#include "ui/kit/fonts/typography_projection.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QQuickWindow>
-#include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qstring.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <cstdint>
-#include <limits>
-#include <optional>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.qt.platform;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
 import telar.gui.foundation.core;
 import telar.gui.application;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   WindowDisplay::WindowDisplay(Store& store, ConfigurationSource& configuration, QObject* parent)
       : QObject(parent),
@@ -56,7 +42,7 @@ namespace telar::gui::qt {
 
   void WindowDisplay::publish() {
     layoutWorkbench();
-    emit changed();
+    changed();
   }
 
   application::window::DisplayMetrics WindowDisplay::metrics(qreal density) const {
@@ -85,24 +71,24 @@ namespace telar::gui::qt {
     const auto& chrome = display.chrome;
     auto typography = chromeTypographyRecord(display, font);
 
-    typography.insert(QStringLiteral("grid"), QVariantMap{
-                                                  {QStringLiteral("cellWidth"), terminal_grid_.cell_width_px / terminal_grid_.scale},
-                                                  {QStringLiteral("cellHeight"), terminal_grid_.cell_height_px / terminal_grid_.scale},
-                                                  {QStringLiteral("pixelHeight"), cell_metrics_.pixels / terminal_grid_.scale},
-                                                  {QStringLiteral("baseline"), cell_metrics_.baseline},
-                                                  {QStringLiteral("family"), toQString(font.family.view())},
-                                                  {QStringLiteral("style"), toQString(font.style.view())},
-                                              });
+    typography.insert(u"grid"_s, QVariantMap{
+                                     {u"cellWidth"_s, terminal_grid_.cell_width_px / terminal_grid_.scale},
+                                     {u"cellHeight"_s, terminal_grid_.cell_height_px / terminal_grid_.scale},
+                                     {u"pixelHeight"_s, cell_metrics_.pixels / terminal_grid_.scale},
+                                     {u"baseline"_s, cell_metrics_.baseline},
+                                     {u"family"_s, toQString(font.family.view())},
+                                     {u"style"_s, toQString(font.style.view())},
+                                 });
 
     return {
-        {QStringLiteral("navigation"), toQRectF(geometry.navigation, density)},
-        {QStringLiteral("sidebar"), toQRectF(geometry.sidebar, density)},
-        {QStringLiteral("terminal"), toQRectF(geometry.terminal, density)},
-        {QStringLiteral("status"), toQRectF(geometry.status, density)},
-        {QStringLiteral("rail"), geometry.rail},
-        {QStringLiteral("paneHeader"), static_cast<qreal>(chrome.pane_header) / density},
-        {QStringLiteral("paneBorder"), ChromeMetrics::logical_pane_border},
-        {QStringLiteral("typography"), std::move(typography)},
+        {u"navigation"_s, toQRectF(geometry.navigation, density)},
+        {u"sidebar"_s, toQRectF(geometry.sidebar, density)},
+        {u"terminal"_s, toQRectF(geometry.terminal, density)},
+        {u"status"_s, toQRectF(geometry.status, density)},
+        {u"rail"_s, geometry.rail},
+        {u"paneHeader"_s, static_cast<qreal>(chrome.pane_header) / density},
+        {u"paneBorder"_s, ChromeMetrics::logical_pane_border},
+        {u"typography"_s, std::move(typography)},
     };
   }
 

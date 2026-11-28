@@ -1,31 +1,8 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.attachments;
 
-#include "attachment_shelf.hpp"
-#include "attachment_preview.hpp"
-#include "clipboard_images.hpp"
-#include <QImage>
-#include <QObject>
-#include <QPointF>
-#include <QString>
-#include <QVariantList>
-#include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qmetatype.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <limits>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.app.panes.attachments.clipboard;
 import telar.gui.application;
 import telar.gui.foundation.actions;
 import telar.base.ds;
@@ -33,6 +10,7 @@ import telar.gui.foundation.core;
 import telar.gui.platform;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -103,14 +81,14 @@ namespace telar::gui::qt {
     }
 
     source_ = source;
-    emit changed();
+    changed();
   }
 
   void AttachmentShelf::setPrompt(ds::Option<AttachmentPrompt> prompt, bool presented) {
     capture_prompt_ = prompt;
     prompt_ = presented ? prompt : ds::none;
     if (catalog_.setTarget(prompt_ ? ds::Option{prompt_->target} : ds::none)) {
-      emit changed();
+      changed();
     }
   }
 
@@ -129,7 +107,7 @@ namespace telar::gui::qt {
         static_cast<void>(captures_.finish(captures_.current()->id));
       }
 
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
   }
 
@@ -150,22 +128,22 @@ namespace telar::gui::qt {
       case platform::ClipboardImageError::source_bytes:
       case platform::ClipboardImageError::png_bytes:
       case platform::ClipboardImageError::pixels:
-        emit quotaReached(*result->failure);
+        quotaReached(*result->failure);
         return;
       case platform::ClipboardImageError::changed:
       case platform::ClipboardImageError::invalid_image:
       case platform::ClipboardImageError::read_failed:
-        emit failed(result->error);
+        failed(result->error);
         return;
       }
 
       // An error outside the enum reports the worker's message.
-      emit failed(result->error);
+      failed(result->error);
       return;
     }
 
     if (!result->error.isEmpty()) {
-      emit failed(result->error);
+      failed(result->error);
 
       return;
     }
@@ -178,7 +156,7 @@ namespace telar::gui::qt {
       adopt(result.getMut());
     } catch (const std::exception& error) {
       delivery_.landing.reset();
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
   }
 
@@ -191,11 +169,11 @@ namespace telar::gui::qt {
     const auto requested = catalog_.retainedBytes() + result.capture->png.size();
     const auto evicted = catalog_.adopt(result.capture.getMut());
     if (evicted) {
-      emit this->evicted(*evicted, *evicted == application::terminal::attachments::AttachmentEviction::items ? AttachmentLimits::maximum_items + 1 : requested);
+      this->evicted(*evicted, *evicted == application::terminal::attachments::AttachmentEviction::items ? AttachmentLimits::maximum_items + 1 : requested);
     }
 
-    emit adopted(result.job.request.capture.target.pane_id);
-    emit changed();
+    adopted(result.job.request.capture.target.pane_id);
+    changed();
   }
 
   void AttachmentShelf::clearPrompt(AttachmentTarget target) {
@@ -204,7 +182,7 @@ namespace telar::gui::qt {
 
     catalog_.reapRetired();
     if (cancelled || removed) {
-      emit changed();
+      changed();
     }
   }
 
@@ -213,7 +191,7 @@ namespace telar::gui::qt {
 
     catalog_.reapRetired();
     if (removed) {
-      emit changed();
+      changed();
     }
 
     return removed;
@@ -232,7 +210,7 @@ namespace telar::gui::qt {
 
     catalog_.reapRetired();
     if (removed != 0) {
-      emit changed();
+      changed();
     }
   }
 
@@ -272,7 +250,7 @@ namespace telar::gui::qt {
     for (std::size_t index = 0; index < snapshot.count; ++index) {
       const auto item = snapshot.items[index];
 
-      result.append(QVariantMap{{QStringLiteral("id"), QString::number(item.id)}, {QStringLiteral("width"), item.width}, {QStringLiteral("height"), item.height}});
+      result.append(QVariantMap{{u"id"_s, QString::number(item.id)}, {u"width"_s, item.width}, {u"height"_s, item.height}});
     }
 
     return result;
@@ -295,7 +273,7 @@ namespace telar::gui::qt {
       return {};
     }
 
-    return {{QStringLiteral("id"), QString::number(*snapshot.modal)}, {QStringLiteral("width"), slot->capture.width}, {QStringLiteral("height"), slot->capture.height}};
+    return {{u"id"_s, QString::number(*snapshot.modal)}, {u"width"_s, slot->capture.width}, {u"height"_s, slot->capture.height}};
   }
 
   const ds::Option<AttachmentPrompt>& AttachmentShelf::prompt() const noexcept {
@@ -337,10 +315,10 @@ namespace telar::gui::qt {
     hover_pointer_ = position;
     if (!position) {
       hover_recovery_.reset();
-      emit hoverRecoveryChanged();
+      hoverRecoveryChanged();
     } else if (!hover_ready_ && !catalog_.snapshot().modal) {
       hover_ready_ = true;
-      emit hoverReadyChanged();
+      hoverReadyChanged();
     }
   }
 
@@ -350,17 +328,17 @@ namespace telar::gui::qt {
     if (valid && catalog_.openModal(id)) {
       hover_recovery_ = hover_pointer_;
       hover_ready_ = false;
-      emit hoverRecoveryChanged();
-      emit hoverReadyChanged();
-      emit changed();
+      hoverRecoveryChanged();
+      hoverReadyChanged();
+      changed();
     }
   }
 
   void AttachmentShelf::close() {
     if (catalog_.closeModal()) {
       hover_recovery_ = hover_pointer_;
-      emit hoverRecoveryChanged();
-      emit changed();
+      hoverRecoveryChanged();
+      changed();
     }
   }
 
@@ -369,7 +347,7 @@ namespace telar::gui::qt {
     const auto id = identity.toULongLong(&valid);
     const auto* const slot = valid ? catalog_.find(id) : nullptr;
     if (slot != nullptr && prompt_ && slot->owns(prompt_->target)) {
-      emit dismissRequested(id);
+      dismissRequested(id);
     }
   }
 

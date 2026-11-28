@@ -1,25 +1,11 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.design.elements;
 
-#include "element_canvas.hpp"
-
-#include <QPainter>
-#include <QPen>
-#include <QRectF>
-#include <QVariantMap>
-
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <functional>
-#include <optional>
-#include <utility>
-
+import std;
+import telar.gui.qt;
 import telar.base.ds;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -115,19 +101,19 @@ namespace telar::gui::qt {
     };
 
     Qt::PenCapStyle capStyle(const QString& name) {
-      if (name == QStringLiteral("round")) {
+      if (name == u"round"_s) {
         return Qt::RoundCap;
       }
 
-      return name == QStringLiteral("square") ? Qt::SquareCap : Qt::FlatCap;
+      return name == u"square"_s ? Qt::SquareCap : Qt::FlatCap;
     }
 
     Qt::PenJoinStyle joinStyle(const QString& name) {
-      if (name == QStringLiteral("round")) {
+      if (name == u"round"_s) {
         return Qt::RoundJoin;
       }
 
-      return name == QStringLiteral("bevel") ? Qt::BevelJoin : Qt::MiterJoin;
+      return name == u"bevel"_s ? Qt::BevelJoin : Qt::MiterJoin;
     }
 
     // The numbers an upper-case SVG path command reads; none for a command outside the subset.
@@ -151,7 +137,7 @@ namespace telar::gui::qt {
     }
 
     ds::Option<ElementCanvas::Operation> operationOf(const QVariantMap& operation) {
-      const auto code = operation.value(QStringLiteral("op")).toInt();
+      const auto code = operation.value(u"op"_s).toInt();
       if (code < 0 || std::cmp_greater(code, std::to_underlying(ElementCanvas::Operation::restore))) {
         return ds::none;
       }
@@ -175,7 +161,7 @@ namespace telar::gui::qt {
     }
 
     QColor colorOf(const QVariantMap& operation) {
-      return operation.value(QStringLiteral("color")).value<QColor>();
+      return operation.value(u"color"_s).value<QColor>();
     }
 
   }
@@ -195,7 +181,7 @@ namespace telar::gui::qt {
     }
 
     operations_ = operations;
-    emit operationsChanged();
+    operationsChanged();
     update();
   }
 
@@ -206,7 +192,7 @@ namespace telar::gui::qt {
   void ElementCanvas::setRatio(qreal ratio) {
     if (!std::equal_to<>{}(ratio, ratio_)) {
       ratio_ = ratio;
-      emit operationsChanged();
+      operationsChanged();
       update();
     }
   }
@@ -289,7 +275,7 @@ namespace telar::gui::qt {
         return;
       }
 
-      const auto values = operation.value(QStringLiteral("values")).toList();
+      const auto values = operation.value(u"values"_s).toList();
       const auto value = [&](qsizetype index) {
         return index < values.size() ? values[index].toReal() : 0.0;
       };
@@ -324,7 +310,7 @@ namespace telar::gui::qt {
         path.addEllipse(point(0), value(2), value(2));
         break;
       case Operation::path:
-        if (!appendSvgPath(path, operation.value(QStringLiteral("text")).toString())) {
+        if (!appendSvgPath(path, operation.value(u"text"_s).toString())) {
           return;
         }
 
@@ -349,10 +335,10 @@ namespace telar::gui::qt {
         line_width = value(0);
         break;
       case Operation::cap:
-        cap = capStyle(operation.value(QStringLiteral("text")).toString());
+        cap = capStyle(operation.value(u"text"_s).toString());
         break;
       case Operation::join:
-        join = joinStyle(operation.value(QStringLiteral("text")).toString());
+        join = joinStyle(operation.value(u"text"_s).toString());
         break;
       case Operation::alpha:
         painter->setOpacity(value(0));

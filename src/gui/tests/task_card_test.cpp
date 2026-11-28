@@ -2,14 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "qml_fixture.hpp"
-#include "ui/app/chrome/activity/activity_projection.hpp"
-#include "ui/app/chrome/activity/agent_projection.hpp"
-#include "ui/app/chrome/sidebar_projection.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/models/list_model.hpp"
-#include "ui/kit/models/projection.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QDebug>
@@ -56,6 +48,14 @@ import telar.gui.features.workbench;
 import telar.base.ds;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
+import telar.gui.ui.app.chrome.activity;
+import telar.gui.ui.app.chrome;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
+import telar.gui.tests.qml_fixture;
+import telar.gui.foundation.core;
+import telar.gui.foundation.model;
+import telar.gui.qt;
 
 namespace {
 
@@ -92,23 +92,29 @@ namespace {
     window.show();
   }
 
-  class TaskCardTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] TaskCardTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void initTestCase() {
+  private:
+    [[qt::slot]] static void initTestCase() {
       bundledFonts();
       QGuiApplication::setFont(QFont{QStringLiteral("IBM Plex Sans")});
     }
 
-    Q_SLOT static void init() {
+    [[qt::slot]] static void init() {
       QTest::failOnWarning(QRegularExpression{QStringLiteral(".*")});
     }
 
     // What the cards read about where a pane works and what its shell ran: an agent's tab and
     // directory with its workspace's repository, and a process's command with how it ended and
     // the repository of its own directory.
-    Q_SLOT static void recordsSayWhereAPaneWorksAndWhatItRan() {
+    [[qt::slot]] static void recordsSayWhereAPaneWorksAndWhatItRan() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -196,7 +202,7 @@ namespace {
       QVERIFY(record.value(QStringLiteral("dirty")).toBool());
     }
 
-    Q_SLOT static void taskCardShowsFactsPlanAndFinalAnswer() {
+    [[qt::slot]] static void taskCardShowsFactsPlanAndFinalAnswer() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -272,7 +278,7 @@ namespace {
       QVERIFY(!window.grabWindow().isNull());
     }
 
-    Q_SLOT static void taskCardKeepsItsShapeWhileFocusAndStateChange() {
+    [[qt::slot]] static void taskCardKeepsItsShapeWhileFocusAndStateChange() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -312,7 +318,7 @@ namespace {
       QVERIFY(visualItems(*card, QStringLiteral("agentCardOutline")).front()->isVisible());
     }
 
-    Q_SLOT static void taskFactsGiveWayWhileTheRowRunsShort() {
+    [[qt::slot]] static void taskFactsGiveWayWhileTheRowRunsShort() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -361,7 +367,7 @@ namespace {
       QCOMPARE(signal->mapToItem(card.get(), QPointF{}).x(), context->mapToItem(card.get(), QPointF{}).x());
     }
 
-    Q_SLOT static void trackedCommandsKeepTheirOutcomeAndNavigationIdentity() {
+    [[qt::slot]] static void trackedCommandsKeepTheirOutcomeAndNavigationIdentity() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -403,7 +409,7 @@ namespace {
       QCOMPARE(visualItems(*card, QStringLiteral("commandFacts")).front()->property("text").toString(), QStringLiteral("host · fix · offline · last known"));
     }
 
-    Q_SLOT static void orderedActivityProjectsTasksAsAgentCards() {
+    [[qt::slot]] static void orderedActivityProjectsTasksAsAgentCards() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -479,4 +485,6 @@ namespace {
 }
 
 QTEST_MAIN(TaskCardTest)
+#ifndef TELAR_MOC_RUN
 #include "task_card_test.moc"
+#endif

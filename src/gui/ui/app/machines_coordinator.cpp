@@ -1,35 +1,8 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app;
 
-#include "machines_coordinator.hpp"
-#include "dialogs.hpp"
-#include "frame_presenter.hpp"
-#include "ui/kit/machines/machine_client.hpp"
-#include "ui/kit/machines/remote_bridge.hpp"
-#include "ui/kit/machines/runtime_connection.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "window_display.hpp"
-#include "window_status.hpp"
-#include <QByteArrayView>
-#include <QCryptographicHash>
-#include <QDir>
-#include <QRandomGenerator>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <optional>
-#include <span>
-#include <string_view>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.machines;
 import telar.platform.paths;
 import telar.platform.process;
 import telar.gui.application;
@@ -113,7 +86,7 @@ namespace telar::gui::qt {
   }
 
   void MachinesCoordinator::publishList() {
-    emit listChanged();
+    listChanged();
   }
 
   void MachinesCoordinator::initialize() {
@@ -192,7 +165,7 @@ namespace telar::gui::qt {
     store_.machinesMut().setLive(slot, true);
     connectMachine(slot);
     if (replacing_active) {
-      emit changed();
+      changed();
     }
 
     return clientAtMut(slot);
@@ -255,7 +228,7 @@ namespace telar::gui::qt {
         source->needs_setup = source->connection.link().setup_repairs;
         summarize(source->key);
         if (key.machine.slot == store_.machines().active()) {
-          emit linkChanged();
+          linkChanged();
         }
       }
     });
@@ -272,7 +245,7 @@ namespace telar::gui::qt {
       return;
     }
 
-    emit selecting();
+    selecting();
     host_.releaseInput();
     dialogs_.show(Store::Dialog::none);
     application::palette::discard(store_.sessionMut());
@@ -284,8 +257,8 @@ namespace telar::gui::qt {
     }
 
     store_.connectionMut().resumeSession();
-    emit changed();
-    emit listChanged();
+    changed();
+    listChanged();
     display_.layoutWorkbench();
     store_.clientMut(store_.machines().active()).setPresented(true);
     host_.presentMachine();
@@ -324,7 +297,7 @@ namespace telar::gui::qt {
     }
 
     if (store_.machinesMut().summarize(slot, observation)) {
-      emit listChanged();
+      listChanged();
     }
   }
 

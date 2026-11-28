@@ -6,13 +6,6 @@ static_assert(true);
 #include "animation_presentation.hpp"
 #include "platform/window.hpp"
 #include "platform/window_activation.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/app/chrome/tabs/tab_strip_layout.hpp"
-#include "ui/design/controls/modal_reveal_layout.hpp"
-#include "ui/design/controls/native_rounded_rectangle.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/models/list_model.hpp"
-#include "ui/kit/scene/window_animation_clock.hpp"
 #include <QCommandLineParser>
 #include <QGuiApplication>
 #include <QJsonDocument>
@@ -33,6 +26,13 @@ static_assert(true);
 
 import telar.gui.foundation.core;
 import telar.base.ds;
+
+import telar.gui.ui.app;
+import telar.gui.ui.app.chrome.tabs;
+import telar.gui.ui.design.controls;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.scene;
 
 namespace {
 

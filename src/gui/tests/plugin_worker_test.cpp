@@ -3,8 +3,6 @@
 static_assert(true);
 #endif
 
-#include "ui/kit/config/plugin_packages.hpp"
-#include "ui/kit/plugins/plugin_worker.hpp"
 #include <QCoreApplication>
 #include <QFile>
 #include <QIODevice>
@@ -47,6 +45,10 @@ import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.platform.primitives;
 import telar.wire.vocabulary;
+import telar.gui.ui.kit.config;
+import telar.gui.ui.kit.plugins;
+import telar.gui.foundation.actions;
+import telar.gui.qt;
 
 namespace {
 
@@ -168,10 +170,16 @@ namespace {
     }
   };
 
-  class PluginWorkerTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] PluginWorkerTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
-    Q_SLOT static void successRetainsBusyRunAndReleasesSnapshot() {
+  private:
+    [[qt::slot]] static void successRetainsBusyRunAndReleasesSnapshot() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       Fixture fixture{memory};
@@ -205,7 +213,7 @@ namespace {
       QVERIFY(QFile::exists(fixture.directory.filePath(QStringLiteral("main.lua"))));
     }
 
-    Q_SLOT static void environmentDirectoryAndDescriptorsAreIsolated() {
+    [[qt::slot]] static void environmentDirectoryAndDescriptorsAreIsolated() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       Fixture fixture{memory};
@@ -256,7 +264,7 @@ namespace {
       QVERIFY(observer.results.front().effects);
     }
 
-    Q_SLOT static void failuresAreBoundedAndPermitReuse() {
+    [[qt::slot]] static void failuresAreBoundedAndPermitReuse() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       Fixture fixture{memory};
@@ -281,7 +289,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void changedPackageNeverStartsWorker() {
+    [[qt::slot]] static void changedPackageNeverStartsWorker() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       const Fixture fixture{memory};
@@ -315,4 +323,6 @@ int main(int argc, char** argv, char* const* environment) {
   }
 }
 
+#ifndef TELAR_MOC_RUN
 #include "plugin_worker_test.moc"
+#endif

@@ -1,21 +1,15 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.overlays.peek;
 
-#include "peek_controller.hpp"
-#include "ui/kit/models/activity_availability.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "ui/kit/text/utf16_encoding.hpp"
-#include <QByteArray>
-#include <QLatin1StringView>
-#include <QStringList>
-#include <QStringView>
-#include <variant>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.text;
 import telar.gui.application;
+import telar.gui.foundation.core;
+import telar.gui.foundation.text;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   PeekController::PeekController(Store& store, QObject* parent)
       : QObject(parent),
@@ -23,7 +17,7 @@ namespace telar::gui::qt {
 
   void PeekController::setDisplay(const application::window::DisplayMetrics& display) {
     display_ = display;
-    emit changed();
+    changed();
   }
 
   void PeekController::setWindowGeneration(std::uint64_t generation) noexcept {
@@ -65,11 +59,11 @@ namespace telar::gui::qt {
     }
 
     if (!valid()) {
-      emit closeRequested();
+      closeRequested();
       return;
     }
 
-    emit changed();
+    changed();
   }
 
   void PeekController::search(const QString& text) {
@@ -84,7 +78,7 @@ namespace telar::gui::qt {
       editor_ = QString::fromUtf8(editor_.toUtf8());
     }
 
-    emit changed();
+    changed();
     if (measured.bytes < measured.requested_bytes) {
       reportLimit(static_cast<qulonglong>(measured.requested_bytes));
     }
@@ -109,11 +103,11 @@ namespace telar::gui::qt {
     store_.interact(
         [&] {
           if (application::peek::submit(store_.sessionMut(), {text.constData(), static_cast<std::size_t>(text.size())})) {
-            emit closeRequested();
+            closeRequested();
           }
         },
         [this](const std::exception& error) {
-          emit failed(QString::fromUtf8(error.what()));
+          failed(QString::fromUtf8(error.what()));
         }
     );
   }
@@ -137,7 +131,7 @@ namespace telar::gui::qt {
       }
     }
 
-    return {{QStringLiteral("revision"), QString::number(store_.dialog().generation)}, {QStringLiteral("title"), title}, {QStringLiteral("facts"), facts}, {QStringLiteral("lines"), lines}, {QStringLiteral("editorText"), editor_}, {QStringLiteral("maximumBytes"), static_cast<qulonglong>(application::peek::PeekLimits::message_bytes)}};
+    return {{u"revision"_s, QString::number(store_.dialog().generation)}, {u"title"_s, title}, {u"facts"_s, facts}, {u"lines"_s, lines}, {u"editorText"_s, editor_}, {u"maximumBytes"_s, static_cast<qulonglong>(application::peek::PeekLimits::message_bytes)}};
   }
 
   QVariantMap PeekController::geometry() const {
@@ -158,7 +152,7 @@ namespace telar::gui::qt {
       return toQRectF(area, density);
     };
 
-    return {{QStringLiteral("bounds"), toQRectF(bounds, density)}, {QStringLiteral("title"), local(geometry.title)}, {QStringLiteral("facts"), local(geometry.facts)}, {QStringLiteral("screen"), local(geometry.screen)}, {QStringLiteral("field"), local(geometry.field)}, {QStringLiteral("footer"), local(geometry.footer)}};
+    return {{u"bounds"_s, toQRectF(bounds, density)}, {u"title"_s, local(geometry.title)}, {u"facts"_s, local(geometry.facts)}, {u"screen"_s, local(geometry.screen)}, {u"field"_s, local(geometry.field)}, {u"footer"_s, local(geometry.footer)}};
   }
 
 }

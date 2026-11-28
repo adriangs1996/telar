@@ -1,22 +1,14 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.chrome.workspaces;
 
-#include "workspaces_controller.hpp"
-#include "project_projection.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QVarLengthArray>
-#include <algorithm>
-#include <cstddef>
-#include <numeric>
-#include <span>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
 import telar.base.ds;
 import telar.base.memory.allocators;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -117,9 +109,9 @@ namespace telar::gui::qt {
       const bool selected = selected_project == workspace.location.id;
       auto record = projectRecord(workspace, session.workspace_list, std::span<const Agent<Memory>>{session.agents()}, selected, shown[static_cast<qsizetype>(index)]);
 
-      record.insert(QStringLiteral("index"), workspaces.size());
+      record.insert(u"index"_s, workspaces.size());
       if (selected) {
-        context.insert(QStringLiteral("index"), workspaces.size());
+        context.insert(u"index"_s, workspaces.size());
       }
 
       workspaces.append(std::move(record));
@@ -129,7 +121,7 @@ namespace telar::gui::qt {
     rows_.reconcile(std::move(workspaces));
     if (context_ != context) {
       context_ = std::move(context);
-      emit contextChanged();
+      contextChanged();
     }
   }
 

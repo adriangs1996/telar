@@ -4,12 +4,6 @@ static_assert(true);
 #endif
 
 #include "platform/window_activation.hpp"
-#include "qml_fixture.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/app/overlays/notifications/notification_layout.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/models/list_model.hpp"
-#include "ui/kit/models/projection.hpp"
 #include <QAbstractItemModel>
 #include <QByteArray>
 #include <QColor>
@@ -47,6 +41,13 @@ import telar.gui.features.notifications;
 import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.gui.ui.app;
+import telar.gui.ui.app.overlays.notifications;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
+import telar.gui.tests.qml_fixture;
+import telar.gui.qt;
+import telar.gui.ui.kit.input;
 
 namespace {
 
@@ -71,15 +72,21 @@ namespace {
     };
   }
 
-  class NotificationOverlayTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] NotificationOverlayTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void initTestCase() {
+  private:
+    [[qt::slot]] static void initTestCase() {
       bundledFonts();
     }
 
-    Q_SLOT static void cardsKeepOriginalPlacementAndOutsideClicksDoNotDismiss() {
+    [[qt::slot]] static void cardsKeepOriginalPlacementAndOutsideClicksDoNotDismiss() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController client{memory};
@@ -127,7 +134,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(visualItems(*overlay, QStringLiteral("notificationCard")).empty(), wait_ms);
     }
 
-    Q_SLOT static void newestTwoCardsRetainPainterOrderAndOwnedText() {
+    [[qt::slot]] static void newestTwoCardsRetainPainterOrderAndOwnedText() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController client{memory};
@@ -161,7 +168,7 @@ namespace {
       QVERIFY(newest.value(QStringLiteral("accessible")).toString().contains(QStringLiteral("opens example.com")));
     }
 
-    Q_SLOT static void anEmptyOverlayParksTheWindowAnimationTimer() {
+    [[qt::slot]] static void anEmptyOverlayParksTheWindowAnimationTimer() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController client{memory};
@@ -183,7 +190,7 @@ namespace {
       QVERIFY(!timer->isActive());
     }
 
-    Q_SLOT static void pointerFocusAndHoverFollowTheTopmostControl() {
+    [[qt::slot]] static void pointerFocusAndHoverFollowTheTopmostControl() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController client{memory};
@@ -236,7 +243,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(client.notifications()->center().items().empty(), wait_ms);
     }
 
-    Q_SLOT static void keyboardActionsActivateOnPress() {
+    [[qt::slot]] static void keyboardActionsActivateOnPress() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ApplicationController client{memory};
@@ -272,7 +279,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void configuredAndCallbackActionsPublishWithoutStealingFocus() {
+    [[qt::slot]] static void configuredAndCallbackActionsPublishWithoutStealingFocus() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -331,4 +338,6 @@ int main(int argc, char** argv) {
   return QTest::qExec(&test, argc, argv);
 }
 
+#ifndef TELAR_MOC_RUN
 #include "notification_overlay_test.moc"
+#endif

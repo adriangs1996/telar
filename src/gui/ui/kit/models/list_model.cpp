@@ -1,4 +1,4 @@
-#include "list_model.hpp"
+module telar.gui.ui.kit.models;
 
 namespace telar::gui::qt {
 

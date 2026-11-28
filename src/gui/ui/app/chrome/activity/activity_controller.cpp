@@ -1,31 +1,16 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.chrome.activity;
 
-#include "activity_controller.hpp"
-#include "activity_projection.hpp"
-#include "agent_projection.hpp"
-#include "ui/kit/machines/machine_client.hpp"
-#include "ui/kit/models/activity_availability.hpp"
-#include <QByteArray>
-#include <QList>
-#include <QMetaObject>
-#include <QVariantMap>
-#include <algorithm>
-#include <ranges>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <tuple>
-#include <utility>
-#include <variant>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.machines;
+import telar.gui.ui.kit.models;
 import telar.gui.application;
 import telar.base.ds;
 import telar.base.memory.allocators;
+import telar.tbc;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -148,9 +133,9 @@ namespace telar::gui::qt {
 
     // The row's key, and the mod content its slots draw.
     void keyAgentRecord(QVariantMap& record, const QString& key, ElementSlots& elements) {
-      record.insert(QStringLiteral("key"), key);
+      record.insert(u"key"_s, key);
       if (elements.active()) {
-        record.insert(QStringLiteral("elements"), elements.elements(ElementSlots::agent_slots, key, ElementSlots::agentItem(record)));
+        record.insert(u"elements"_s, elements.elements(ElementSlots::agent_slots, key, ElementSlots::agentItem(record)));
       }
     }
 
@@ -164,7 +149,7 @@ namespace telar::gui::qt {
       context.dirty = workspace != nullptr && workspace->dirty;
       auto record = processRecord(pane, workspace == nullptr ? std::string_view{} : std::string_view{workspace->name}, context);
 
-      record.insert(QStringLiteral("key"), key);
+      record.insert(u"key"_s, key);
 
       return record;
     }
@@ -209,7 +194,7 @@ namespace telar::gui::qt {
 
   QString ActivityController::identity(const application::machines::MachineActivityTarget& target) {
     const auto& source = target.source;
-    const auto prefix = QStringLiteral("machine:") + QString::number(source.machine.slot) + QLatin1Char(':') + QString::number(source.machine.generation) + QLatin1Char(':') + QString::number(source.generation) + QLatin1Char(':') + QString::number(target.runtime_generation);
+    const auto prefix = u"machine:"_s + QString::number(source.machine.slot) + QLatin1Char(':') + QString::number(source.machine.generation) + QLatin1Char(':') + QString::number(source.generation) + QLatin1Char(':') + QString::number(target.runtime_generation);
 
     if (const auto* agent = std::get_if<application::machines::MachineActivityTarget::Agent>(&target.owner)) {
       QByteArray session;
@@ -219,16 +204,16 @@ namespace telar::gui::qt {
         session.append(static_cast<char>(byte));
       }
 
-      return prefix + QStringLiteral(":agent:") + QString::number(agent->key.pane_id) + QLatin1Char(':') + QString::number(agent->key.pane_generation) + QLatin1Char(':') + QString::fromLatin1(session.toHex());
+      return prefix + u":agent:"_s + QString::number(agent->key.pane_id) + QLatin1Char(':') + QString::number(agent->key.pane_generation) + QLatin1Char(':') + QString::fromLatin1(session.toHex());
     }
 
     if (const auto* process = std::get_if<application::machines::MachineActivityTarget::Process>(&target.owner)) {
-      return prefix + QStringLiteral(":process:") + QString::number(process->pane_id) + QLatin1Char(':') + QString::number(process->pane_generation);
+      return prefix + u":process:"_s + QString::number(process->pane_id) + QLatin1Char(':') + QString::number(process->pane_generation);
     }
 
     const auto command = std::get<application::machines::MachineActivityTarget::Command>(target.owner);
 
-    return prefix + QStringLiteral(":command:") + QString::number(command.worktree) + QLatin1Char(':') + QString::number(command.workspace);
+    return prefix + u":command:"_s + QString::number(command.worktree) + QLatin1Char(':') + QString::number(command.workspace);
   }
 
   void ActivityController::synchronize() {
@@ -328,7 +313,7 @@ namespace telar::gui::qt {
     selection_ = selection;
     if (agent_count_ != agent_count) {
       agent_count_ = agent_count;
-      emit agentCountChanged();
+      agentCountChanged();
     }
   }
 
@@ -376,7 +361,7 @@ namespace telar::gui::qt {
     hover_seen_ = true;
     if (hovered_ != identity) {
       hovered_ = identity;
-      emit hoveredChanged();
+      hoveredChanged();
     }
   }
 
@@ -388,7 +373,7 @@ namespace telar::gui::qt {
     }
 
     hovered_.clear();
-    emit hoveredChanged();
+    hoveredChanged();
   }
 
   void ActivityController::showHover(const QString& identity, std::uint64_t pointer_revision) {
@@ -397,7 +382,7 @@ namespace telar::gui::qt {
     }
 
     hovered_ = identity;
-    emit hoveredChanged();
+    hoveredChanged();
   }
 
   void ActivityController::observePointer(bool hover_input, ds::Option<QPointF> position) {

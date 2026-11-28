@@ -2,17 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "qml_fixture.hpp"
-#include "shape_atlas.hpp"
-#include "ui/app/chrome/tabs/tab_strip_layout.hpp"
-#include "ui/design/controls/native_agent_status.hpp"
-#include "ui/design/controls/native_progress_ring.hpp"
-#include "ui/design/controls/native_tab_activity.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/models/list_model.hpp"
-#include "ui/kit/models/progress_value.hpp"
-#include "ui/kit/models/projection.hpp"
 #include <QAbstractItemModel>
 #include <QColor>
 #include <QDebug>
@@ -57,6 +46,14 @@ import telar.gui.foundation.drawing;
 import telar.gui.features.activity;
 import telar.base.ds;
 import telar.wire.vocabulary;
+import telar.gui.ui.app.chrome.tabs;
+import telar.gui.ui.design.controls;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
+import telar.gui.tests.qml_fixture;
+import telar.gui.tests.shape_atlas;
+import telar.gui.foundation.core;
+import telar.gui.qt;
 
 namespace {
 
@@ -155,15 +152,21 @@ namespace {
     return items;
   }
 
-  class TabActivitySceneTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] TabActivitySceneTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void initTestCase() {
+  private:
+    [[qt::slot]] static void initTestCase() {
       bundledFonts();
     }
 
-    Q_SLOT static void originalRingAndCapsuleAtlas() {
+    [[qt::slot]] static void originalRingAndCapsuleAtlas() {
       QQuickWindow window;
       const auto fixture = atlasFixture();
       const auto density = window.effectiveDevicePixelRatio();
@@ -206,7 +209,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void sharedClockParksWhenEveryObserverIsHidden() {
+    [[qt::slot]] static void sharedClockParksWhenEveryObserverIsHidden() {
       QQuickWindow window;
       NativeTabActivity first{window.contentItem()};
       NativeTabActivity second{window.contentItem()};
@@ -239,7 +242,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(changes.count() > before, wait_ms);
     }
 
-    Q_SLOT static void progressRetargetsAndSettlesWithoutIdlePolling() {
+    [[qt::slot]] static void progressRetargetsAndSettlesWithoutIdlePolling() {
       QQuickWindow window;
       NativeTabActivity item{window.contentItem()};
 
@@ -268,7 +271,7 @@ namespace {
       QCOMPARE(item.fraction(), restored_fraction);
     }
 
-    Q_SLOT static void clockCallbacksCanDestroyTheirWindow() {
+    [[qt::slot]] static void clockCallbacksCanDestroyTheirWindow() {
       auto window = std::make_unique<QQuickWindow>();
       auto owned_item = std::make_unique<NativeTabActivity>(window->contentItem());
       auto* item = owned_item.get();
@@ -288,7 +291,7 @@ namespace {
       QVERIFY(!window);
     }
 
-    Q_SLOT static void fractionalTabRowsAlignInPhysicalPixels() {
+    [[qt::slot]] static void fractionalTabRowsAlignInPhysicalPixels() {
       QQuickWindow window;
       ListModel model;
       auto first = record(TabActivity::Kind::none);
@@ -320,7 +323,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void tabMotionSettlesAndParksTheSharedClock() {
+    [[qt::slot]] static void tabMotionSettlesAndParksTheSharedClock() {
       QQuickWindow window;
       ListModel model;
       auto first = record(TabActivity::Kind::none);
@@ -364,7 +367,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!layout.transitioning(), wait_ms);
     }
 
-    Q_SLOT static void tabMotionObserverCanRetireDuringATransition() {
+    [[qt::slot]] static void tabMotionObserverCanRetireDuringATransition() {
       QQuickWindow window;
       ListModel model;
       auto first = record(TabActivity::Kind::none);
@@ -393,7 +396,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!timers.front()->isActive(), wait_ms);
     }
 
-    Q_SLOT static void machineContextReplacementRetiresCollidingTabVisuals() {
+    [[qt::slot]] static void machineContextReplacementRetiresCollidingTabVisuals() {
       QQuickWindow window;
       ListModel model;
       auto first = record(TabActivity::Kind::none);
@@ -436,7 +439,7 @@ namespace {
       QCOMPARE(layout.items()->data(layout.items()->index(0, 0), ListModel::record_role).toMap().value(QStringLiteral("tab")).toMap().value(QStringLiteral("key")).toString(), QStringLiteral("1"));
     }
 
-    Q_SLOT static void stripReservesStatusAndPropagatesHiddenAttention() {
+    [[qt::slot]] static void stripReservesStatusAndPropagatesHiddenAttention() {
       QQuickWindow window;
       QQmlEngine engine;
       ListModel model;
@@ -496,4 +499,6 @@ int main(int argc, char** argv) {
   return QTest::qExec(&test, argc, argv);
 }
 
+#ifndef TELAR_MOC_RUN
 #include "tab_activity_scene_test.moc"
+#endif

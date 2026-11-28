@@ -1,8 +1,6 @@
 telar_add_qml_sources(gui-quick
   SOURCES
     history_controller.cpp
-    history_controller.hpp
-    history_match_model.hpp
     history_pointer.cpp
   QML_FILES
     HistoryEmpty.qml
@@ -14,7 +12,6 @@ telar_add_qml_sources(gui-quick
     HistoryMeta.qml
     HistoryPanel.qml
     HistoryRow.qml
-    HistorySearchBar.qml
-  REGISTERS)
-
+    HistorySearchBar.qml)
 add_subdirectory(layout)
+

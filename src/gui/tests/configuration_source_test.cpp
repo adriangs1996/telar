@@ -2,8 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "appearance_fixture.hpp"
 #include <array>
 #include <cerrno>
 #include <climits>
@@ -22,8 +20,6 @@ static_assert(true);
 #include <string_view>
 #include <utility>
 
-#include "ui/kit/config/configuration_source.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
@@ -55,6 +51,11 @@ import telar.plugins;
 import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.gui.ui.kit.config;
+import telar.gui.ui.kit.fonts;
+import telar.gui.tests.appearance_fixture;
+import telar.gui.foundation.actions;
+import telar.gui.qt;
 
 namespace telar::gui::qt {
   namespace {
@@ -207,11 +208,17 @@ namespace {
     return state;
   }
 
-  class ConfigurationSourceTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] ConfigurationSourceTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void pluginCompletionRejectsObsoleteIdentityAndGeneration() {
+  private:
+    [[qt::slot]] static void pluginCompletionRejectsObsoleteIdentityAndGeneration() {
       const PluginFixture fixture;
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
@@ -253,7 +260,7 @@ namespace {
       source.authorizePlugin(replacement, effects);
     }
 
-    Q_SLOT static void pluginOverridesRetainPendingPolicyAfterFailure() {
+    [[qt::slot]] static void pluginOverridesRetainPendingPolicyAfterFailure() {
       const PluginFixture fixture;
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
@@ -291,7 +298,7 @@ namespace {
       QCOMPARE(source.error(), QString{});
     }
 
-    Q_SLOT static void disabledPluginReferencedByStaticBarCanReload() {
+    [[qt::slot]] static void disabledPluginReferencedByStaticBarCanReload() {
       const PluginFixture fixture;
 
       writeFile(fixture.path, R"(
@@ -347,7 +354,7 @@ namespace {
       QCOMPARE(source.error(), QString{});
     }
 
-    Q_SLOT static void pluginOverrideRequestsSupersedeCapturedWorkers() {
+    [[qt::slot]] static void pluginOverrideRequestsSupersedeCapturedWorkers() {
       const PluginFixture fixture;
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
@@ -375,7 +382,7 @@ namespace {
       QCOMPARE(changes.count(), 1);
     }
 
-    Q_SLOT static void pluginTrustAndActionFailuresRetainTheAdoptedGeneration() {
+    [[qt::slot]] static void pluginTrustAndActionFailuresRetainTheAdoptedGeneration() {
       const PluginFixture fixture;
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
@@ -418,7 +425,7 @@ namespace {
       QCOMPARE(source.error(), QString{});
     }
 
-    Q_SLOT static void clientQueriesTrackAdoptionAndLiveState() {
+    [[qt::slot]] static void clientQueriesTrackAdoptionAndLiveState() {
       const QTemporaryDir directory;
       const auto absolute_path = directory.filePath(QStringLiteral("config.lua"));
       const auto path = QDir::current().relativeFilePath(absolute_path);
@@ -467,7 +474,7 @@ namespace {
       QCOMPARE(requiredJsonField(replaced, "generation").encoded(), std::string_view{"3"});
     }
 
-    Q_SLOT static void bindingQueriesRetainTheAdoptedGeneration() {
+    [[qt::slot]] static void bindingQueriesRetainTheAdoptedGeneration() {
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
@@ -498,7 +505,7 @@ namespace {
       QVERIFY_THROWS_EXCEPTION(std::invalid_argument, static_cast<void>(source.query({.section = ConfigurationQuery::Section::binding, .index = -1})));
     }
 
-    Q_SLOT static void bindingQueryErrorsPreserveAuthority() {
+    [[qt::slot]] static void bindingQueryErrorsPreserveAuthority() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
@@ -514,7 +521,7 @@ namespace {
       QVERIFY_THROWS_EXCEPTION(std::runtime_error, static_cast<void>(source.query({.section = ConfigurationQuery::Section::binding, .index = std::numeric_limits<std::int64_t>::max()})));
     }
 
-    Q_SLOT static void appearanceEventsPreserveTheAdoptedGeneration() {
+    [[qt::slot]] static void appearanceEventsPreserveTheAdoptedGeneration() {
       const AppearanceFixture appearance;
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
@@ -550,7 +557,7 @@ namespace {
       QCOMPARE(configuration_changes.count(), 0);
     }
 
-    Q_SLOT static void cliThemeLocksSurviveAppearanceAndFailedReload() {
+    [[qt::slot]] static void cliThemeLocksSurviveAppearanceAndFailedReload() {
       const AppearanceFixture appearance;
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
@@ -579,7 +586,7 @@ namespace {
       QCOMPARE(theme_changes.count(), 0);
     }
 
-    Q_SLOT static void guiAndInputQueriesRetainAdoptedProfiles() {
+    [[qt::slot]] static void guiAndInputQueriesRetainAdoptedProfiles() {
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
@@ -617,7 +624,7 @@ namespace {
       QCOMPARE(source.error(), QString{});
     }
 
-    Q_SLOT static void guiAndInputQueryErrorsPreserveAuthority() {
+    [[qt::slot]] static void guiAndInputQueryErrorsPreserveAuthority() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
@@ -638,7 +645,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void runtimeQueriesRetainAdoptedValuesAfterFailedReload() {
+    [[qt::slot]] static void runtimeQueriesRetainAdoptedValuesAfterFailedReload() {
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
@@ -672,7 +679,7 @@ namespace {
       QVERIFY(requiredJsonField(parsed, "session_persist").boolean());
     }
 
-    Q_SLOT static void runtimeQueryErrorsPreserveAuthority() {
+    [[qt::slot]] static void runtimeQueryErrorsPreserveAuthority() {
       ApplicationMemory application_memory;
       ApplicationAllocator& memory = application_memory.memory();
       ConfigurationSource source{memory};
@@ -690,7 +697,7 @@ namespace {
       QVERIFY(!source.query({.section = ConfigurationQuery::Section::runtime}).empty());
     }
 
-    Q_SLOT static void rootChangesAndForcedReload() {
+    [[qt::slot]] static void rootChangesAndForcedReload() {
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
@@ -713,7 +720,7 @@ namespace {
       QTRY_COMPARE(changes.count(), 2);
     }
 
-    Q_SLOT static void nestedDependenciesAndFailureRecovery() {
+    [[qt::slot]] static void nestedDependenciesAndFailureRecovery() {
       const QTemporaryDir directory;
 
       QVERIFY(QDir{directory.path()}.mkpath(QStringLiteral("nested")));
@@ -747,7 +754,7 @@ namespace {
       QVERIFY(!source.configuration().sidebar_visible);
     }
 
-    Q_SLOT static void runawayRenderLeavesTheWindowResponsive() {
+    [[qt::slot]] static void runawayRenderLeavesTheWindowResponsive() {
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
@@ -783,7 +790,7 @@ namespace {
       QVERIFY(result->error.contains(QStringLiteral("budget")));
     }
 
-    Q_SLOT static void modulesLoadedByCallbacksRemainWatched() {
+    [[qt::slot]] static void modulesLoadedByCallbacksRemainWatched() {
       const QTemporaryDir directory;
 
       QVERIFY(QDir{directory.path()}.mkpath(QStringLiteral("nested")));
@@ -811,7 +818,7 @@ namespace {
       QCOMPARE(second.actions[0].kind, BindingActionKind::toggle_pane_fullscreen);
     }
 
-    Q_SLOT static void failedCallbacksKeepTheirLoadedDependencies() {
+    [[qt::slot]] static void failedCallbacksKeepTheirLoadedDependencies() {
       const QTemporaryDir directory;
 
       QVERIFY(QDir{directory.path()}.mkpath(QStringLiteral("nested")));
@@ -837,7 +844,7 @@ namespace {
       QCOMPARE(effects.actions[0].kind, BindingActionKind::toggle_sidebar);
     }
 
-    Q_SLOT static void unrelatedChangesPreserveCallbackState() {
+    [[qt::slot]] static void unrelatedChangesPreserveCallbackState() {
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
@@ -865,7 +872,7 @@ namespace {
       QCOMPARE(reset.actions[0].parameter, std::uint64_t{0});
     }
 
-    Q_SLOT static void unrelatedDirectoryChangePreservesGeneration() {
+    [[qt::slot]] static void unrelatedDirectoryChangePreservesGeneration() {
       const QTemporaryDir directory;
 
       QVERIFY(directory.isValid());
@@ -887,7 +894,7 @@ namespace {
       QCOMPARE(changes.count(), 0);
     }
 
-    Q_SLOT static void pendingReloadPreservesActiveGenerationAndEventLoop() {
+    [[qt::slot]] static void pendingReloadPreservesActiveGenerationAndEventLoop() {
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
@@ -918,7 +925,7 @@ namespace {
       QVERIFY(source.configuration().sidebar_visible);
     }
 
-    Q_SLOT static void latestForcedReloadSupersedesPendingCheck() {
+    [[qt::slot]] static void latestForcedReloadSupersedesPendingCheck() {
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
@@ -951,7 +958,7 @@ namespace {
       QCOMPARE(changes.count(), 1);
     }
 
-    Q_SLOT static void switchingSourceRejectsLateResult() {
+    [[qt::slot]] static void switchingSourceRejectsLateResult() {
       const QTemporaryDir directory;
       const auto first = directory.filePath(QStringLiteral("first.lua"));
       const auto second = directory.filePath(QStringLiteral("second.lua"));
@@ -978,7 +985,7 @@ namespace {
       QVERIFY(source.configuration().sidebar_visible);
     }
 
-    Q_SLOT static void callbackDependenciesAddedDuringCheckRemainWatched() {
+    [[qt::slot]] static void callbackDependenciesAddedDuringCheckRemainWatched() {
       const QTemporaryDir directory;
 
       QVERIFY(QDir{directory.path()}.mkpath(QStringLiteral("nested")));
@@ -1009,7 +1016,7 @@ namespace {
       QCOMPARE(updated.actions[0].kind, BindingActionKind::toggle_pane_fullscreen);
     }
 
-    Q_SLOT static void failedReloadPreservesCallbackState() {
+    [[qt::slot]] static void failedReloadPreservesCallbackState() {
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
@@ -1042,7 +1049,7 @@ namespace {
       QCOMPARE(replacement.actions[0].parameter, std::uint64_t{0});
     }
 
-    Q_SLOT static void destructionWaitsForWorkerAndDiscardsNotification() {
+    [[qt::slot]] static void destructionWaitsForWorkerAndDiscardsNotification() {
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
@@ -1068,7 +1075,7 @@ namespace {
       QVERIFY(!changed);
     }
 
-    Q_SLOT static void fontValidationFailurePreservesGeneration() {
+    [[qt::slot]] static void fontValidationFailurePreservesGeneration() {
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
@@ -1089,7 +1096,7 @@ namespace {
       QVERIFY(!source.error().isEmpty());
     }
 
-    Q_SLOT static void adoptionCanDestroySourceAndAllocator() {
+    [[qt::slot]] static void adoptionCanDestroySourceAndAllocator() {
       const QTemporaryDir directory;
       const auto path = directory.filePath(QStringLiteral("config.lua"));
 
@@ -1120,4 +1127,6 @@ int main(int argc, char** argv) {
   return QTest::qExec(&test, argc, argv);
 }
 
+#ifndef TELAR_MOC_RUN
 #include "configuration_source_test.moc"
+#endif

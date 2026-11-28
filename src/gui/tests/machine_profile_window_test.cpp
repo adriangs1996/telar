@@ -4,12 +4,6 @@ static_assert(true);
 #endif
 
 #include "assertions.hpp"
-#include "gui_wait.hpp"
-#include "ui/app/application_controller.hpp"
-#include "ui/app/overlays/machine_prompt/machine_profiles_source.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/machines/machine_client.hpp"
-#include "wire_runtime.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QFile>
@@ -47,6 +41,15 @@ import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.pane_io;
 import telar.wire.vocabulary;
+import telar.gui.ui.app;
+import telar.gui.ui.app.overlays.machine_prompt.machine_profiles_source;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.machines;
+import telar.gui.tests.gui_wait;
+import telar.gui.tests.wire_runtime;
+import telar.gui.qt;
+import telar.gui.ui.app.overlays.machine_wizard;
+import telar.gui.ui.kit.input;
 
 namespace telar::gui::test {
 
@@ -232,11 +235,17 @@ namespace {
         wait_ms);
   }
 
-  class MachineProfileWindowTest : public QObject {
-    Q_OBJECT
+  class [[qt::object]] MachineProfileWindowTest : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void requestedRemoteSurvivesRejectedInitialProfiles() {
+  private:
+    [[qt::slot]] static void requestedRemoteSurvivesRejectedInitialProfiles() {
       ProfileFixture fixture;
 
       fixture.application.roster()->configureRemoteLaunch(QStringLiteral("window@fixture"), {});
@@ -249,7 +258,7 @@ namespace {
       QVERIFY(!MachineProfileWindow::profiles(fixture.application).error().isEmpty());
     }
 
-    Q_SLOT static void unavailableInitialMachineReportsItsCapacityFailure() {
+    [[qt::slot]] static void unavailableInitialMachineReportsItsCapacityFailure() {
       ProfileFixture fixture;
 
       fixture.application.roster()->configureRemoteLaunch(QStringLiteral("window@fixture"), {});
@@ -272,7 +281,7 @@ namespace {
       QVERIFY_THROWS_EXCEPTION(std::logic_error, fixture.application.roster()->configureRemoteLaunch(QStringLiteral("other"), {}));
     }
 
-    Q_SLOT static void requestedDisabledMachineRunsTheNamedCommandInRemoteHome() {
+    [[qt::slot]] static void requestedDisabledMachineRunsTheNamedCommandInRemoteHome() {
       ProfileFixture fixture;
       auto& application = fixture.application;
 
@@ -291,7 +300,7 @@ namespace {
       QCOMPARE(application.status()->error(), QString{});
     }
 
-    Q_SLOT static void requestedMachineLabelUsesItsSavedDestination() {
+    [[qt::slot]] static void requestedMachineLabelUsesItsSavedDestination() {
       ProfileFixture fixture;
 
       fixture.application.roster()->configureRemoteLaunch(QStringLiteral("Saved"), {});
@@ -304,7 +313,7 @@ namespace {
       QVERIFY(!MachineProfileWindow::client(fixture.application, machines.active())->named_launch);
     }
 
-    Q_SLOT static void requestedTemporaryMachineAdoptsASavedProfile() {
+    [[qt::slot]] static void requestedTemporaryMachineAdoptsASavedProfile() {
       ProfileFixture temporary;
 
       temporary.application.roster()->configureRemoteLaunch(QStringLiteral("window-command@fixture"), {QStringLiteral("/bin/echo"), QStringLiteral("REMOTE_NAMED")});
@@ -323,7 +332,7 @@ namespace {
       QVERIFY(machines.row(selected).enabled && machines.row(selected).pinned);
     }
 
-    Q_SLOT static void launchArgumentsRetainTheOriginalSixtyFourArgumentLimit() {
+    [[qt::slot]] static void launchArgumentsRetainTheOriginalSixtyFourArgumentLimit() {
       ProfileFixture fixture;
 
       QVERIFY(fixture.start(R"({"version":1,"machines":[]})"));
@@ -345,7 +354,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void machineActionsCycleAndPickerEnablesWithoutSelecting() {
+    [[qt::slot]] static void machineActionsCycleAndPickerEnablesWithoutSelecting() {
       ProfileFixture fixture;
 
       QVERIFY(fixture.start(R"({"version":1,"local_label":"Personal","machines":[{"id":"m-000000000001","label":"Build","destination":"window@fixture","enabled":true},{"id":"m-000000000002","label":"Offline","destination":"window-other@fixture","enabled":false}]})"));
@@ -395,7 +404,7 @@ namespace {
       QVERIFY(machines.row(Machines::local_slot).enabled);
     }
 
-    Q_SLOT static void pickerAddsThroughTheWizardThenRenamesAndRemoves() {
+    [[qt::slot]] static void pickerAddsThroughTheWizardThenRenamesAndRemoves() {
       ProfileFixture fixture;
 
       QVERIFY(fixture.start(R"({"version":1,"machines":[]})"));
@@ -431,7 +440,7 @@ namespace {
       QCOMPARE(application.palette()->state().value(QStringLiteral("count")).toInt(), 2);
     }
 
-    Q_SLOT static void stalePickerAndInvalidEditsKeepTheirTargets() {
+    [[qt::slot]] static void stalePickerAndInvalidEditsKeepTheirTargets() {
       ProfileFixture fixture;
 
       QVERIFY(fixture.start(R"({"version":1,"machines":[{"id":"m-000000000001","label":"Build","destination":"window@fixture","enabled":false}]})"));
@@ -455,7 +464,7 @@ namespace {
       QCOMPARE(MachineProfileWindow::machines(application).row(slot).label.view(), std::string_view{"Renamed"});
     }
 
-    Q_SLOT static void setupOpensTheWizardOnThatMachine() {
+    [[qt::slot]] static void setupOpensTheWizardOnThatMachine() {
       ProfileFixture fixture;
 
       QVERIFY(fixture.start(R"({"version":1,"machines":[{"id":"m-000000000001","label":"Missing","destination":"missing","enabled":true}]})"));
@@ -478,7 +487,7 @@ namespace {
       QCOMPARE(MachineProfileWindow::machines(application).active(), active);
     }
 
-    Q_SLOT static void hiddenAdmissionAndVisibleDisable() {
+    [[qt::slot]] static void hiddenAdmissionAndVisibleDisable() {
       ProfileFixture fixture;
 
       QVERIFY(fixture.start(R"({"version":1,"local_label":"Personal","machines":[{"id":"m-000000000001","label":"Build","destination":"window@fixture","enabled":true},{"id":"m-000000000002","label":"Offline","destination":"offline@fixture","enabled":false}]})"));
@@ -510,7 +519,7 @@ namespace {
       QCOMPARE(MachineProfileWindow::client(application, slot)->identity, identity);
     }
 
-    Q_SLOT static void stableIdsAndClientIncarnations() {
+    [[qt::slot]] static void stableIdsAndClientIncarnations() {
       ProfileFixture fixture;
 
       QVERIFY(fixture.start(R"({"version":1,"machines":[{"id":"m-000000000001","label":"Build","destination":"window@fixture","enabled":true}]})"));
@@ -545,7 +554,7 @@ namespace {
       QCOMPARE(MachineProfileWindow::machines(application).row(slot).id, MachineId::fromRaw(3));
     }
 
-    Q_SLOT static void permanentFailuresAndInvalidReplacement() {
+    [[qt::slot]] static void permanentFailuresAndInvalidReplacement() {
       ProfileFixture fixture;
 
       QVERIFY(fixture.start(R"({"version":1,"machines":[{"id":"m-000000000001","label":"Denied","destination":"denied","enabled":true},{"id":"m-000000000002","label":"Missing","destination":"missing","enabled":true}]})"));
@@ -569,7 +578,7 @@ namespace {
       QCOMPARE(machines.active(), Machines::local_slot);
     }
 
-    Q_SLOT static void savedProfileAdoptsPinnedTemporaryClient() {
+    [[qt::slot]] static void savedProfileAdoptsPinnedTemporaryClient() {
       ProfileFixture fixture;
 
       QVERIFY(fixture.start(R"({"version":1,"machines":[]})"));
@@ -605,4 +614,6 @@ int main(int argc, char** argv) {
   return QTest::qExec(&test, argc, argv);
 }
 
+#ifndef TELAR_MOC_RUN
 #include "machine_profile_window_test.moc"
+#endif

@@ -1,25 +1,8 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.fonts;
 
-#include "font_resolver.hpp"
-#include "bundled_fonts.hpp"
-#include "platform/font.h"
-#include "terminal_font.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QFont>
-#include <QGuiApplication>
-#include <QScreen>
-#include <QString>
-#include <QStringList>
-#include <QtCore/qtypes.h>
-#include <cstddef>
-#include <cstring>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <utility>
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
 
 namespace telar::gui::qt {
 

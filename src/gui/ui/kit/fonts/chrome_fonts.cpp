@@ -1,26 +1,18 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.fonts;
 
-#include "chrome_fonts.hpp"
-#include "font_source.hpp"
-#include <QByteArray>
-#include <QtCore/qstringliteral.h>
-#include <cstdint>
-#include <memory>
-#include <stdexcept>
-#include <string_view>
-
+import std;
+import telar.gui.qt;
 import telar.gui.foundation.core;
 import telar.base.ds;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
+
   namespace {
 
     QByteArray bundledFont(bool emphasized) {
-      [[clang::no_destroy]] static const auto regular = loadFontBytes(QStringLiteral(":/telar/fonts/IBMPlexSans-Regular.ttf"));
-      [[clang::no_destroy]] static const auto semibold = loadFontBytes(QStringLiteral(":/telar/fonts/IBMPlexSans-SemiBold.ttf"));
+      [[clang::no_destroy]] static const auto regular = loadFontBytes(u":/telar/fonts/IBMPlexSans-Regular.ttf"_s);
+      [[clang::no_destroy]] static const auto semibold = loadFontBytes(u":/telar/fonts/IBMPlexSans-SemiBold.ttf"_s);
 
       return emphasized ? semibold : regular;
     }

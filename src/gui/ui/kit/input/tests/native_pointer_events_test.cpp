@@ -1,4 +1,3 @@
-#include "ui/kit/input/native_pointer_events.hpp"
 #include <QCoreApplication>
 #include <QEvent>
 #include <QGuiApplication>
@@ -19,6 +18,7 @@
 import telar.testing;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.gui.ui.kit.input;
 
 namespace {
 

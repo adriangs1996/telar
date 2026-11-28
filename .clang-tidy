@@ -140,6 +140,7 @@ ExtraArgs:
   - -Wno-lifetime-safety-intra-tu-constructor-suggestions
   - -Wno-lifetime-safety-cross-tu-constructor-suggestions
   - -Wno-thread-safety-negative
+  - -Wno-unknown-attributes
 WarningsAsErrors: '*'
 HeaderFilterRegex: '(^|/)(src|lib)/'
 ExcludeHeaderFilterRegex: '(^|/)(lib/(tbc|ebnf)|dependencies|generated|out[^/]*|tests|third_party|vendor|\.toolchain)/'
@@ -169,6 +170,7 @@ CheckOptions:
   readability-identifier-naming.VariableCase: lower_case
   readability-identifier-naming.ParameterCase: lower_case
   readability-identifier-naming.ConstantCase: lower_case
+  readability-identifier-naming.ConstantIgnoredRegexp: '^staticMetaObject$'
   readability-identifier-naming.PrivateMemberCase: lower_case
   readability-identifier-naming.PrivateMemberSuffix: '_'
   readability-identifier-naming.MacroDefinitionCase: UPPER_CASE

@@ -3,17 +3,6 @@
 static_assert(true);
 #endif
 
-#include "ui/app/panes/terminal/links/link_preview.hpp"
-#include "ui/kit/cell_scene/terminal_scene.hpp"
-#include "ui/kit/cell_scene/window_images.hpp"
-#include "ui/kit/fonts/box_font.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/fonts/font_collection.hpp"
-#include "ui/kit/fonts/font_resolver.hpp"
-#include "ui/kit/fonts/resident_fonts.hpp"
-#include "ui/kit/fonts/terminal_font.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "ui/kit/scene/scene_nodes.hpp"
 #include <QColor>
 #include <QGuiApplication>
 #include <QImage>
@@ -57,6 +46,14 @@ import telar.gui.application;
 import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.gui.ui.app.panes.terminal.links;
+import telar.gui.ui.kit.cell_scene;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.scene;
+import telar.base.memory.allocators;
+import telar.gui.foundation.fonts;
+import telar.gui.qt;
 
 namespace {
 
@@ -710,9 +707,15 @@ namespace {
     std::uint64_t pane_id_ = 1;
   };
 
-  class SceneTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] SceneTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
+  private:
   private:
     enum class ScrollStep : std::uint8_t {
       palette = 8,
@@ -726,17 +729,17 @@ namespace {
       restore_grid = 18,
     };
 
-    Q_SLOT static void scrolledStandardRowsMatchFreshScene() {
+    [[qt::slot]] static void scrolledStandardRowsMatchFreshScene() {
       checkScrolledRows(false);
     }
 
-    Q_SLOT static void scrolledOpticalRowsMatchFreshScene() {
+    [[qt::slot]] static void scrolledOpticalRowsMatchFreshScene() {
       checkScrolledRows(true);
     }
 
     // Rows drawn a row below their places, as under a fold closing, leave their first place
     // empty: the same picture as a screen with an empty row there.
-    Q_SLOT static void offsetRowsMatchTheScreenTheyStandFor() {
+    [[qt::slot]] static void offsetRowsMatchTheScreenTheyStandFor() {
       constexpr std::uint32_t offset = 20;
       constexpr std::size_t lowered = 2;
       SceneFixture reference{CursorShape::block, false};
@@ -760,7 +763,7 @@ namespace {
 
     // A view a row further down than its screen draws the screen's rows moved up and the row
     // after them from the rows kept apart: the same picture as a screen holding them all.
-    Q_SLOT static void drawnRowsMatchTheScreenTheyStandFor() {
+    [[qt::slot]] static void drawnRowsMatchTheScreenTheyStandFor() {
       constexpr std::uint32_t offset = 11;
       SceneFixture reference{CursorShape::block, false};
       SceneFixture drawn{CursorShape::block, false};
@@ -847,13 +850,13 @@ namespace {
     }
 
     // NOLINTNEXTLINE(readability-identifier-naming): Qt requires the _data suffix.
-    Q_SLOT static void changingTextAndInlineDecorationsMatchesFreshRows_data() {
+    [[qt::slot]] static void changingTextAndInlineDecorationsMatchesFreshRows_data() {
       QTest::addColumn<bool>("optical");
       QTest::newRow("standard") << false;
       QTest::newRow("optical") << true;
     }
 
-    Q_SLOT static void changingTextAndInlineDecorationsMatchesFreshRows() {
+    [[qt::slot]] static void changingTextAndInlineDecorationsMatchesFreshRows() {
       QFETCH(const bool, optical);
       constexpr ds::Array<std::string_view, 5> contents{"ffi!=->M", "ABCDEFGH", "        ", "01234567", "ffi!=->M"};
       constexpr std::size_t columns = 8;
@@ -890,7 +893,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void viewportResizeExcludesHiddenLigatureContextWithoutCellDamage() {
+    [[qt::slot]] static void viewportResizeExcludesHiddenLigatureContextWithoutCellDamage() {
       SceneFixture fixture{CursorShape::block, false};
       const ds::Array<Byte, 4> text{'=', '=', '=', '='};
       ds::Array<Cell, 4> cells;
@@ -917,7 +920,7 @@ namespace {
       QCOMPARE(fixture.capture(), complete);
     }
 
-    Q_SLOT static void blinkingCursorMovesRebuildLigaturesWithoutCellDamage() {
+    [[qt::slot]] static void blinkingCursorMovesRebuildLigaturesWithoutCellDamage() {
       SceneFixture fixture{CursorShape::block};
       const ds::Array<Byte, 4> text{'=', '=', '=', ' '};
       ds::Array<Cell, 4> cells;
@@ -941,7 +944,7 @@ namespace {
       QVERIFY(retained != split);
     }
 
-    Q_SLOT static void regularAndSyntheticStylesUseOriginalGlyphMasks() {
+    [[qt::slot]] static void regularAndSyntheticStylesUseOriginalGlyphMasks() {
       SceneFixture fixture{CursorShape::block, false};
 
       fixture.useWhiteTextOnBlack();
@@ -963,7 +966,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void oversizedGlyphFallsBackWithoutDiscardingCell() {
+    [[qt::slot]] static void oversizedGlyphFallsBackWithoutDiscardingCell() {
       SceneFixture fixture{CursorShape::block, false};
       const auto blank = fixture.capture();
       constexpr std::uint16_t oversized_raster_height = 4096;
@@ -973,7 +976,7 @@ namespace {
       QVERIFY(fixture.capture() != blank);
     }
 
-    Q_SLOT static void malformedUtf8UsesReplacementGlyph() {
+    [[qt::slot]] static void malformedUtf8UsesReplacementGlyph() {
       SceneFixture fixture{CursorShape::block, false};
 
       fixture.setCell(plain_style, CursorShape::block, false, "\ufffd");
@@ -983,7 +986,7 @@ namespace {
       QCOMPARE(fixture.capture(), replacement);
     }
 
-    Q_SLOT static void boxInkUsesProvidedPhysicalFontMetrics() {
+    [[qt::slot]] static void boxInkUsesProvidedPhysicalFontMetrics() {
       SceneFixture fixture{CursorShape::block, false};
       constexpr QSizeF cell{32, 32};
 
@@ -998,7 +1001,7 @@ namespace {
       QCOMPARE(fixture.pixel(fixture.capture(), cell.width() / 2, (cell.height() / 2) + offset), toQColor(cursor_color));
     }
 
-    Q_SLOT static void fontSmoothingSelectsOpticalMasksWithoutChangingTheGrid() {
+    [[qt::slot]] static void fontSmoothingSelectsOpticalMasksWithoutChangingTheGrid() {
       SceneFixture fixture{CursorShape::block, false};
 
       fixture.setFontHinting(FontHinting::native);
@@ -1029,7 +1032,7 @@ namespace {
       QVERIFY(fitted != plain);
     }
 
-    Q_SLOT static void cursorAndPreeditShareFontSmoothing() {
+    [[qt::slot]] static void cursorAndPreeditShareFontSmoothing() {
       SceneFixture fixture{CursorShape::block};
 
       fixture.setCursorTextColor(cursor_text_color);
@@ -1058,7 +1061,7 @@ namespace {
       QVERIFY(light_preedit != strong_preedit);
     }
 
-    Q_SLOT static void proceduralInkIgnoresFontSmoothing() {
+    [[qt::slot]] static void proceduralInkIgnoresFontSmoothing() {
       SceneFixture fixture{CursorShape::block};
 
       fixture.setCursorTextColor(cursor_text_color);
@@ -1072,7 +1075,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void boxStrokeUsesDesignMetricsAtDisplayScale() {
+    [[qt::slot]] static void boxStrokeUsesDesignMetricsAtDisplayScale() {
       const auto font = TerminalFont::resolve(QVariantMap{}, 1);
       constexpr qreal quadrupled_scale = 4;
       constexpr float expected_thickness = 3;
@@ -1083,7 +1086,7 @@ namespace {
       QCOMPARE(BoxFont::thickness(font.faces.front(), quadrupled_scale), expected_thickness);
     }
 
-    Q_SLOT static void boxStrokesUseCompleteCellAndUnicodeWeight() {
+    [[qt::slot]] static void boxStrokesUseCompleteCellAndUnicodeWeight() {
       SceneFixture fixture{CursorShape::block, false};
       constexpr QSizeF expanded_cell{27, 51};
 
@@ -1104,7 +1107,7 @@ namespace {
       QCOMPARE(fixture.pixel(cross, expanded_cell.width() / 2, expanded_cell.height() / 2), fixture.pixel(cross, expanded_cell.width() - 1, expanded_cell.height() / 2));
     }
 
-    Q_SLOT static void roundedCornersReachTheirCellEdges() {
+    [[qt::slot]] static void roundedCornersReachTheirCellEdges() {
       SceneFixture fixture{CursorShape::block, false};
       constexpr QSize expanded_pixels{27, 51};
 
@@ -1122,7 +1125,7 @@ namespace {
       QCOMPARE(fixture.capture(), image);
     }
 
-    Q_SLOT static void diagonalMasksKeepOrientationAndCursorColor() {
+    [[qt::slot]] static void diagonalMasksKeepOrientationAndCursorColor() {
       SceneFixture fixture{CursorShape::block, false};
       constexpr QSizeF square_cell{32, 32};
 
@@ -1144,7 +1147,7 @@ namespace {
       QCOMPARE(fixture.pixel(falling, 0, last_row), toQColor(cursor_color));
     }
 
-    Q_SLOT static void oversizedCurvesKeepProceduralFallback() {
+    [[qt::slot]] static void oversizedCurvesKeepProceduralFallback() {
       SceneFixture fixture{CursorShape::block, false};
       constexpr QSizeF oversized_cell{512, 512};
 
@@ -1159,7 +1162,7 @@ namespace {
       QCOMPARE(fixture.pixel(image, oversized_cell.width() / 2, 0), toQColor(background_color));
     }
 
-    Q_SLOT static void curveRasterLimitSelectsReservedMask() {
+    [[qt::slot]] static void curveRasterLimitSelectsReservedMask() {
       SceneFixture fixture{CursorShape::block, false};
       constexpr qreal largest_exact_extent = 256;
       const auto exact_extent = largest_exact_extent / fixture.scale();
@@ -1184,7 +1187,7 @@ namespace {
       QCOMPARE(fixture.pixel(image, oversized_cell.width() / 2, 0), toQColor(background_color));
     }
 
-    Q_SLOT static void curveMasksSurviveRetainedCursorAndResize() {
+    [[qt::slot]] static void curveMasksSurviveRetainedCursorAndResize() {
       SceneFixture fixture{CursorShape::block};
 
       fixture.setCursorTextColor(cursor_text_color);
@@ -1207,7 +1210,7 @@ namespace {
       QCOMPARE(fixture.capture(), original);
     }
 
-    Q_SLOT static void faintCurveIntersectionsBlendOnce() {
+    [[qt::slot]] static void faintCurveIntersectionsBlendOnce() {
       SceneFixture fixture{CursorShape::block, false};
       constexpr QSizeF square_cell{32, 32};
 
@@ -1226,7 +1229,7 @@ namespace {
       QVERIFY(std::abs(center.green() - expected_green) <= channel_tolerance);
     }
 
-    Q_SLOT static void fullBlockFillsConfiguredCell() {
+    [[qt::slot]] static void fullBlockFillsConfiguredCell() {
       SceneFixture fixture{CursorShape::block, false};
       constexpr QSizeF expanded_cell{27, 51};
 
@@ -1244,7 +1247,7 @@ namespace {
       QCOMPARE(fixture.capture(), image);
     }
 
-    Q_SLOT static void halfBlocksUseWholeCellGeometry() {
+    [[qt::slot]] static void halfBlocksUseWholeCellGeometry() {
       SceneFixture fixture{CursorShape::block, false};
       constexpr QSizeF expanded_cell{27, 51};
 
@@ -1261,7 +1264,7 @@ namespace {
       QCOMPARE(fixture.pixel(lower, expanded_cell.width() - 1, expanded_cell.height() - 1), toQColor(cursor_color));
     }
 
-    Q_SLOT static void shadesBlendAcrossWholeCell() {
+    [[qt::slot]] static void shadesBlendAcrossWholeCell() {
       SceneFixture fixture{CursorShape::block, false};
       constexpr QSizeF expanded_cell{27, 51};
 
@@ -1288,7 +1291,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void brailleUsesCellGridAndKeepsDecorations() {
+    [[qt::slot]] static void brailleUsesCellGridAndKeepsDecorations() {
       SceneFixture fixture{CursorShape::block, false};
       constexpr QSizeF expanded_cell{16, 32};
 
@@ -1314,7 +1317,7 @@ namespace {
       QCOMPARE(fixture.capture(), decorated_space);
     }
 
-    Q_SLOT static void blockCursorRepaintsProceduralInk() {
+    [[qt::slot]] static void blockCursorRepaintsProceduralInk() {
       SceneFixture fixture{CursorShape::block};
       constexpr QSizeF expanded_cell{27, 51};
 
@@ -1327,7 +1330,7 @@ namespace {
       QCOMPARE(fixture.pixel(image, expanded_cell.width() - 1, expanded_cell.height() - 1), toQColor(cursor_color));
     }
 
-    Q_SLOT static void combiningMarksKeepTextShaping() {
+    [[qt::slot]] static void combiningMarksKeepTextShaping() {
       SceneFixture fixture{CursorShape::block, false};
       constexpr QSizeF expanded_cell{27, 51};
 
@@ -1338,7 +1341,7 @@ namespace {
       QCOMPARE(fixture.pixel(image, expanded_cell.width() - 1, expanded_cell.height() - 1), toQColor(background_color));
     }
 
-    Q_SLOT static void underlinesRemainAboveProceduralInk() {
+    [[qt::slot]] static void underlinesRemainAboveProceduralInk() {
       SceneFixture fixture{CursorShape::block, false};
       constexpr QSizeF expanded_cell{27, 51};
 
@@ -1356,7 +1359,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void proceduralInkKeepsSelectionInverseAndConcealment() {
+    [[qt::slot]] static void proceduralInkKeepsSelectionInverseAndConcealment() {
       SceneFixture fixture{CursorShape::block, false};
       constexpr QSizeF expanded_cell{27, 51};
 
@@ -1381,7 +1384,7 @@ namespace {
       QCOMPARE(fixture.pixel(concealed, expanded_cell.width() - 1, expanded_cell.height() - 1), toQColor(background_color));
     }
 
-    Q_SLOT static void hoverUnderlineDoesNotChangeRetainedText() {
+    [[qt::slot]] static void hoverUnderlineDoesNotChangeRetainedText() {
       SceneFixture fixture{CursorShape::block, false};
       const auto target = requireLinkTarget("https://underline.test");
       const application::terminal::links::LinkMatch match{.target = target, .start = origin, .end = {.x = 1}};
@@ -1394,7 +1397,7 @@ namespace {
       QCOMPARE(fixture.capture(), original);
     }
 
-    Q_SLOT static void linkPreviewWrapsAndClipsWithinItsPane() {
+    [[qt::slot]] static void linkPreviewWrapsAndClipsWithinItsPane() {
       constexpr float pane_width = 200;
       constexpr float pane_height = 600;
       constexpr float cell_width = 8;
@@ -1421,7 +1424,7 @@ namespace {
       QVERIFY(!LinkPreview::layout(hit, invalid, font.faces.front(), 1));
     }
 
-    Q_SLOT static void blockCursorIsOpaque() {
+    [[qt::slot]] static void blockCursorIsOpaque() {
       SceneFixture fixture{CursorShape::block};
       const auto image = fixture.capture();
 
@@ -1431,7 +1434,7 @@ namespace {
       QCOMPARE(fixture.pixel(image, cell.width() / 2, cell.height() / 2), toQColor(cursor_color));
     }
 
-    Q_SLOT static void inactiveWindowCursorIsHollow() {
+    [[qt::slot]] static void inactiveWindowCursorIsHollow() {
       SceneFixture fixture{CursorShape::block};
 
       fixture.setKeyboard(false);
@@ -1444,7 +1447,7 @@ namespace {
       QCOMPARE(fixture.pixel(image, 0, cell.height() / 2), toQColor(cursor_color));
     }
 
-    Q_SLOT static void unfocusedPaneHasNoCursor() {
+    [[qt::slot]] static void unfocusedPaneHasNoCursor() {
       SceneFixture fixture{CursorShape::block};
 
       fixture.setPaneFocused(false);
@@ -1457,7 +1460,7 @@ namespace {
       QCOMPARE(fixture.pixel(image, cell.width() / 2, cell.height() / 2), toQColor(background_color));
     }
 
-    Q_SLOT static void underlineVariantsUseOriginalSingleRule() {
+    [[qt::slot]] static void underlineVariantsUseOriginalSingleRule() {
       SceneFixture fixture{CursorShape::block, false};
       CellStyle style;
       constexpr unsigned underline_shift = 8;
@@ -1492,7 +1495,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void cursorUsesConfiguredTextColor() {
+    [[qt::slot]] static void cursorUsesConfiguredTextColor() {
       SceneFixture fixture{CursorShape::block};
 
       fixture.setCursorTextColor(cursor_text_color);
@@ -1503,7 +1506,7 @@ namespace {
       QVERIFY(SceneFixture::bluePixels(image) > 0);
     }
 
-    Q_SLOT static void cursorDoesNotRevealInvisibleText() {
+    [[qt::slot]] static void cursorDoesNotRevealInvisibleText() {
       SceneFixture fixture{CursorShape::block};
 
       fixture.setCursorTextColor(cursor_text_color);
@@ -1517,7 +1520,7 @@ namespace {
       QCOMPARE(SceneFixture::bluePixels(image), 0);
     }
 
-    Q_SLOT static void selectionInvalidatesRetainedRow() {
+    [[qt::slot]] static void selectionInvalidatesRetainedRow() {
       SceneFixture fixture{CursorShape::block, false};
       const auto cell = fixture.cellSize();
 
@@ -1529,7 +1532,7 @@ namespace {
     }
 
     // NOLINTNEXTLINE(readability-identifier-naming): Qt requires the _data suffix.
-    Q_SLOT static void rowBackgroundsMatchIndependentRectangles_data() {
+    [[qt::slot]] static void rowBackgroundsMatchIndependentRectangles_data() {
       QTest::addColumn<BackgroundPattern>("pattern");
       QTest::newRow("uniform") << BackgroundPattern::uniform;
       QTest::newRow("alternating") << BackgroundPattern::alternating;
@@ -1540,7 +1543,7 @@ namespace {
       QTest::newRow("clipped-wide") << BackgroundPattern::clipped_wide;
     }
 
-    Q_SLOT static void rowBackgroundsMatchIndependentRectangles() {
+    [[qt::slot]] static void rowBackgroundsMatchIndependentRectangles() {
       QFETCH(const BackgroundPattern, pattern);
       constexpr qreal cell_height = 21;
       constexpr float translucent_alpha = 0.5F;
@@ -1575,13 +1578,13 @@ namespace {
     }
 
     // NOLINTNEXTLINE(readability-identifier-naming): Qt requires the _data suffix.
-    Q_SLOT static void mixedBackgroundColorsMatchIndependentRectangles_data() {
+    [[qt::slot]] static void mixedBackgroundColorsMatchIndependentRectangles_data() {
       QTest::addColumn<bool>("mixed");
       QTest::newRow("opaque-overlap") << false;
       QTest::newRow("mixed-precision-and-alpha") << true;
     }
 
-    Q_SLOT static void mixedBackgroundColorsMatchIndependentRectangles() {
+    [[qt::slot]] static void mixedBackgroundColorsMatchIndependentRectangles() {
       QFETCH(const bool, mixed);
       constexpr qreal cell_height = 21;
       constexpr Color precise_color{.r = 0.12345F, .g = 0.65789F, .b = 0.30001F};
@@ -1633,13 +1636,13 @@ namespace {
     }
 
     // NOLINTNEXTLINE(readability-identifier-naming): Qt requires the _data suffix.
-    Q_SLOT static void cellColorsMatchExplicitPaletteColors_data() {
+    [[qt::slot]] static void cellColorsMatchExplicitPaletteColors_data() {
       QTest::addColumn<bool>("optical");
       QTest::newRow("standard") << false;
       QTest::newRow("optical") << true;
     }
 
-    Q_SLOT static void cellColorsMatchExplicitPaletteColors() {
+    [[qt::slot]] static void cellColorsMatchExplicitPaletteColors() {
       QFETCH(const bool, optical);
       constexpr auto faint = static_cast<std::uint16_t>(CellAttribute::faint);
       constexpr auto inverse = static_cast<std::uint16_t>(CellAttribute::inverse);
@@ -1691,7 +1694,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void sparseBackgroundTransitionsMatchIndependentRectangles() {
+    [[qt::slot]] static void sparseBackgroundTransitionsMatchIndependentRectangles() {
       struct Step {
         std::size_t count = 0;
         Color color;
@@ -1743,7 +1746,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void changedBackgroundsMatchFreshRectangles() {
+    [[qt::slot]] static void changedBackgroundsMatchFreshRectangles() {
       constexpr qreal cell_height = 21;
       constexpr float translucent_alpha = 0.5F;
       SceneFixture retained{CursorShape::block, false};
@@ -1805,4 +1808,6 @@ int main(int argc, char** argv) {
   return QTest::qExec(&test, argc, argv);
 }
 
+#ifndef TELAR_MOC_RUN
 #include "scene_test.moc"
+#endif

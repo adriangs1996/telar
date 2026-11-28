@@ -2,15 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "qml_fixture.hpp"
-#include "ui/app/chrome/activity/agent_projection.hpp"
-#include "ui/app/chrome/sidebar_projection.hpp"
-#include "ui/design/controls/native_agent_status.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/models/agent_status_value.hpp"
-#include "ui/kit/models/list_model.hpp"
-#include "ui/kit/models/projection.hpp"
 #include <QAbstractItemModel>
 #include <QCoreApplication>
 #include <QDebug>
@@ -57,6 +48,14 @@ import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 import telar.base.memory.allocators;
+import telar.gui.ui.app.chrome.activity;
+import telar.gui.ui.app.chrome;
+import telar.gui.ui.design.controls;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
+import telar.gui.tests.qml_fixture;
+import telar.gui.foundation.model;
+import telar.gui.qt;
 
 namespace {
 
@@ -92,20 +91,26 @@ namespace {
     window.show();
   }
 
-  class AgentTimelineTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] AgentTimelineTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void initTestCase() {
+  private:
+    [[qt::slot]] static void initTestCase() {
       bundledFonts();
       QGuiApplication::setFont(QFont{QStringLiteral("IBM Plex Sans")});
     }
 
-    Q_SLOT static void init() {
+    [[qt::slot]] static void init() {
       QTest::failOnWarning(QRegularExpression{QStringLiteral(".*")});
     }
 
-    Q_SLOT static void opaqueIntervalSurvivesQmlWithoutNumericCoercion() {
+    [[qt::slot]] static void opaqueIntervalSurvivesQmlWithoutNumericCoercion() {
       QQmlEngine engine;
       const ChromeMetrics chrome;
       auto record = workingRecord();
@@ -132,7 +137,7 @@ namespace {
       QCOMPARE(item->property("statusText").toString(), QStringLiteral("Working 3s"));
     }
 
-    Q_SLOT static void visibleStatusesShareOneTimerAndPauseTogether() {
+    [[qt::slot]] static void visibleStatusesShareOneTimerAndPauseTogether() {
       QQuickWindow window;
       NativeAgentStatus first{window.contentItem()};
       NativeAgentStatus second_status{window.contentItem()};
@@ -172,7 +177,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(window.isExposed() && timers.front()->isActive(), wait_ms);
     }
 
-    Q_SLOT static void readyLabelsCatchUpWithoutAStatusTransition() {
+    [[qt::slot]] static void readyLabelsCatchUpWithoutAStatusTransition() {
       QQuickWindow window;
       NativeAgentStatus status{window.contentItem()};
 
@@ -199,7 +204,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!timers.front()->isActive(), wait_ms);
     }
 
-    Q_SLOT static void onlyTheBadgePulsesAndHiddenAncestorsParkTheClock() {
+    [[qt::slot]] static void onlyTheBadgePulsesAndHiddenAncestorsParkTheClock() {
       QQuickWindow window;
 
       window.setColor(Qt::black);
@@ -266,7 +271,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(timer->isActive(), wait_ms);
     }
 
-    Q_SLOT static void reparentingAndSignalDestructionRetireSubscriptions() {
+    [[qt::slot]] static void reparentingAndSignalDestructionRetireSubscriptions() {
       QQuickWindow first_window;
       QQuickWindow second_window;
       auto status = std::make_unique<NativeAgentStatus>(first_window.contentItem());
@@ -298,7 +303,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(!second_timers.front()->isActive(), wait_ms);
     }
 
-    Q_SLOT static void activityModelPreservesElapsedAgeAcrossRevisions() {
+    [[qt::slot]] static void activityModelPreservesElapsedAgeAcrossRevisions() {
       SystemAllocator system;
       telar::MemoryAdapter adapter{system};
       telar::ConcurrentMemory& memory = adapter;
@@ -359,7 +364,7 @@ namespace {
       QCOMPARE(status->animatedAlpha(), 1);
     }
 
-    Q_SLOT static void frameSamplingKeepsWorkingGlyphsInPhase() {
+    [[qt::slot]] static void frameSamplingKeepsWorkingGlyphsInPhase() {
       QQuickWindow window;
       NativeAgentStatus first{window.contentItem()};
       NativeAgentStatus second_status{window.contentItem()};
@@ -392,4 +397,6 @@ namespace {
 }
 
 QTEST_MAIN(AgentTimelineTest)
+#ifndef TELAR_MOC_RUN
 #include "agent_timeline_test.moc"
+#endif

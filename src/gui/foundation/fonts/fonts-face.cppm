@@ -195,6 +195,11 @@ export {
 // Owned textual headers stay in this global module fragment only; importers
 // reach their names through these declarations instead of including them.
 export namespace telar::gui::inline foundation::inline fonts {
+  using ::telar_font_family_not_found;
+  using ::telar_font_found;
   using ::telar_font_max_axes;
   using ::telar_font_max_bytes;
+  using ::telar_font_style_not_found;
+  using ::telarGuiFindFont;
+  using ::telarGuiFindValidatedFallbackFont;
 }

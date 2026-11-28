@@ -3,12 +3,12 @@
 static_assert(true);
 #endif
 
-#include "ui/kit/motion/scroll_motion.hpp"
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 
 import telar.testing;
+import telar.gui.ui.kit.motion;
 
 namespace {
 

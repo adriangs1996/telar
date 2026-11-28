@@ -5,9 +5,6 @@ static_assert(true);
 
 #include "assertions.hpp"
 #include "platform/window.hpp"
-#include "ui/kit/cell_scene/graphics_scene.hpp"
-#include "ui/kit/cell_scene/window_images.hpp"
-#include "ui/kit/scene/scene_nodes.hpp"
 #include <QColor>
 #include <QDir>
 #include <QGuiApplication>
@@ -50,6 +47,12 @@ import telar.gui.foundation.terminal;
 import telar.base.ds;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
+import telar.gui.ui.kit.cell_scene;
+import telar.gui.ui.kit.scene;
+import telar.base.diagnostics;
+import telar.base.memory.allocators;
+import telar.gui.application;
+import telar.gui.qt;
 
 namespace {
 
@@ -378,12 +381,18 @@ namespace {
     return std::abs(actual.red() - expected.red()) <= maximum_interpolation_error && std::abs(actual.green() - expected.green()) <= maximum_interpolation_error && std::abs(actual.blue() - expected.blue()) <= maximum_interpolation_error;
   }
 
-  class GraphicsRetentionSceneTest : public QObject {
-    Q_OBJECT
+  class [[qt::object]] GraphicsRetentionSceneTest : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
+  private:
     // An image's row is drawn where the view draws it: from the view's top shown row, through the
     // folds, and nowhere while a fold hides it.
-    Q_SLOT static void imageRowsFollowTheViewAndItsFolds() {
+    [[qt::slot]] static void imageRowsFollowTheViewAndItsFolds() {
       constexpr std::uint32_t fold_first = 10;
       constexpr std::uint32_t fold_rows = 5;
       constexpr std::uint64_t top = 4;
@@ -406,7 +415,7 @@ namespace {
       QCOMPARE(folded.drawn(-1), ds::Option<std::int64_t>{-1 - static_cast<std::int64_t>(top)});
     }
 
-    Q_SLOT static void highestPlacementsAreSelectedBeforeAnyUpload() {
+    [[qt::slot]] static void highestPlacementsAreSelectedBeforeAnyUpload() {
       Fixture fixture;
       const auto image = fixture.begin(1);
 
@@ -463,7 +472,7 @@ namespace {
       QCOMPARE(fixture.placement_limits_.size(), std::size_t{2});
     }
 
-    Q_SLOT static void incompleteReplacementPreservesThePreviousTexture() {
+    [[qt::slot]] static void incompleteReplacementPreservesThePreviousTexture() {
       Fixture fixture;
       const auto previous = fixture.begin(1);
 
@@ -478,7 +487,7 @@ namespace {
       QCOMPARE(fixture.sample({cell_side, cell_side}), blue);
     }
 
-    Q_SLOT static void retainedPlacementUsesItsOwnGeometryWithANewerTexture() {
+    [[qt::slot]] static void retainedPlacementUsesItsOwnGeometryWithANewerTexture() {
       Fixture fixture;
       const auto previous = fixture.begin(1);
 
@@ -495,7 +504,7 @@ namespace {
       QVERIFY(fixture.graphics().findImage(previous.key) != nullptr);
     }
 
-    Q_SLOT static void placeholderFragmentsSampleTheWholeStandIn() {
+    [[qt::slot]] static void placeholderFragmentsSampleTheWholeStandIn() {
       Fixture fixture;
       const auto previous = fixture.begin(1);
       constexpr ds::Array quadrants{red, green, blue, yellow};
@@ -515,7 +524,7 @@ namespace {
       QVERIFY(closeColor(fixture.sample({cell_side + (cell_side / 2), cell_side + (cell_side / 2)}), yellow));
     }
 
-    Q_SLOT static void reattachedCatalogDoesNotShowPixelsFromThePreviousLifetime() {
+    [[qt::slot]] static void reattachedCatalogDoesNotShowPixelsFromThePreviousLifetime() {
       Fixture fixture;
       const auto previous = fixture.begin(1);
 
@@ -530,7 +539,7 @@ namespace {
       QCOMPARE(fixture.sample({cell_side, cell_side}), blue);
     }
 
-    Q_SLOT static void reconstructedCatalogAtTheSameAddressReplacesItsTexture() {
+    [[qt::slot]] static void reconstructedCatalogAtTheSameAddressReplacesItsTexture() {
       Fixture fixture;
       const auto previous = fixture.begin(1);
 
@@ -548,7 +557,7 @@ namespace {
       QCOMPARE(fixture.sample({cell_side, cell_side}), blue);
     }
 
-    Q_SLOT static void rgbRowsKeepTheirColorWithoutAnAlphaChannel() {
+    [[qt::slot]] static void rgbRowsKeepTheirColorWithoutAnAlphaChannel() {
       Fixture fixture;
       const auto image = fixture.begin(1, 2, 2, ImageFormat::rgb);
 
@@ -557,7 +566,7 @@ namespace {
       QCOMPARE(fixture.sample({cell_side, cell_side}), red);
     }
 
-    Q_SLOT static void straightAlphaIsBlendedOnce() {
+    [[qt::slot]] static void straightAlphaIsBlendedOnce() {
       Fixture fixture;
       constexpr int half_opacity = 128;
       const auto image = fixture.begin(1);
@@ -569,7 +578,7 @@ namespace {
       QCOMPARE(fixture.sample({cell_side, cell_side}), QColor(half_opacity, 0, 0));
     }
 
-    Q_SLOT static void drawBudgetIncludesRetainedScenesInPaintOrder() {
+    [[qt::slot]] static void drawBudgetIncludesRetainedScenesInPaintOrder() {
       Fixture fixture;
       const auto image = fixture.begin(1);
 
@@ -623,7 +632,7 @@ namespace {
       QTRY_COMPARE(fixture.sample({displaced_view_x, cell_side}), red);
     }
 
-    Q_SLOT static void placeholderDrawsPrecedeAboveTextImagesAtTheBound() {
+    [[qt::slot]] static void placeholderDrawsPrecedeAboveTextImagesAtTheBound() {
       Fixture fixture;
       const auto image = fixture.begin(1);
 
@@ -661,7 +670,7 @@ namespace {
       QCOMPARE(fixture.statistics().image_draws, std::size_t{1});
     }
 
-    Q_SLOT static void imageGeometryIsClippedToItsOwnView() {
+    [[qt::slot]] static void imageGeometryIsClippedToItsOwnView() {
       Fixture fixture;
       const auto image = fixture.begin(1);
 
@@ -682,7 +691,7 @@ namespace {
       QCOMPARE(fixture.sample({window_side + (cell_side / 2), cell_side}), red);
     }
 
-    Q_SLOT static void visibleImagesAdvanceAcrossTheUploadBound() {
+    [[qt::slot]] static void visibleImagesAdvanceAcrossTheUploadBound() {
       Fixture fixture;
 
       fixture.capture();
@@ -706,7 +715,7 @@ namespace {
       QVERIFY(fixture.statistics().uploads_started <= maximum_uploads);
     }
 
-    Q_SLOT static void twoViewsShareOneTextureAndRefreshTogether() {
+    [[qt::slot]] static void twoViewsShareOneTextureAndRefreshTogether() {
       Fixture fixture;
       const auto image = fixture.begin(1);
 
@@ -731,7 +740,7 @@ namespace {
       QTRY_COMPARE(fixture.sample({window_side + cell_side, cell_side}), blue);
     }
 
-    Q_SLOT static void panesCompeteForOneGlobalTextureBudget() {
+    [[qt::slot]] static void panesCompeteForOneGlobalTextureBudget() {
       Fixture fixture;
       const auto image = fixture.begin(1);
 
@@ -801,7 +810,7 @@ namespace {
       QCOMPARE(fixture.statistics().resident_bytes, texture_bytes * 2);
     }
 
-    Q_SLOT static void aSpareOfTheSameSizeReusesItsNativeTexture() {
+    [[qt::slot]] static void aSpareOfTheSameSizeReusesItsNativeTexture() {
       Fixture fixture;
       const auto image = fixture.begin(1);
 
@@ -825,7 +834,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void hidingTheWindowReleasesAndRestoresItsImages() {
+    [[qt::slot]] static void hidingTheWindowReleasesAndRestoresItsImages() {
       Fixture fixture;
       const auto image = fixture.begin(1);
 
@@ -839,7 +848,7 @@ namespace {
       QCOMPARE(fixture.statistics().resources.allocations, std::uint64_t{2});
     }
 
-    Q_SLOT static void idleImagesExpireWhileTheirPaneIsHidden() {
+    [[qt::slot]] static void idleImagesExpireWhileTheirPaneIsHidden() {
       Fixture fixture;
       const auto image = fixture.begin(1);
 
@@ -855,7 +864,7 @@ namespace {
       QCOMPARE(fixture.statistics().resources.allocations, std::uint64_t{2});
     }
 
-    Q_SLOT static void visibleImagesRemainResidentAtAnIdleDeadline() {
+    [[qt::slot]] static void visibleImagesRemainResidentAtAnIdleDeadline() {
       Fixture fixture;
       const auto image = fixture.begin(1);
 
@@ -869,7 +878,7 @@ namespace {
       QCOMPARE(fixture.statistics().resources.allocations, std::uint64_t{1});
     }
 
-    Q_SLOT static void aTemporaryRenderStopKeepsTheVisibleImageResident() {
+    [[qt::slot]] static void aTemporaryRenderStopKeepsTheVisibleImageResident() {
       Fixture fixture;
       const auto image = fixture.begin(1);
 
@@ -897,7 +906,7 @@ namespace {
       QCOMPARE(fixture.statistics().resources.allocations, allocations);
     }
 
-    Q_SLOT static void oversizedTextureKeepsItsDrawableStandIn() {
+    [[qt::slot]] static void oversizedTextureKeepsItsDrawableStandIn() {
       Fixture fixture;
       const auto previous = fixture.begin(1);
 
@@ -916,4 +925,6 @@ namespace {
 }
 
 QTEST_MAIN(GraphicsRetentionSceneTest)
+#ifndef TELAR_MOC_RUN
 #include "graphics_retention_scene_test.moc"
+#endif

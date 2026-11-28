@@ -1,22 +1,7 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app;
 
-#include "dialogs.hpp"
-#include "key_bindings.hpp"
-#include "pointer_dispatcher.hpp"
-#include "ui/app/overlays/machine_prompt/machine_prompt_controller.hpp"
-#include "ui/app/overlays/machine_wizard/machine_wizard_controller.hpp"
-#include "ui/app/overlays/palette/palette_controller.hpp"
-#include "ui/app/overlays/peek/peek_controller.hpp"
-#include "ui/app/overlays/workspace_form/workspace_form_controller.hpp"
-#include "ui/app/panes/terminal/history/history_controller.hpp"
-#include "ui/kit/paths/path_picker_controller.hpp"
-#include <QString>
-#include <cstdint>
-#include <optional>
-
+import std;
+import telar.gui.qt;
 import telar.gui.application;
 import telar.base.ds;
 
@@ -85,7 +70,7 @@ namespace telar::gui::qt {
     }
 
     store_.setDialog(kind, line_search_pane);
-    emit changed();
+    changed();
   }
 
   void Dialogs::showPaths() {

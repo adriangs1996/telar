@@ -1,0 +1,668 @@
+module;
+#include <QAbstractAnimation>
+#include <QAbstractEventDispatcher>
+#include <QAbstractItemModel>
+#include <QAbstractListModel>
+#include <QAbstractNativeEventFilter>
+#include <QAccessible>
+#include <QAnyStringView>
+#include <QBrush>
+#include <QBuffer>
+#include <QByteArray>
+#include <QByteArrayView>
+#include <QChar>
+#include <QClipboard>
+#include <QColor>
+#include <QCommandLineOption>
+#include <QCommandLineParser>
+#include <QCoreApplication>
+#include <QCryptographicHash>
+#include <QCursor>
+#include <QDateTime>
+#include <QDebug>
+#include <QDesktopServices>
+#include <QDir>
+#include <QDrag>
+#include <QDragEnterEvent>
+#include <QEasingCurve>
+#include <QElapsedTimer>
+#include <QEvent>
+#include <QEventLoop>
+#include <QExplicitlySharedDataPointer>
+#include <QFile>
+#include <QFileDevice>
+#include <QFileInfo>
+#include <QFileSystemWatcher>
+#include <QFocusEvent>
+#include <QFont>
+#include <QFontDatabase>
+#include <QFontInfo>
+#include <QFontMetricsF>
+#include <QFuture>
+#include <QFutureWatcher>
+#include <QGuiApplication>
+#include <QHash>
+#include <QHoverEvent>
+#include <QIODevice>
+#include <QImage>
+#include <QImageReader>
+#include <QInputDevice>
+#include <QInputMethod>
+#include <QInputMethodEvent>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QKeyEvent>
+#include <QLatin1Char>
+#include <QLatin1StringView>
+#include <QList>
+#include <QLocalServer>
+#include <QLocalSocket>
+#include <QMap>
+#include <QMatrix4x4>
+#include <QMetaMethod>
+#include <QMetaObject>
+#include <QMetaProperty>
+#include <QMetaType>
+#include <QMimeData>
+#include <QModelIndex>
+#include <QMouseEvent>
+#include <QObject>
+#include <QPaintDevice>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPair>
+#include <QPen>
+#include <QPersistentModelIndex>
+#include <QPlatformSurfaceEvent>
+#include <QPoint>
+#include <QPointF>
+#include <QPointer>
+#include <QPointingDevice>
+#include <QProcess>
+#include <QProcessEnvironment>
+#include <QQmlApplicationEngine>
+#include <QQmlComponent>
+#include <QQmlContext>
+#include <QQmlEngine>
+#include <QQmlError>
+#include <QQmlExpression>
+#include <QQmlIncubationController>
+#include <QQuickItem>
+#include <QQuickPaintedItem>
+#include <QQuickRenderTarget>
+#include <QQuickStyle>
+#include <QQuickView>
+#include <QQuickWindow>
+#include <QRandomGenerator>
+#include <QRawFont>
+#include <QRect>
+#include <QRectF>
+#include <QRegion>
+#include <QRegularExpression>
+#include <QRgb>
+#include <QSGFlatColorMaterial>
+#include <QSGGeometry>
+#include <QSGGeometryNode>
+#include <QSGImageNode>
+#include <QSGMaterial>
+#include <QSGMaterialShader>
+#include <QSGNode>
+#include <QSGOpacityNode>
+#include <QSGRectangleNode>
+#include <QSGRenderNode>
+#include <QSGRendererInterface>
+#include <QSGSimpleRectNode>
+#include <QSGSimpleTextureNode>
+#include <QSGTextNode>
+#include <QSGTexture>
+#include <QSGTransformNode>
+#include <QScopeGuard>
+#include <QScopedValueRollback>
+#include <QScreen>
+#include <QSemaphore>
+#include <QSet>
+#include <QSharedData>
+#include <QSize>
+#include <QSizeF>
+#include <QSocketNotifier>
+#include <QStandardPaths>
+#include <QString>
+#include <QStringList>
+#include <QStringView>
+#include <QStyleHints>
+#include <QSvgRenderer>
+#include <QSysInfo>
+#include <QTemporaryDir>
+#include <QTemporaryFile>
+#include <QTextCharFormat>
+#include <QTextLayout>
+#include <QTextOption>
+#include <QThread>
+#include <QThreadPool>
+#include <QTimer>
+#include <QTransform>
+#include <QTypeInfo>
+#include <QUrl>
+#include <QVarLengthArray>
+#include <QVariant>
+#include <QVariantAnimation>
+#include <QVariantList>
+#include <QVariantMap>
+#include <QWheelEvent>
+#include <QWindow>
+#include <QtConcurrent/QtConcurrentRun>
+#include <QtCore/qendian.h>
+#include <QtCore/qlogging.h>
+#include <QtCore/qmath.h>
+#include <QtCore/qnumeric.h>
+#include <QtCore/qstringliteral.h>
+#include <QtCore/qtenvironmentvariables.h>
+#include <QtCore/qtmochelpers.h>
+#include <QtCore/qtypes.h>
+#include <QtGui/qglyphrun.h>
+#include <QtQml/qqml.h>
+#include <QtQml/qqmlmoduleregistration.h>
+#include <QtQuick/qquickitemgrabresult.h>
+#include <QtQuick/qsgmaterialtype.h>
+
+export module telar.gui.qt;
+
+export import :meta;
+
+import std;
+
+export {
+  using ::QAbstractAnimation;
+  using ::QAbstractEventDispatcher;
+  using ::QAbstractItemModel;
+  using ::QAbstractListModel;
+  using ::QAbstractNativeEventFilter;
+  using ::QAccessible;
+  using ::QAccessibleActionInterface;
+  using ::QAnyStringView;
+  using ::QBrush;
+  using ::QBuffer;
+  using ::QByteArray;
+  using ::QByteArrayView;
+  using ::QChar;
+  using ::QClipboard;
+  using ::QColor;
+  using ::QCommandLineOption;
+  using ::QCommandLineParser;
+  using ::QCoreApplication;
+  using ::QCryptographicHash;
+  using ::QCursor;
+  using ::QDateTime;
+  using ::QDebug;
+  using ::QDesktopServices;
+  using ::QDir;
+  using ::QDrag;
+  using ::QDragEnterEvent;
+  using ::QDragMoveEvent;
+  using ::QDropEvent;
+  using ::QEasingCurve;
+  using ::QElapsedTimer;
+  using ::QEvent;
+  using ::QEventLoop;
+  using ::QExplicitlySharedDataPointer;
+  using ::QFile;
+  using ::QFileDevice;
+  using ::QFileInfo;
+  using ::QFileSystemWatcher;
+  using ::QFlags;
+  using ::QFocusEvent;
+  using ::QFont;
+  using ::QFontDatabase;
+  using ::QFontInfo;
+  using ::QFontMetricsF;
+  using ::QFuture;
+  using ::QFutureWatcher;
+  using ::QGlyphRun;
+  using ::QGuiApplication;
+  using ::QHash;
+  using ::QHoverEvent;
+  using ::QImage;
+  using ::QImageReader;
+  using ::QInputDevice;
+  using ::QInputMethod;
+  using ::QInputMethodEvent;
+  using ::QIODevice;
+  using ::QIODeviceBase;
+  using ::QJsonArray;
+  using ::QJsonDocument;
+  using ::QJsonObject;
+  using ::QJsonValue;
+  using ::QKeyEvent;
+  using ::QLatin1Char;
+  using ::QLatin1String;
+  using ::QLatin1StringView;
+  using ::QList;
+  using ::QLocalServer;
+  using ::QLocalSocket;
+  using ::QMap;
+  using ::QMatrix4x4;
+  using ::QMessageLogger;
+  using ::QMetaClassInfo;
+  using ::QMetaMethod;
+  using ::QMetaObject;
+  using ::QMetaProperty;
+  using ::QMetaType;
+  using ::QMimeData;
+  using ::QModelIndex;
+  using ::QMouseEvent;
+  using ::QObject;
+  using ::QPaintDevice;
+  using ::QPainter;
+  using ::QPainterPath;
+  using ::QPair;
+  using ::QPen;
+  using ::QPersistentModelIndex;
+  using ::QPlatformSurfaceEvent;
+  using ::QPoint;
+  using ::QPointer;
+  using ::QPointF;
+  using ::QPointingDevice;
+  using ::QProcess;
+  using ::QProcessEnvironment;
+  using ::QQmlApplicationEngine;
+  using ::QQmlComponent;
+  using ::QQmlContext;
+  using ::QQmlEngine;
+  using ::QQmlError;
+  using ::QQmlExpression;
+  using ::QQmlIncubationController;
+  using ::QQmlModuleRegistration;
+  using ::QQuickItem;
+  using ::QQuickItemGrabResult;
+  using ::QQuickPaintedItem;
+  using ::QQuickRenderTarget;
+  using ::QQuickStyle;
+  using ::QQuickTransform;
+  using ::QQuickView;
+  using ::QQuickWindow;
+  using ::QRandomGenerator;
+  using ::QRawFont;
+  using ::QRect;
+  using ::QRectF;
+  using ::QRegion;
+  using ::QRegularExpression;
+  using ::QRgb;
+  using ::QScopedValueRollback;
+  using ::QScopeGuard;
+  using ::QScreen;
+  using ::QSemaphore;
+  using ::QSet;
+  using ::QSGFlatColorMaterial;
+  using ::QSGGeometry;
+  using ::QSGGeometryNode;
+  using ::QSGImageNode;
+  using ::QSGMaterial;
+  using ::QSGMaterialShader;
+  using ::QSGMaterialType;
+  using ::QSGNode;
+  using ::QSGOpacityNode;
+  using ::QSGRectangleNode;
+  using ::QSGRendererInterface;
+  using ::QSGRenderNode;
+  using ::QSGSimpleRectNode;
+  using ::QSGSimpleTextureNode;
+  using ::QSGTextNode;
+  using ::QSGTexture;
+  using ::QSGTransformNode;
+  using ::QSharedData;
+  using ::QSize;
+  using ::QSizeF;
+  using ::QSocketNotifier;
+  using ::QStandardPaths;
+  using ::QString;
+  using ::QStringList;
+  using ::QStringView;
+  using ::QStyleHints;
+  using ::QSvgRenderer;
+  using ::QSysInfo;
+  using ::QTemporaryDir;
+  using ::QTemporaryFile;
+  using ::QTextCharFormat;
+  using ::QTextLayout;
+  using ::QTextOption;
+  using ::QThread;
+  using ::QThreadPool;
+  using ::QTimer;
+  using ::QTransform;
+  using ::QTypeInfo;
+  using ::QUrl;
+  using ::QVariant;
+  using ::QVariantAnimation;
+  using ::QVariantList;
+  using ::QVariantMap;
+  using ::QVarLengthArray;
+  using ::QWheelEvent;
+  using ::QWindow;
+
+  using ::qAbs;
+  using ::qAlpha;
+  using ::qBlue;
+  using ::qBound;
+  using ::qEnvironmentVariable;
+  using ::qEnvironmentVariableIntValue;
+  using ::qEnvironmentVariableIsEmpty;
+  using ::qEnvironmentVariableIsSet;
+  using ::qFromBigEndian;
+  using ::qFromLittleEndian;
+  using ::qFromUnaligned;
+  using ::qFuzzyCompare;
+  using ::qFuzzyIsNull;
+  using ::qgetenv;
+  using ::qGreen;
+  using ::qHash;
+  using ::qint64;
+  using ::qintptr;
+  using ::qIsFinite;
+  using ::qIsNaN;
+  using ::qlonglong;
+  using ::qMax;
+  using ::qMin;
+  using ::qmlContext;
+  using ::qmlEngine;
+  using ::qmlRegisterAnonymousType;
+  using ::qmlRegisterEnum;
+  using ::qmlRegisterModule;
+  using ::qmlRegisterNamespaceAndRevisions;
+  using ::qmlRegisterSingletonInstance;
+  using ::qmlRegisterType;
+  using ::qmlRegisterTypesAndRevisions;
+  using ::qmlRegisterUncreatableType;
+  using ::qobject_cast;
+  using ::qPremultiply;
+  using ::qputenv;
+  using ::qreal;
+  using ::qRed;
+  using ::qRegisterMetaType;
+  using ::qReturnArg;
+  using ::qRgb;
+  using ::qRgba;
+  using ::qRound;
+  using ::qRound64;
+  using ::qScopeGuard;
+  using ::qsizetype;
+  using ::qToBigEndian;
+  using ::qToLittleEndian;
+  using ::qToUnaligned;
+  using ::quint32;
+  using ::quint64;
+  using ::quint8;
+  using ::qulonglong;
+  using ::qUnpremultiply;
+  using ::qunsetenv;
+  using ::uchar;
+  using ::uint;
+  using ::ulong;
+  using ::ushort;
+
+  using ::operator|;
+  using ::operator&;
+  using ::operator==;
+  using ::operator!=;
+  using ::operator+;
+  using ::operator-;
+  using ::operator*;
+  using ::operator/;
+  using ::operator<<;
+
+  namespace Qt {
+    using ::Qt::ActiveWindowFocusReason;
+    using ::Qt::AlignHCenter;
+    using ::Qt::AlignLeft;
+    using ::Qt::Alignment;
+    using ::Qt::AlignRight;
+    using ::Qt::AltModifier;
+    using ::Qt::ApplicationActive;
+    using ::Qt::ApplicationState;
+    using ::Qt::ArrowCursor;
+    using ::Qt::BevelJoin;
+    using ::Qt::black;
+    using ::Qt::blue;
+    using ::Qt::CaseInsensitive;
+    using ::Qt::ColorScheme;
+    using ::Qt::ControlModifier;
+    using ::Qt::CopyAction;
+    using ::Qt::CursorShape;
+    using ::Qt::DirectConnection;
+    using ::Qt::ElideNone;
+    using ::Qt::ElideRight;
+    using ::Qt::FindDirectChildrenOnly;
+    using ::Qt::FlatCap;
+    using ::Qt::green;
+    using ::Qt::GroupSwitchModifier;
+    using ::Qt::IBeamCursor;
+    using ::Qt::ImAbsolutePosition;
+    using ::Qt::ImAnchorPosition;
+    using ::Qt::ImAnchorRectangle;
+    using ::Qt::ImCurrentSelection;
+    using ::Qt::ImCursorPosition;
+    using ::Qt::ImCursorRectangle;
+    using ::Qt::ImEnabled;
+    using ::Qt::ImEnterKeyType;
+    using ::Qt::ImFont;
+    using ::Qt::ImHints;
+    using ::Qt::ImhNoAutoUppercase;
+    using ::Qt::ImhNoPredictiveText;
+    using ::Qt::ImInputItemClipRectangle;
+    using ::Qt::ImMaximumTextLength;
+    using ::Qt::ImPlatformData;
+    using ::Qt::ImPreferredLanguage;
+    using ::Qt::ImQueryAll;
+    using ::Qt::ImQueryInput;
+    using ::Qt::ImReadOnly;
+    using ::Qt::ImSurroundingText;
+    using ::Qt::ImTextAfterCursor;
+    using ::Qt::ImTextBeforeCursor;
+    using ::Qt::InputMethodQuery;
+    using ::Qt::IntersectClip;
+    using ::Qt::Key;
+    using ::Qt::Key_1;
+    using ::Qt::Key_2;
+    using ::Qt::Key_3;
+    using ::Qt::Key_A;
+    using ::Qt::Key_Alt;
+    using ::Qt::Key_AltGr;
+    using ::Qt::Key_AsciiTilde;
+    using ::Qt::Key_B;
+    using ::Qt::Key_Backspace;
+    using ::Qt::Key_Backtab;
+    using ::Qt::Key_BracketLeft;
+    using ::Qt::Key_C;
+    using ::Qt::Key_CapsLock;
+    using ::Qt::Key_Ccedilla;
+    using ::Qt::Key_Colon;
+    using ::Qt::Key_Control;
+    using ::Qt::Key_D;
+    using ::Qt::Key_Delete;
+    using ::Qt::Key_Down;
+    using ::Qt::Key_E;
+    using ::Qt::Key_End;
+    using ::Qt::Key_Enter;
+    using ::Qt::Key_Escape;
+    using ::Qt::Key_F;
+    using ::Qt::Key_F1;
+    using ::Qt::Key_F10;
+    using ::Qt::Key_F11;
+    using ::Qt::Key_F12;
+    using ::Qt::Key_F13;
+    using ::Qt::Key_F14;
+    using ::Qt::Key_F15;
+    using ::Qt::Key_F16;
+    using ::Qt::Key_F17;
+    using ::Qt::Key_F18;
+    using ::Qt::Key_F19;
+    using ::Qt::Key_F2;
+    using ::Qt::Key_F20;
+    using ::Qt::Key_F21;
+    using ::Qt::Key_F22;
+    using ::Qt::Key_F23;
+    using ::Qt::Key_F24;
+    using ::Qt::Key_F3;
+    using ::Qt::Key_F4;
+    using ::Qt::Key_F5;
+    using ::Qt::Key_F6;
+    using ::Qt::Key_F7;
+    using ::Qt::Key_F8;
+    using ::Qt::Key_F9;
+    using ::Qt::Key_G;
+    using ::Qt::Key_H;
+    using ::Qt::Key_Home;
+    using ::Qt::Key_I;
+    using ::Qt::Key_Insert;
+    using ::Qt::Key_J;
+    using ::Qt::Key_K;
+    using ::Qt::Key_L;
+    using ::Qt::Key_Left;
+    using ::Qt::Key_M;
+    using ::Qt::Key_masculine;
+    using ::Qt::Key_Menu;
+    using ::Qt::Key_Meta;
+    using ::Qt::Key_Minus;
+    using ::Qt::Key_N;
+    using ::Qt::Key_Ntilde;
+    using ::Qt::Key_NumLock;
+    using ::Qt::Key_O;
+    using ::Qt::Key_P;
+    using ::Qt::Key_PageDown;
+    using ::Qt::Key_PageUp;
+    using ::Qt::Key_Percent;
+    using ::Qt::Key_Q;
+    using ::Qt::Key_Question;
+    using ::Qt::Key_QuoteLeft;
+    using ::Qt::Key_R;
+    using ::Qt::Key_Return;
+    using ::Qt::Key_Right;
+    using ::Qt::Key_S;
+    using ::Qt::Key_ScrollLock;
+    using ::Qt::Key_Shift;
+    using ::Qt::Key_Slash;
+    using ::Qt::Key_Space;
+    using ::Qt::Key_T;
+    using ::Qt::Key_Tab;
+    using ::Qt::Key_U;
+    using ::Qt::Key_unknown;
+    using ::Qt::Key_Up;
+    using ::Qt::Key_V;
+    using ::Qt::Key_W;
+    using ::Qt::Key_X;
+    using ::Qt::Key_Y;
+    using ::Qt::Key_Z;
+    using ::Qt::KeyboardModifiers;
+    using ::Qt::KeypadModifier;
+    using ::Qt::LeftButton;
+    using ::Qt::LeftToRight;
+    using ::Qt::MetaModifier;
+    using ::Qt::MiddleButton;
+    using ::Qt::MiterJoin;
+    using ::Qt::MouseButton;
+    using ::Qt::MouseButtons;
+    using ::Qt::MouseEventNotSynthesized;
+    using ::Qt::MouseEventSynthesizedBySystem;
+    using ::Qt::MouseFocusReason;
+    using ::Qt::NoButton;
+    using ::Qt::NoModifier;
+    using ::Qt::NoScrollPhase;
+    using ::Qt::OtherFocusReason;
+    using ::Qt::PenCapStyle;
+    using ::Qt::PenJoinStyle;
+    using ::Qt::PointingHandCursor;
+    using ::Qt::PreciseTimer;
+    using ::Qt::QueuedConnection;
+    using ::Qt::red;
+    using ::Qt::RightButton;
+    using ::Qt::RoundCap;
+    using ::Qt::RoundJoin;
+    using ::Qt::ScrollBegin;
+    using ::Qt::ScrollEnd;
+    using ::Qt::ScrollMomentum;
+    using ::Qt::ScrollPhase;
+    using ::Qt::ScrollUpdate;
+    using ::Qt::ShiftModifier;
+    using ::Qt::SingleShotConnection;
+    using ::Qt::SkipEmptyParts;
+    using ::Qt::SplitHCursor;
+    using ::Qt::SplitVCursor;
+    using ::Qt::SquareCap;
+    using ::Qt::TabFocusAllControls;
+    using ::Qt::TabFocusReason;
+    using ::Qt::TextElideMode;
+    using ::Qt::Tool;
+    using ::Qt::transparent;
+    using ::Qt::UserRole;
+    using ::Qt::white;
+    using ::Qt::WindowFlags;
+    using ::Qt::WindowStaysOnTopHint;
+    using ::Qt::WindowType;
+    using ::Qt::operator|;
+
+    inline namespace StringLiterals {
+      using ::Qt::StringLiterals::operator""_s;
+      using ::Qt::StringLiterals::operator""_ba;
+    }
+  }
+
+  namespace QtConcurrent {
+    using ::QtConcurrent::run;
+  }
+
+  namespace QtMocConstants {
+    using ::QtMocConstants::AccessPrivate;
+    using ::QtMocConstants::AccessProtected;
+    using ::QtMocConstants::AccessPublic;
+    using ::QtMocConstants::Constant;
+    using ::QtMocConstants::DefaultPropertyFlags;
+    using ::QtMocConstants::EnumFlags;
+    using ::QtMocConstants::EnumIsScoped;
+    using ::QtMocConstants::EnumOrFlag;
+    using ::QtMocConstants::Final;
+    using ::QtMocConstants::MetaObjectFlag;
+    using ::QtMocConstants::MethodCloned;
+    using ::QtMocConstants::PropertyAccessInStaticMetaCall;
+    using ::QtMocConstants::Required;
+    using ::QtMocConstants::Resettable;
+    using ::QtMocConstants::StdCppSet;
+    using ::QtMocConstants::Writable;
+  }
+
+  namespace QtMocHelpers {
+    using ::QtMocHelpers::ClassInfos;
+    using ::QtMocHelpers::EnumData;
+    using ::QtMocHelpers::indexOfMethod;
+    using ::QtMocHelpers::metaObjectData;
+    using ::QtMocHelpers::MethodData;
+    using ::QtMocHelpers::PropertyData;
+    using ::QtMocHelpers::SignalData;
+    using ::QtMocHelpers::SlotData;
+    using ::QtMocHelpers::StringRefStorage;
+    using ::QtMocHelpers::UintData;
+  }
+
+  namespace QQmlPrivate {
+    using ::QQmlPrivate::metaTypeForNamespace;
+  }
+
+  namespace QtPrivate {
+    using ::QtPrivate::QMetaTypeInterface;
+  }
+}
+
+export namespace telar::qt {
+
+  [[tbc::hot_path]] inline QDebug info(std::source_location loc = std::source_location::current()) {
+    return QMessageLogger(loc.file_name(), static_cast<int>(loc.line()), loc.function_name()).info();
+  }
+
+  [[tbc::hot_path]] inline QDebug warning(std::source_location loc = std::source_location::current()) {
+    return QMessageLogger(loc.file_name(), static_cast<int>(loc.line()), loc.function_name()).warning();
+  }
+
+  [[tbc::hot_path, noreturn]] inline void fatal(const char* message, std::source_location loc = std::source_location::current()) {
+    QMessageLogger(loc.file_name(), static_cast<int>(loc.line()), loc.function_name()).fatal("%s", message);
+  }
+
+}

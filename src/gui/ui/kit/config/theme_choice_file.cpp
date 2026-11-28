@@ -1,20 +1,12 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.config;
 
-#include "theme_choice_file.hpp"
-#include <QFile>
-#include <cerrno>
-#include <cstdint>
-#include <span>
-#include <string_view>
-#include <unistd.h>
-
+import std;
+import telar.gui.qt;
 import telar.platform.error;
 import telar.platform.fs;
 import telar.platform.primitives;
 import telar.base.memory.allocators;
+import telar.sys.posix;
 
 namespace telar::gui::qt {
 
@@ -96,8 +88,11 @@ namespace telar::gui::qt {
       return;
     }
 
-    if (::unlink(path_.constData()) != 0 && errno != ENOENT) {
-      throw runtime::SystemError{"Forget the chosen theme", errno};
+    if (::unlink(path_.constData()) != 0) {
+      const auto error = sys::lastError();
+      if (error != ENOENT) {
+        throw runtime::SystemError{"Forget the chosen theme", error};
+      }
     }
 
     stamp_ = stamp();

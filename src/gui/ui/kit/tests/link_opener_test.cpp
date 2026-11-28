@@ -2,11 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "qt_case.hpp"
-#include "ui/kit/links/external_link_opener.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "ui/kit/process/environment.hpp"
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QProcess>
@@ -37,8 +32,15 @@ static_assert(true);
 
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.ui.kit.links;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.process;
+import telar.gui.tests.qt_case;
+import telar.gui.foundation.system;
+import telar.gui.qt;
 
 namespace {
+  using Qt::StringLiterals::operator""_s;
 
   using namespace telar::gui;
   using namespace telar::gui::qt;
@@ -78,17 +80,17 @@ namespace {
         process_id = process.processId();
       },
           Qt::SingleShotConnection);
-      if (text.contains(QStringLiteral("launch.test"))) {
-        process.start(QStringLiteral("/"));
+      if (text.contains(u"launch.test"_s)) {
+        process.start(u"/"_s);
 
         return;
       }
 
-      if (text.contains(QStringLiteral("throw.test"))) {
+      if (text.contains(u"throw.test"_s)) {
         throw std::runtime_error{"Injected host failure"};
       }
 
-      if (text.contains(QStringLiteral("read-error.test"))) {
+      if (text.contains(u"read-error.test"_s)) {
         QObject::connect(&process, &QProcess::started, &process, [&process] {
           process.errorOccurred(QProcess::ReadError);
         },
@@ -107,7 +109,7 @@ esac
 printf '%s' "$1"
 )";
 
-      process.start(QStringLiteral("/bin/sh"), {QStringLiteral("-c"), QString::fromLatin1(script), QStringLiteral("telar-link-test"), text}, QIODevice::ReadOnly);
+      process.start(u"/bin/sh"_s, {u"-c"_s, QString::fromLatin1(script), u"telar-link-test"_s, text}, QIODevice::ReadOnly);
     }
   };
 
@@ -124,16 +126,22 @@ printf '%s' "$1"
     return *result;
   }
 
-  class LinkOpenerTest : public QObject {
-    Q_OBJECT
+  class [[qt::object]] LinkOpenerTest : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void init() {
+  private:
+    [[qt::slot]] static void init() {
       TestHost::started.clear();
       TestHost::process_id = 0;
     }
 
-    Q_SLOT static void lastPendingWins() {
+    [[qt::slot]] static void lastPendingWins() {
       Observer observer;
       ExternalLinkOpener<TestHost, Observer> opener{observer};
       const auto first = target("https://slow.test");
@@ -151,7 +159,7 @@ printf '%s' "$1"
       QVERIFY(!observer.results.front() && !observer.results.back());
     }
 
-    Q_SLOT static void completionsKeepTheirOriginalContext() {
+    [[qt::slot]] static void completionsKeepTheirOriginalContext() {
       ContextObserver observer;
       ExternalLinkOpener<TestHost, ContextObserver, std::uint64_t> opener{observer};
       constexpr std::uint64_t first_context = 11;
@@ -171,7 +179,7 @@ printf '%s' "$1"
       QVERIFY(!observer.results[1].second);
     }
 
-    Q_SLOT static void failuresAndRecovery() {
+    [[qt::slot]] static void failuresAndRecovery() {
       Observer observer;
       ExternalLinkOpener<TestHost, Observer> opener{observer};
 
@@ -196,7 +204,7 @@ printf '%s' "$1"
       QVERIFY(!observer.results.back() && !opener.active());
     }
 
-    Q_SLOT static void outputLimits() {
+    [[qt::slot]] static void outputLimits() {
       Observer observer;
       ExternalLinkOpener<TestHost, Observer> opener{observer};
 
@@ -211,7 +219,7 @@ printf '%s' "$1"
       QVERIFY(!observer.results.back());
     }
 
-    Q_SLOT static void timeoutAndShutdown() {
+    [[qt::slot]] static void timeoutAndShutdown() {
       Observer observer;
 
       {
@@ -235,12 +243,12 @@ printf '%s' "$1"
       }
 
       QVERIFY(observer.results.empty());
-      QVERIFY(!TestHost::started.contains(QStringLiteral("https://must-not-open.test")));
+      QVERIFY(!TestHost::started.contains(u"https://must-not-open.test"_s));
       QCOMPARE(::waitpid(static_cast<decltype(::getpid())>(TestHost::process_id), nullptr, WNOHANG), -1);
       QCOMPARE(errno, ECHILD);
     }
 
-    Q_SLOT static void argumentAuthority() {
+    [[qt::slot]] static void argumentAuthority() {
       Observer observer;
       ExternalLinkOpener<TestHost, Observer> opener{observer};
       const auto literal = target("https://literal.test/$(id);date");
@@ -255,7 +263,7 @@ printf '%s' "$1"
       QCOMPARE(system::LinuxExternalLinks::executable, std::string_view{"xdg-open"});
     }
 
-    Q_SLOT static void environmentAuthority() {
+    [[qt::slot]] static void environmentAuthority() {
       constexpr auto name = "TELAR_GUI_TEST_ENVIRONMENT";
       const auto previous = qgetenv(name);
       const auto restore = qScopeGuard([previous] {
@@ -302,4 +310,6 @@ printf '%s' "$1"
 
 }
 
+#ifndef TELAR_MOC_RUN
 #include "link_opener_test.moc"
+#endif

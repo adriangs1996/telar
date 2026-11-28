@@ -1,6 +1,4 @@
 telar_add_qml_sources(gui-quick
-  SOURCES
-    history_hint_projection.hpp
   QML_FILES
     BarBadge.qml
     BarBattery.qml
@@ -17,6 +15,6 @@ telar_add_qml_sources(gui-quick
     PromptActions.qml
     PromptField.qml
     SystemSummary.qml)
-
 add_subdirectory(controls)
 add_subdirectory(elements)
+

@@ -1,32 +1,12 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal.history.layout;
 
-#include "history_row_layout.hpp"
-#include <QByteArray>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QString>
-#include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <functional>
-#include <limits>
-#include <string_view>
-
+import std;
+import telar.gui.qt;
 import telar.gui.foundation.text;
 import telar.gui.application;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   HistoryRowLayout::HistoryRowLayout(QQuickItem* parent)
       : QQuickItem(parent) {}
@@ -39,7 +19,7 @@ namespace telar::gui::qt {
     if (measurements_ != measurements) {
       measurements_ = measurements;
       measurements_dirty_ = true;
-      emit measurementsChanged();
+      measurementsChanged();
       polish();
     }
   }
@@ -52,14 +32,14 @@ namespace telar::gui::qt {
     query_ = query;
     query_bytes_ = query.toUtf8();
     query_dirty_ = true;
-    emit queryChanged();
+    queryChanged();
     polish();
   }
 
   void HistoryRowLayout::publishLines() {
     query_dirty_ = false;
-    emit lineLayoutChanged();
-    emit layoutChanged();
+    lineLayoutChanged();
+    layoutChanged();
   }
 
   QRectF HistoryRowLayout::logical(Rect area) const noexcept {
@@ -69,8 +49,8 @@ namespace telar::gui::qt {
   QVariantMap HistoryRowLayout::layout() const {
     auto result = geometryLayout();
 
-    result.insert(QStringLiteral("needed"), static_cast<qreal>(command_width_) / density_);
-    result.insert(QStringLiteral("lines"), commandLines());
+    result.insert(u"needed"_s, static_cast<qreal>(command_width_) / density_);
+    result.insert(u"lines"_s, commandLines());
 
     return result;
   }
@@ -81,30 +61,30 @@ namespace telar::gui::qt {
 
   QVariantMap HistoryRowLayout::geometryLayout() const {
     return {
-        {QStringLiteral("frame"), logical(geometry_.frame)},
-        {QStringLiteral("status"), logical(geometry_.status)},
-        {QStringLiteral("command"), logical(geometry_.command)},
-        {QStringLiteral("provider"), logical(geometry_.provider)},
-        {QStringLiteral("cwd"), logical(geometry_.cwd)},
-        {QStringLiteral("time"), logical(geometry_.time)},
-        {QStringLiteral("radius"), static_cast<qreal>(application::history::HistoryRowGeometry::corner_radius) * ratio_},
-        {QStringLiteral("stroke"), ratio_},
-        {QStringLiteral("providerRadius"), static_cast<qreal>(application::history::HistoryRowGeometry::provider_radius) * ratio_},
-        {QStringLiteral("selectionTintAlpha"), application::history::HistoryRowGeometry::selection_tint_alpha},
-        {QStringLiteral("selectionRingAlpha"), application::history::HistoryRowGeometry::selection_ring_alpha},
-        {QStringLiteral("hoverAlpha"), application::history::HistoryRowGeometry::hover_alpha},
-        {QStringLiteral("cwdAlpha"), application::history::HistoryRowGeometry::cwd_alpha},
-        {QStringLiteral("cardHeight"), static_cast<qreal>(card_.height) / density_},
-        {QStringLiteral("meta"), logical(card_.meta)},
-        {QStringLiteral("more"), card_.more},
-        {QStringLiteral("moreBound"), application::history::HistoryCard::more_bound},
+        {u"frame"_s, logical(geometry_.frame)},
+        {u"status"_s, logical(geometry_.status)},
+        {u"command"_s, logical(geometry_.command)},
+        {u"provider"_s, logical(geometry_.provider)},
+        {u"cwd"_s, logical(geometry_.cwd)},
+        {u"time"_s, logical(geometry_.time)},
+        {u"radius"_s, static_cast<qreal>(application::history::HistoryRowGeometry::corner_radius) * ratio_},
+        {u"stroke"_s, ratio_},
+        {u"providerRadius"_s, static_cast<qreal>(application::history::HistoryRowGeometry::provider_radius) * ratio_},
+        {u"selectionTintAlpha"_s, application::history::HistoryRowGeometry::selection_tint_alpha},
+        {u"selectionRingAlpha"_s, application::history::HistoryRowGeometry::selection_ring_alpha},
+        {u"hoverAlpha"_s, application::history::HistoryRowGeometry::hover_alpha},
+        {u"cwdAlpha"_s, application::history::HistoryRowGeometry::cwd_alpha},
+        {u"cardHeight"_s, static_cast<qreal>(card_.height) / density_},
+        {u"meta"_s, logical(card_.meta)},
+        {u"more"_s, card_.more},
+        {u"moreBound"_s, application::history::HistoryCard::more_bound},
     };
   }
 
   void HistoryRowLayout::setHistoryIndex(int index) {
     if (history_index_ != index) {
       history_index_ = index;
-      emit historyIndexChanged();
+      historyIndexChanged();
     }
   }
 
@@ -118,19 +98,19 @@ namespace telar::gui::qt {
     QVariantList matches;
     auto record = [&](Rect area, std::string_view cluster) {
       matches.append(QVariantMap{
-          {QStringLiteral("bounds"), logical(area)},
-          {QStringLiteral("text"), QString::fromUtf8(cluster.data(), static_cast<qsizetype>(cluster.size()))},
+          {u"bounds"_s, logical(area)},
+          {u"text"_s, QString::fromUtf8(cluster.data(), static_cast<qsizetype>(cluster.size()))},
       });
     };
 
     highlight.paint(text, line.text, cell_width_, record);
 
     return {
-        {QStringLiteral("text"), QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()))},
-        {QStringLiteral("bounds"), logical(line.text)},
-        {QStringLiteral("markerBounds"), logical(line.marker)},
-        {QStringLiteral("marker"), QString::fromUtf8(line.mark.data(), static_cast<qsizetype>(line.mark.size()))},
-        {QStringLiteral("matches"), matches},
+        {u"text"_s, QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()))},
+        {u"bounds"_s, logical(line.text)},
+        {u"markerBounds"_s, logical(line.marker)},
+        {u"marker"_s, QString::fromUtf8(line.mark.data(), static_cast<qsizetype>(line.mark.size()))},
+        {u"matches"_s, matches},
     };
   }
 
@@ -159,7 +139,7 @@ namespace telar::gui::qt {
   }
 
   void HistoryRowLayout::prepareCommand() {
-    const auto text = measurements_.value(QStringLiteral("commandText")).toString();
+    const auto text = measurements_.value(u"commandText"_s).toString();
     if (command_text_ != text) {
       command_text_ = text;
       command_bytes_ = text.toUtf8();
@@ -185,7 +165,7 @@ namespace telar::gui::qt {
       return std::isfinite(value) && value > 0 ? static_cast<float>(value * density) : 0;
     };
 
-    const auto ratio = measurements_.value(QStringLiteral("ratio"), 1).toDouble();
+    const auto ratio = measurements_.value(u"ratio"_s, 1).toDouble();
     if (!std::isfinite(ratio) || ratio <= 0) {
       return;
     }
@@ -193,23 +173,23 @@ namespace telar::gui::qt {
     ChromeMetrics chrome;
 
     chrome.ratio = static_cast<float>(ratio * density);
-    chrome.small = static_cast<std::uint16_t>(std::clamp(std::round(advance(QStringLiteral("smallPixels"))), 0.0F, static_cast<float>(std::numeric_limits<std::uint16_t>::max())));
+    chrome.small = static_cast<std::uint16_t>(std::clamp(std::round(advance(u"smallPixels"_s)), 0.0F, static_cast<float>(std::numeric_limits<std::uint16_t>::max())));
     prepareCommand();
-    const auto cell_width = std::max(1.0F, std::round(advance(QStringLiteral("cellWidth"))));
-    const auto cell_height = std::max(1.0F, std::round(advance(QStringLiteral("cellHeight"))));
+    const auto cell_width = std::max(1.0F, std::round(advance(u"cellWidth"_s)));
+    const auto cell_height = std::max(1.0F, std::round(advance(u"cellHeight"_s)));
     const auto command_width = static_cast<float>(first_line_columns_) * cell_width;
     const application::history::HistoryRowMeasurements measured{
         .command = command_width,
-        .cwd = advance(QStringLiteral("cwd")),
-        .time = advance(QStringLiteral("time")),
-        .agent = measurements_.value(QStringLiteral("agent")).toBool(),
-        .show_cwd = measurements_.value(QStringLiteral("showCwd")).toBool(),
-        .has_cwd = measurements_.value(QStringLiteral("hasCwd")).toBool(),
-        .has_time = measurements_.value(QStringLiteral("hasTime")).toBool(),
-        .expanded = measurements_.value(QStringLiteral("expanded")).toBool(),
+        .cwd = advance(u"cwd"_s),
+        .time = advance(u"time"_s),
+        .agent = measurements_.value(u"agent"_s).toBool(),
+        .show_cwd = measurements_.value(u"showCwd"_s).toBool(),
+        .has_cwd = measurements_.value(u"hasCwd"_s).toBool(),
+        .has_time = measurements_.value(u"hasTime"_s).toBool(),
+        .expanded = measurements_.value(u"expanded"_s).toBool(),
     };
 
-    const auto row_height = advance(QStringLiteral("rowHeight"));
+    const auto row_height = advance(u"rowHeight"_s);
     const auto geometry = application::history::HistoryRowGeometry::derive({.width = static_cast<float>(width() * density), .height = static_cast<float>(height() * density)}, chrome, row_height, measured);
     if (geometry != geometry_ || std::not_equal_to<>{}(density, density_) || std::not_equal_to<>{}(ratio, ratio_) || std::not_equal_to<>{}(command_width, command_width_) || measurements_dirty_) {
       const auto previous_geometry = geometryState();
@@ -221,13 +201,13 @@ namespace telar::gui::qt {
       cell_width_ = cell_width;
       cell_height_ = cell_height;
       expanded_ = measured.expanded;
-      card_ = expanded_ ? application::history::HistoryCard::measure(geometry_, chrome, {.cell_width = cell_width, .cell_height = cell_height, .row_height = row_height, .viewport_height = advance(QStringLiteral("viewportHeight"))}, {command_bytes_.constData(), static_cast<std::size_t>(command_bytes_.size())}) : application::history::HistoryCard{};
+      card_ = expanded_ ? application::history::HistoryCard::measure(geometry_, chrome, {.cell_width = cell_width, .cell_height = cell_height, .row_height = row_height, .viewport_height = advance(u"viewportHeight"_s)}, {command_bytes_.constData(), static_cast<std::size_t>(command_bytes_.size())}) : application::history::HistoryCard{};
       if (expanded_) {
-        const auto raw_open = measurements_.value(QStringLiteral("open"), 1).toFloat();
+        const auto raw_open = measurements_.value(u"open"_s, 1).toFloat();
         const auto open = std::isfinite(raw_open) ? std::clamp(raw_open, 0.0F, 1.0F) : 0.0F;
         const auto delta = std::max(0.0F, card_.intrinsic_height - row_height) * open;
         const auto opened = std::round(row_height + delta);
-        const auto viewport_height = advance(QStringLiteral("viewportHeight"));
+        const auto viewport_height = advance(u"viewportHeight"_s);
         const auto tallest = std::max(row_height, viewport_height - chrome.px(application::history::HistoryCard::viewport_clearance));
 
         card_.height = viewport_height > 0 ? std::min(tallest, opened) : opened;
@@ -235,7 +215,7 @@ namespace telar::gui::qt {
 
       measurements_dirty_ = false;
       if (geometryState() != previous_geometry) {
-        emit geometryLayoutChanged();
+        geometryLayoutChanged();
       }
 
       publishLines();

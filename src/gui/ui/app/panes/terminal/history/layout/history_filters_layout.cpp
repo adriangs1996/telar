@@ -1,31 +1,12 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal.history.layout;
 
-#include "history_filters_layout.hpp"
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QString>
-#include <QStringList>
-#include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <span>
-#include <string_view>
-
+import std;
+import telar.gui.qt;
 import telar.gui.application;
 import telar.base.ds;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -46,8 +27,8 @@ namespace telar::gui::qt {
     if (input_ != input) {
       input_ = input;
       prepareLabels();
-      emit inputChanged();
-      emit labelsChanged();
+      inputChanged();
+      labelsChanged();
       polish();
     }
   }
@@ -59,7 +40,7 @@ namespace telar::gui::qt {
   void HistoryFiltersLayout::setMeasurements(const QVariantMap& measurements) {
     if (measurements_ != measurements) {
       measurements_ = measurements;
-      emit measurementsChanged();
+      measurementsChanged();
       polish();
     }
   }
@@ -77,27 +58,27 @@ namespace telar::gui::qt {
   }
 
   void HistoryFiltersLayout::prepareLabels() {
-    const auto scope = input_.value(QStringLiteral("scope")).toString();
-    const auto author = input_.value(QStringLiteral("author")).toString();
-    const auto value = input_.value(QStringLiteral("scopeValue")).toString();
+    const auto scope = input_.value(u"scope"_s).toString();
+    const auto author = input_.value(u"author"_s).toString();
+    const auto value = input_.value(u"scopeValue"_s).toString();
 
     scope_choices_.clear();
     for (const auto& choice : application::history::HistoryFilterLabels::scopes) {
       const auto route = label(choice.value);
       const auto selected = route == scope;
 
-      scope_choices_.append(QVariantMap{{QStringLiteral("text"), label(choice.text)}, {QStringLiteral("value"), route}, {QStringLiteral("detail"), selected ? value : QString{}}, {QStringLiteral("selected"), selected}});
+      scope_choices_.append(QVariantMap{{u"text"_s, label(choice.text)}, {u"value"_s, route}, {u"detail"_s, selected ? value : QString{}}, {u"selected"_s, selected}});
     }
 
     author_choices_.clear();
     for (const auto& choice : application::history::HistoryFilterLabels::authors) {
       const auto route = label(choice.value);
 
-      author_choices_.append(QVariantMap{{QStringLiteral("text"), label(choice.text)}, {QStringLiteral("value"), route}, {QStringLiteral("selected"), route == author}});
+      author_choices_.append(QVariantMap{{u"text"_s, label(choice.text)}, {u"value"_s, route}, {u"selected"_s, route == author}});
     }
 
     key_labels_.clear();
-    const auto keys = application::history::HistoryFilterLabels::keys(input_.value(QStringLiteral("macStyle")).toBool() ? application::history::HistoryKeyStyle::mac : application::history::HistoryKeyStyle::pc);
+    const auto keys = application::history::HistoryFilterLabels::keys(input_.value(u"macStyle"_s).toBool() ? application::history::HistoryKeyStyle::mac : application::history::HistoryKeyStyle::pc);
 
     for (const auto key : keys) {
       key_labels_.append(label(key));
@@ -116,7 +97,7 @@ namespace telar::gui::qt {
       return area;
     };
 
-    return {{QStringLiteral("bounds"), logical(chip.bounds)}, {QStringLiteral("label"), logical(local(chip.label))}, {QStringLiteral("value"), logical(local(chip.value))}};
+    return {{u"bounds"_s, logical(chip.bounds)}, {u"label"_s, logical(local(chip.label))}, {u"value"_s, logical(local(chip.value))}};
   }
 
   QVariantMap HistoryFiltersLayout::layout() const {
@@ -139,20 +120,20 @@ namespace telar::gui::qt {
     }
 
     return {
-        {QStringLiteral("scopes"), scopes},
-        {QStringLiteral("authors"), authors},
-        {QStringLiteral("keys"), keys},
-        {QStringLiteral("failed"), chipRecord(geometry_.failed)},
-        {QStringLiteral("scopeGroup"), logical(geometry_.scope_group)},
-        {QStringLiteral("authorGroup"), logical(geometry_.author_group)},
-        {QStringLiteral("separator"), logical(geometry_.separator)},
-        {QStringLiteral("showKeys"), geometry_.show_keys},
-        {QStringLiteral("showRight"), geometry_.show_right},
-        {QStringLiteral("visible"), geometry_.visible},
-        {QStringLiteral("groupRadius"), static_cast<qreal>(application::history::HistoryFilterGeometry::group_radius) * ratio_},
-        {QStringLiteral("chipRadius"), static_cast<qreal>(application::history::HistoryFilterChipGeometry::corner_radius) * ratio_},
-        {QStringLiteral("ringWidth"), static_cast<qreal>(application::history::HistoryFilterChipGeometry::ring_width) * ratio_},
-        {QStringLiteral("dangerRingAlpha"), application::history::HistoryFilterChipGeometry::danger_ring_alpha},
+        {u"scopes"_s, scopes},
+        {u"authors"_s, authors},
+        {u"keys"_s, keys},
+        {u"failed"_s, chipRecord(geometry_.failed)},
+        {u"scopeGroup"_s, logical(geometry_.scope_group)},
+        {u"authorGroup"_s, logical(geometry_.author_group)},
+        {u"separator"_s, logical(geometry_.separator)},
+        {u"showKeys"_s, geometry_.show_keys},
+        {u"showRight"_s, geometry_.show_right},
+        {u"visible"_s, geometry_.visible},
+        {u"groupRadius"_s, static_cast<qreal>(application::history::HistoryFilterGeometry::group_radius) * ratio_},
+        {u"chipRadius"_s, static_cast<qreal>(application::history::HistoryFilterChipGeometry::corner_radius) * ratio_},
+        {u"ringWidth"_s, static_cast<qreal>(application::history::HistoryFilterChipGeometry::ring_width) * ratio_},
+        {u"dangerRingAlpha"_s, application::history::HistoryFilterChipGeometry::danger_ring_alpha},
     };
   }
 
@@ -191,7 +172,7 @@ namespace telar::gui::qt {
   }
 
   void HistoryFiltersLayout::updatePolish() {
-    const auto ratio = input_.value(QStringLiteral("ratio"), 1).toDouble();
+    const auto ratio = input_.value(u"ratio"_s, 1).toDouble();
     if (!std::isfinite(ratio) || ratio <= 0) {
       return;
     }
@@ -207,16 +188,16 @@ namespace telar::gui::qt {
       return std::isfinite(width) && width > 0 ? static_cast<float>(width * density_) : 0.0F;
     };
 
-    const auto scope_widths = measurements_.value(QStringLiteral("scopes")).toList();
-    const auto author_widths = measurements_.value(QStringLiteral("authors")).toList();
-    const auto key_widths = measurements_.value(QStringLiteral("keys")).toList();
+    const auto scope_widths = measurements_.value(u"scopes"_s).toList();
+    const auto author_widths = measurements_.value(u"authors"_s).toList();
+    const auto key_widths = measurements_.value(u"keys"_s).toList();
     application::history::HistoryFilterMeasurements measured;
 
     for (std::size_t index = 0; index < measured.scopes.size(); ++index) {
       const auto widths = scope_widths.value(static_cast<qsizetype>(index)).toMap();
       const auto choice = scope_choices_.value(static_cast<qsizetype>(index)).toMap();
 
-      measured.scopes.atMut(index) = {.label = advance(widths.value(QStringLiteral("label"))), .value = advance(widths.value(QStringLiteral("value"))), .has_value = !choice.value(QStringLiteral("detail")).toString().isEmpty()};
+      measured.scopes.atMut(index) = {.label = advance(widths.value(u"label"_s)), .value = advance(widths.value(u"value"_s)), .has_value = !choice.value(u"detail"_s).toString().isEmpty()};
     }
 
     for (std::size_t index = 0; index < measured.authors.size(); ++index) {
@@ -227,9 +208,9 @@ namespace telar::gui::qt {
       measured.keys.atMut(index) = advance(key_widths.value(static_cast<qsizetype>(index)));
     }
 
-    measured.failed = advance(measurements_.value(QStringLiteral("failed")));
+    measured.failed = advance(measurements_.value(u"failed"_s));
     geometry_ = application::history::HistoryFilterGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, chrome, measured);
-    emit layoutChanged();
+    layoutChanged();
   }
 
   void HistoryFiltersLayout::componentComplete() {

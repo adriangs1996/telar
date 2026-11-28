@@ -1,12 +1,9 @@
 telar_add_qml_sources(gui-quick
   SOURCES
     document_view.cpp
-    document_view.hpp
     documents_controller.cpp
-    documents_controller.hpp
   QML_FILES
     DocumentBlock.qml
     DocumentTheme.qml
     DocumentView.qml
-    InlineDocuments.qml
-  REGISTERS)
+    InlineDocuments.qml)

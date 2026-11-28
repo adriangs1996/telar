@@ -1,4 +1,3 @@
-#include "ui/kit/models/list_model.hpp"
 #include <QAbstractItemModelTester>
 #include <QCoreApplication>
 #include <QPersistentModelIndex>
@@ -11,17 +10,19 @@
 #include <vector>
 
 import telar.testing;
+import telar.gui.ui.kit.models;
 
 namespace {
+  using Qt::StringLiterals::operator""_s;
 
   using telar::gui::qt::ListModel;
   using telar::testing::check;
 
   QVariantMap record(int key, int revision) {
     return {
-        {QStringLiteral("key"), QString::number(key)},
-        {QStringLiteral("command"), QStringLiteral("echo row %1 revision %2").arg(key).arg(revision)},
-        {QStringLiteral("details"), QVariantMap{{QStringLiteral("revision"), revision}}},
+        {u"key"_s, QString::number(key)},
+        {u"command"_s, u"echo row %1 revision %2"_s.arg(key).arg(revision)},
+        {u"details"_s, QVariantMap{{u"revision"_s, revision}}},
     };
   }
 

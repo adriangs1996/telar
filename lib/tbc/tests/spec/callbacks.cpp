@@ -2,7 +2,7 @@
 
 // CASE: gui.deferred_borrowed_capture
 // PAIR: gui.deferred_capture
-// SOURCE: src/gui/ui/app/overlays/machine_prompt/machine_profiles_source.cpp :: start
+// SOURCE: src/gui/ui/app/overlays/machine_prompt/machine_profiles_source/machine_profiles_source.cpp :: start
 // STATUS: implemented
 // CONTRACT: enqueue retains its callback after the caller returns; captures must outlive execution.
 // SCENARIO: Capturing a string_view by value copies a pointer, not the local string's bytes.
@@ -18,7 +18,7 @@ void deferredBorrowedCapture() {
 
 // CASE: gui.deferred_owned_capture
 // PAIR: gui.deferred_capture
-// SOURCE: src/gui/ui/app/overlays/machine_prompt/machine_profiles_source.hpp :: Request
+// SOURCE: src/gui/ui/app/overlays/machine_prompt/machine_profiles_source/machine_profiles_source.cppm :: Request
 // STATUS: implemented
 // CONTRACT: Owning request data moves into the retained callback and survives its producer.
 // SCENARIO: The worker owns a copy of input instead of borrowing the input descriptor.

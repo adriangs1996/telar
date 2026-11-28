@@ -1,14 +1,7 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.models;
 
-#include "ui/kit/models/activity_availability.hpp"
-#include "ui/kit/machines/machine_client.hpp"
-#include "ui/kit/store/store.hpp"
-#include <algorithm>
-#include <variant>
-
+import std;
+import telar.gui.ui.kit.store;
 import telar.gui.application;
 
 namespace telar::gui::qt {

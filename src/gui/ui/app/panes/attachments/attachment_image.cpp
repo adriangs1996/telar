@@ -1,15 +1,7 @@
-#include "attachment_image.hpp"
-#include <QImage>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QSGNode>
-#include <QSGSimpleTextureNode>
-#include <QSGTexture>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <memory>
-#include <utility>
+module telar.gui.ui.app.panes.attachments;
+
+import std;
+import telar.gui.qt;
 
 namespace telar::gui::qt {
 
@@ -57,7 +49,7 @@ namespace telar::gui::qt {
     }
 
     image_ = std::move(image);
-    emit imageChanged();
+    imageChanged();
     update();
   }
 
@@ -68,7 +60,7 @@ namespace telar::gui::qt {
   void AttachmentImage::setThumbnail(bool thumbnail) {
     if (thumbnail_ != thumbnail) {
       thumbnail_ = thumbnail;
-      emit imageChanged();
+      imageChanged();
       update();
     }
   }

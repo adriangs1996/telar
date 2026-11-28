@@ -2,13 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "qml_fixture.hpp"
-#include "ui/app/chrome/mode_bar/mode_projection.hpp"
-#include "ui/design/controls/cell_text_grid.hpp"
-#include "ui/design/controls/native_cell_text.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/models/projection.hpp"
 #include <QCoreApplication>
 #include <QDebug>
 #include <QFont>
@@ -46,6 +39,13 @@ import telar.gui.foundation.keys;
 import telar.gui.features.workbench;
 import telar.gui.features.status_bar;
 import telar.base.ds;
+import telar.gui.ui.app.chrome.mode_bar;
+import telar.gui.ui.design.controls;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
+import telar.gui.tests.qml_fixture;
+import telar.gui.foundation.core;
+import telar.gui.qt;
 
 namespace {
 
@@ -71,20 +71,26 @@ namespace {
     return {{QStringLiteral("cellWidth"), cell_width}, {QStringLiteral("cellHeight"), cell_height}, {QStringLiteral("pixelHeight"), font_pixels}, {QStringLiteral("baseline"), baseline}, {QStringLiteral("family"), QString{}}, {QStringLiteral("style"), QString{}}};
   }
 
-  class ModeBarTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] ModeBarTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void initTestCase() {
+  private:
+    [[qt::slot]] static void initTestCase() {
       bundledFonts();
       QGuiApplication::setFont(QFont{QStringLiteral("IBM Plex Sans")});
     }
 
-    Q_SLOT static void init() {
+    [[qt::slot]] static void init() {
       QTest::failOnWarning(QRegularExpression{QStringLiteral(".*")});
     }
 
-    Q_SLOT static void hintsKeepConfiguredAliasOrderAndSkipLongSequences() {
+    [[qt::slot]] static void hintsKeepConfiguredAliasOrderAndSkipLongSequences() {
       constexpr KeyChord prefix{.key = KeyChord::Key::character, .character = 'a', .modifiers = static_cast<unsigned>(KeyChord::Modifier::control)};
       constexpr KeyChord first{.key = KeyChord::Key::character, .character = 'z'};
       constexpr KeyChord second{.key = KeyChord::Key::character, .character = 'a'};
@@ -108,7 +114,7 @@ namespace {
       QVERIFY(ModeHints::resolve(without_prefix).items().empty());
     }
 
-    Q_SLOT static void unicodeKeyHintsPreservePackedUtf8() {
+    [[qt::slot]] static void unicodeKeyHintsPreservePackedUtf8() {
       for (const auto scalar : {U'ñ', U'中', U'😀'}) {
         const KeyChord key{.character = KeyCharacter::pack(scalar), .modifiers = static_cast<unsigned>(KeyChord::Modifier::control)};
         const auto label = ModeKeyLabel::format(key);
@@ -119,7 +125,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void prefixLabelsLeadWithCancelThenTheBoundActions() {
+    [[qt::slot]] static void prefixLabelsLeadWithCancelThenTheBoundActions() {
       ModeHints hints;
 
       hints.append({.key = {.key = KeyChord::Key::character, .character = 's'}, .label = "split right"});
@@ -133,7 +139,7 @@ namespace {
       QVERIFY(ModeBarLabels::resolve(StatusMode::normal, hints).title().empty());
     }
 
-    Q_SLOT static void standaloneModeBarDropsWholeHintsAndKeepsTheTitle() {
+    [[qt::slot]] static void standaloneModeBarDropsWholeHintsAndKeepsTheTitle() {
       QQuickWindow window;
       QQmlEngine engine;
       const QVariantMap properties{
@@ -165,7 +171,7 @@ namespace {
       QCOMPARE(bar->property("layout").toMap().value(QStringLiteral("title")).toRectF().width(), title.width());
     }
 
-    Q_SLOT static void cellTextRetainsItsWidthAndUsesWholeCellClipping() {
+    [[qt::slot]] static void cellTextRetainsItsWidthAndUsesWholeCellClipping() {
       QQuickWindow window;
       NativeCellText text{window.contentItem()};
 
@@ -206,4 +212,6 @@ namespace {
 }
 
 QTEST_MAIN(ModeBarTest)
+#ifndef TELAR_MOC_RUN
 #include "mode_bar_test.moc"
+#endif

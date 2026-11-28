@@ -217,7 +217,7 @@ namespace constness {
 
 // CASE: constness.shared_pointer_mutation
 // PAIR: constness.shared_access
-// SOURCE: src/gui/ui/app/panes/terminal/terminal_item.hpp :: TerminalItem::viewFolds
+// SOURCE: src/gui/ui/app/panes/terminal/terminal-terminal_item.cppm :: TerminalItem::viewFolds
 // STATUS: implemented
 // CONTRACT: A const method, or a reference to const, lends shared everything its object reaches, as Rust's `&T` does: nothing reached through a reference, a pointer or a smart pointer changes through it, except a shared type, a synchronization primitive or an opaque C object.
 // SCENARIO: A function that receives a view by reference to const appends through the pointer the view holds; reject at the pointer.
@@ -249,7 +249,7 @@ namespace constness {
 
 // CASE: constness.shared_owner_mutation
 // PAIR: constness.shared_access
-// SOURCE: src/gui/ui/app/panes/terminal/terminal_item.hpp :: TerminalItem::viewFolds
+// SOURCE: src/gui/ui/app/panes/terminal/terminal-terminal_item.cppm :: TerminalItem::viewFolds
 // STATUS: implemented
 // CONTRACT: A const method, or a reference to const, lends shared everything its object reaches, as Rust's `&T` does: nothing reached through a reference, a pointer or a smart pointer changes through it, except a shared type, a synchronization primitive or an opaque C object.
 // SCENARIO: A const method clears the store a unique_ptr field owns, which is part of the object as a Rust `Box` is; reject at the owner's access.

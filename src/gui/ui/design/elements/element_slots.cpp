@@ -1,24 +1,14 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.design.elements;
 
-#include "element_slots.hpp"
-#include "component_projection.hpp"
-#include "ui/kit/config/configuration_source.hpp"
-#include <QColor>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QStringLiteral>
-#include <QVariant>
-#include <algorithm>
-#include <array>
-#include <cstddef>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.config;
 import telar.gui.application;
 import telar.base.ds;
+import telar.lua;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -66,10 +56,10 @@ namespace telar::gui::qt {
         }
 
         operations.append(QVariantMap{
-            {QStringLiteral("op"), step.op},
-            {QStringLiteral("values"), values},
-            {QStringLiteral("color"), paint(step.color, theme, ink)},
-            {QStringLiteral("text"), text(rendered.view(step.text))},
+            {u"op"_s, step.op},
+            {u"values"_s, values},
+            {u"color"_s, paint(step.color, theme, ink)},
+            {u"text"_s, text(rendered.view(step.text))},
         });
       }
 
@@ -83,23 +73,23 @@ namespace telar::gui::qt {
       if (kind == application::components::ElementKind::icon) {
         const auto glyph = element.named ? application::components::Icon::find(normalizedIcon(rendered.view(element.text)).toStdString()).glyph : rendered.view(element.text);
 
-        record.insert(QStringLiteral("glyph"), text(glyph));
+        record.insert(u"glyph"_s, text(glyph));
       } else if (kind == application::components::ElementKind::mark) {
         const auto name = rendered.view(element.text);
-        const auto icon = application::components::Icon::find(name == "telar" ? std::string_view{"telar_mark"} : (QStringLiteral("provider_") + text(name)).toStdString());
+        const auto icon = application::components::Icon::find(name == "telar" ? std::string_view{"telar_mark"} : (u"provider_"_s + text(name)).toStdString());
 
-        record.insert(QStringLiteral("glyph"), text(icon.glyph));
-        record.insert(QStringLiteral("providerMark"), static_cast<int>(icon.provider));
-        record.insert(QStringLiteral("telarMark"), icon.telar);
+        record.insert(u"glyph"_s, text(icon.glyph));
+        record.insert(u"providerMark"_s, static_cast<int>(icon.provider));
+        record.insert(u"telarMark"_s, icon.telar);
       } else if (kind == application::components::ElementKind::tile) {
         const auto mark = application::activity::ApplicationMark::forApplication(rendered.view(element.text));
 
-        record.insert(QStringLiteral("glyph"), text(mark.glyph));
-        record.insert(QStringLiteral("tile"), text(mark.tile));
-        record.insert(QStringLiteral("ink"), text(mark.ink));
-        record.insert(QStringLiteral("providerMark"), static_cast<int>(mark.provider));
+        record.insert(u"glyph"_s, text(mark.glyph));
+        record.insert(u"tile"_s, text(mark.tile));
+        record.insert(u"ink"_s, text(mark.ink));
+        record.insert(u"providerMark"_s, static_cast<int>(mark.provider));
       } else if (kind == application::components::ElementKind::canvas) {
-        record.insert(QStringLiteral("operations"), canvasOperations(rendered, element, theme, ink));
+        record.insert(u"operations"_s, canvasOperations(rendered, element, theme, ink));
       }
     }
   }
@@ -113,7 +103,7 @@ namespace telar::gui::qt {
     settle_.setInterval(0);
     connect(&settle_, &QTimer::timeout, this, [this] {
       ++revision_;
-      emit contentChanged();
+      contentChanged();
     });
   }
 
@@ -186,11 +176,11 @@ namespace telar::gui::qt {
     }
 
     return {
-        {QStringLiteral("slot"), QString::fromLatin1(application::components::slot_names[static_cast<std::size_t>(slot)].data(), static_cast<qsizetype>(application::components::slot_names[static_cast<std::size_t>(slot)].size()))},
-        {QStringLiteral("key"), key},
-        {QStringLiteral("revision"), QString::number(current.revision)},
-        {QStringLiteral("nodes"), current.nodes},
-        {QStringLiteral("error"), current.error},
+        {u"slot"_s, QString::fromLatin1(application::components::slot_names[static_cast<std::size_t>(slot)].data(), static_cast<qsizetype>(application::components::slot_names[static_cast<std::size_t>(slot)].size()))},
+        {u"key"_s, key},
+        {u"revision"_s, QString::number(current.revision)},
+        {u"nodes"_s, current.nodes},
+        {u"error"_s, current.error},
     };
   }
 
@@ -295,7 +285,7 @@ namespace telar::gui::qt {
         }
 
         if (!succeeded && current.failures == failure_limit) {
-          emit failed(QStringLiteral("components.%1 failed %2 times and fell back to the built-in piece: %3").arg(text(application::components::slot_names[static_cast<std::size_t>(current.slot)])).arg(failure_limit).arg(outcome.error));
+          failed(u"components.%1 failed %2 times and fell back to the built-in piece: %3"_s.arg(text(application::components::slot_names[static_cast<std::size_t>(current.slot)])).arg(failure_limit).arg(outcome.error));
         }
 
         if (current.dirty && current.failures < failure_limit) {
@@ -322,59 +312,59 @@ namespace telar::gui::qt {
       const auto kind = element.kind;
       const auto ink = theme.chromeColor(tones[static_cast<std::size_t>(element.tone)]);
       QVariantMap record{
-          {QStringLiteral("index"), static_cast<int>(index)},
-          {QStringLiteral("parent"), element.parent == application::components::Element::none ? -1 : static_cast<int>(element.parent)},
-          {QStringLiteral("kind"), QString::fromLatin1(application::components::element_kind_names[static_cast<std::size_t>(kind)])},
-          {QStringLiteral("key"), text(rendered.view(element.key))},
-          {QStringLiteral("text"), text(rendered.view(element.text))},
-          {QStringLiteral("tooltip"), text(rendered.view(element.tooltip))},
-          {QStringLiteral("padding"), QVariantList{element.padding[0], element.padding[1], element.padding[2], element.padding[3]}},
-          {QStringLiteral("gap"), element.gap},
-          {QStringLiteral("width"), element.width},
-          {QStringLiteral("height"), element.height},
-          {QStringLiteral("minWidth"), element.min_width},
-          {QStringLiteral("minHeight"), element.min_height},
-          {QStringLiteral("grow"), element.grow},
-          {QStringLiteral("x"), element.x},
-          {QStringLiteral("y"), element.y},
-          {QStringLiteral("rotation"), element.rotation},
-          {QStringLiteral("scale"), element.scale},
-          {QStringLiteral("opacity"), element.opacity},
-          {QStringLiteral("z"), element.z},
-          {QStringLiteral("transition"), element.transition_ms},
-          {QStringLiteral("easing"), element.easing},
-          {QStringLiteral("radius"), element.radius},
-          {QStringLiteral("borderWidth"), element.border_width},
-          {QStringLiteral("background"), paint(element.background, theme)},
-          {QStringLiteral("border"), paint(element.border, theme)},
-          {QStringLiteral("hover"), paint(element.hover, theme)},
-          {QStringLiteral("color"), paint(element.color, theme, ink)},
-          {QStringLiteral("align"), element.align},
-          {QStringLiteral("justify"), element.justify},
-          {QStringLiteral("sizeRole"), element.size_role},
-          {QStringLiteral("size"), element.size},
-          {QStringLiteral("bold"), element.bold},
-          {QStringLiteral("italic"), element.italic},
-          {QStringLiteral("maxLines"), element.max_lines},
-          {QStringLiteral("clip"), element.clip},
-          {QStringLiteral("shadow"), element.shadow},
-          {QStringLiteral("action"), element.action == application::components::Element::none ? -1 : static_cast<int>(element.action)},
-          {QStringLiteral("callback"), element.callback == application::components::Element::none ? -1 : static_cast<int>(element.callback)},
-          {QStringLiteral("url"), text(rendered.view(element.url))},
-          {QStringLiteral("since"), static_cast<qint64>(element.since)},
+          {u"index"_s, static_cast<int>(index)},
+          {u"parent"_s, element.parent == application::components::Element::none ? -1 : static_cast<int>(element.parent)},
+          {u"kind"_s, QString::fromLatin1(application::components::element_kind_names[static_cast<std::size_t>(kind)])},
+          {u"key"_s, text(rendered.view(element.key))},
+          {u"text"_s, text(rendered.view(element.text))},
+          {u"tooltip"_s, text(rendered.view(element.tooltip))},
+          {u"padding"_s, QVariantList{element.padding[0], element.padding[1], element.padding[2], element.padding[3]}},
+          {u"gap"_s, element.gap},
+          {u"width"_s, element.width},
+          {u"height"_s, element.height},
+          {u"minWidth"_s, element.min_width},
+          {u"minHeight"_s, element.min_height},
+          {u"grow"_s, element.grow},
+          {u"x"_s, element.x},
+          {u"y"_s, element.y},
+          {u"rotation"_s, element.rotation},
+          {u"scale"_s, element.scale},
+          {u"opacity"_s, element.opacity},
+          {u"z"_s, element.z},
+          {u"transition"_s, element.transition_ms},
+          {u"easing"_s, element.easing},
+          {u"radius"_s, element.radius},
+          {u"borderWidth"_s, element.border_width},
+          {u"background"_s, paint(element.background, theme)},
+          {u"border"_s, paint(element.border, theme)},
+          {u"hover"_s, paint(element.hover, theme)},
+          {u"color"_s, paint(element.color, theme, ink)},
+          {u"align"_s, element.align},
+          {u"justify"_s, element.justify},
+          {u"sizeRole"_s, element.size_role},
+          {u"size"_s, element.size},
+          {u"bold"_s, element.bold},
+          {u"italic"_s, element.italic},
+          {u"maxLines"_s, element.max_lines},
+          {u"clip"_s, element.clip},
+          {u"shadow"_s, element.shadow},
+          {u"action"_s, element.action == application::components::Element::none ? -1 : static_cast<int>(element.action)},
+          {u"callback"_s, element.callback == application::components::Element::none ? -1 : static_cast<int>(element.callback)},
+          {u"url"_s, text(rendered.view(element.url))},
+          {u"since"_s, static_cast<qint64>(element.since)},
       };
 
-      record.insert(QStringLiteral("clickable"), element.action != application::components::Element::none || element.callback != application::components::Element::none || element.url.length != 0);
+      record.insert(u"clickable"_s, element.action != application::components::Element::none || element.callback != application::components::Element::none || element.url.length != 0);
       if (element.max_width >= 0) {
-        record.insert(QStringLiteral("maxWidth"), element.max_width);
+        record.insert(u"maxWidth"_s, element.max_width);
       }
 
       if (element.max_height >= 0) {
-        record.insert(QStringLiteral("maxHeight"), element.max_height);
+        record.insert(u"maxHeight"_s, element.max_height);
       }
 
       if (element.align_self) {
-        record.insert(QStringLiteral("alignSelf"), *element.align_self);
+        record.insert(u"alignSelf"_s, *element.align_self);
       }
 
       addKindFields(record, rendered, element, theme, ink);
@@ -388,49 +378,49 @@ namespace telar::gui::qt {
   QVariantMap ElementSlots::tabItem(const QVariantMap& record, int position) {
     QVariantList panes;
 
-    for (const auto& entry : record.value(QStringLiteral("cards")).toList()) {
+    for (const auto& entry : record.value(u"cards"_s).toList()) {
       const auto card = entry.toMap();
 
       panes.append(QVariantMap{
-          {QStringLiteral("key"), card.value(QStringLiteral("key"))},
-          {QStringLiteral("program"), card.value(QStringLiteral("program"))},
-          {QStringLiteral("focused"), card.value(QStringLiteral("focused"))},
-          {QStringLiteral("attention"), !card.value(QStringLiteral("attentionColor")).toString().isEmpty()},
+          {u"key"_s, card.value(u"key"_s)},
+          {u"program"_s, card.value(u"program"_s)},
+          {u"focused"_s, card.value(u"focused"_s)},
+          {u"attention"_s, !card.value(u"attentionColor"_s).toString().isEmpty()},
       });
     }
 
     return {
-        {QStringLiteral("index"), position + 1},
-        {QStringLiteral("key"), record.value(QStringLiteral("key"))},
-        {QStringLiteral("title"), record.value(QStringLiteral("title"))},
-        {QStringLiteral("label"), record.value(QStringLiteral("label"))},
-        {QStringLiteral("path"), record.value(QStringLiteral("path"))},
-        {QStringLiteral("application"), record.value(QStringLiteral("application"))},
-        {QStringLiteral("selected"), record.value(QStringLiteral("selected"))},
-        {QStringLiteral("attention"), !record.value(QStringLiteral("attentionColor")).toString().isEmpty()},
-        {QStringLiteral("panes"), panes},
+        {u"index"_s, position + 1},
+        {u"key"_s, record.value(u"key"_s)},
+        {u"title"_s, record.value(u"title"_s)},
+        {u"label"_s, record.value(u"label"_s)},
+        {u"path"_s, record.value(u"path"_s)},
+        {u"application"_s, record.value(u"application"_s)},
+        {u"selected"_s, record.value(u"selected"_s)},
+        {u"attention"_s, !record.value(u"attentionColor"_s).toString().isEmpty()},
+        {u"panes"_s, panes},
     };
   }
 
   QVariantMap ElementSlots::paneItem(const QVariantMap& pane, const QVariantMap& chrome) {
     QVariantMap item{
-        {QStringLiteral("id"), pane.value(QStringLiteral("key"))},
-        {QStringLiteral("index"), chrome.value(QStringLiteral("index")).toInt()},
-        {QStringLiteral("program"), chrome.value(QStringLiteral("program"))},
-        {QStringLiteral("context"), chrome.value(QStringLiteral("context"))},
-        {QStringLiteral("focused"), pane.value(QStringLiteral("focused"))},
-        {QStringLiteral("fullscreen"), pane.value(QStringLiteral("fullscreen"))},
-        {QStringLiteral("images_paused"), chrome.value(QStringLiteral("imagesPaused"))},
-        {QStringLiteral("needs_attention"), chrome.value(QStringLiteral("needsAttention"))},
-        {QStringLiteral("progress"), chrome.value(QStringLiteral("progressText"))},
+        {u"id"_s, pane.value(u"key"_s)},
+        {u"index"_s, chrome.value(u"index"_s).toInt()},
+        {u"program"_s, chrome.value(u"program"_s)},
+        {u"context"_s, chrome.value(u"context"_s)},
+        {u"focused"_s, pane.value(u"focused"_s)},
+        {u"fullscreen"_s, pane.value(u"fullscreen"_s)},
+        {u"images_paused"_s, chrome.value(u"imagesPaused"_s)},
+        {u"needs_attention"_s, chrome.value(u"needsAttention"_s)},
+        {u"progress"_s, chrome.value(u"progressText"_s)},
     };
 
-    const auto agent = chrome.value(QStringLiteral("agent")).toMap();
+    const auto agent = chrome.value(u"agent"_s).toMap();
     if (!agent.isEmpty()) {
-      item.insert(QStringLiteral("agent"), QVariantMap{
-                                               {QStringLiteral("status"), statusName(agent.value(QStringLiteral("statusCode")))},
-                                               {QStringLiteral("blocked_reason"), agent.value(QStringLiteral("blockedReason"))},
-                                           });
+      item.insert(u"agent"_s, QVariantMap{
+                                  {u"status"_s, statusName(agent.value(u"statusCode"_s))},
+                                  {u"blocked_reason"_s, agent.value(u"blockedReason"_s)},
+                              });
     }
 
     return item;
@@ -438,19 +428,19 @@ namespace telar::gui::qt {
 
   QVariantMap ElementSlots::agentItem(const QVariantMap& record) {
     return {
-        {QStringLiteral("key"), record.value(QStringLiteral("key"))},
-        {QStringLiteral("title"), record.value(QStringLiteral("title"))},
-        {QStringLiteral("project"), record.value(QStringLiteral("project"))},
-        {QStringLiteral("detail"), record.value(QStringLiteral("detail"))},
-        {QStringLiteral("provider"), record.value(QStringLiteral("provider"))},
-        {QStringLiteral("status"), statusName(record.value(QStringLiteral("statusCode")))},
-        {QStringLiteral("selected"), record.value(QStringLiteral("selected"))},
+        {u"key"_s, record.value(u"key"_s)},
+        {u"title"_s, record.value(u"title"_s)},
+        {u"project"_s, record.value(u"project"_s)},
+        {u"detail"_s, record.value(u"detail"_s)},
+        {u"provider"_s, record.value(u"provider"_s)},
+        {u"status"_s, statusName(record.value(u"statusCode"_s))},
+        {u"selected"_s, record.value(u"selected"_s)},
         {
-            QStringLiteral("plan"),
+            u"plan"_s,
             QVariantMap{
-                {QStringLiteral("done"), record.value(QStringLiteral("planDone"))},
-                {QStringLiteral("total"), record.value(QStringLiteral("planTotal"))},
-                {QStringLiteral("step"), record.value(QStringLiteral("planStep"))},
+                {u"done"_s, record.value(u"planDone"_s)},
+                {u"total"_s, record.value(u"planTotal"_s)},
+                {u"step"_s, record.value(u"planStep"_s)},
             },
         },
     };

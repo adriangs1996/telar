@@ -1,12 +1,8 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.nvim;
 
-#include "nvim_controller.hpp"
-#include <exception>
-
+import std;
 import telar.gui.application;
+import telar.gui.ui.kit.machines;
 
 namespace telar::gui::qt {
 
@@ -22,7 +18,7 @@ namespace telar::gui::qt {
     try {
       request(store_.sessionMut());
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
   }
 
@@ -70,7 +66,7 @@ namespace telar::gui::qt {
     });
 
     // The picker changed here, not by a message of the runtime: its views are told.
-    emit editorChanged(pane_id);
+    editorChanged(pane_id);
   }
 
   void NvimController::search(std::uint64_t pane_id, const QString& query) {
@@ -81,7 +77,7 @@ namespace telar::gui::qt {
     });
 
     // The picker changed here, not by a message of the runtime: its views are told.
-    emit editorChanged(pane_id);
+    editorChanged(pane_id);
   }
 
   void NvimController::accept(std::uint64_t pane_id, application::nvim::Choice choice) {
@@ -90,7 +86,7 @@ namespace telar::gui::qt {
     });
 
     // The picker changed here, not by a message of the runtime: its views are told.
-    emit editorChanged(pane_id);
+    editorChanged(pane_id);
   }
 
   void NvimController::preview(std::uint64_t pane_id, ds::Option<std::size_t> index, application::nvim::PreviewArea area) {
@@ -105,7 +101,7 @@ namespace telar::gui::qt {
     });
 
     // The picker changed here, not by a message of the runtime: its views are told.
-    emit editorChanged(pane_id);
+    editorChanged(pane_id);
   }
 
   void NvimController::dismiss(std::uint64_t pane_id) {
@@ -114,7 +110,7 @@ namespace telar::gui::qt {
     });
 
     // The picker changed here, not by a message of the runtime: its views are told.
-    emit editorChanged(pane_id);
+    editorChanged(pane_id);
   }
 
   void NvimController::dismissMessage(std::uint64_t pane_id, std::uint64_t key) {
@@ -123,7 +119,7 @@ namespace telar::gui::qt {
     });
 
     // The messages changed here, not by a message of the runtime: its views are told.
-    emit editorChanged(pane_id);
+    editorChanged(pane_id);
   }
 
   void NvimController::answer(std::uint64_t pane_id, bool accepted, std::uint32_t index, const QString& text) {

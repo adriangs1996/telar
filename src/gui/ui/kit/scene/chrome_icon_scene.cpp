@@ -1,36 +1,8 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.scene;
 
-#include "chrome_icon_scene.hpp"
-#include "alpha_mask.hpp"
-#include "alpha_mask_material.hpp"
-#include "alpha_mask_vertex.hpp"
-#include "chrome_glyph_images.hpp"
-#include "qt_buffers.hpp"
-#include "scene_nodes.hpp"
-#include "ui/kit/fonts/font_asset.hpp"
-#include "ui/kit/fonts/resident_fonts.hpp"
-#include <QColor>
-#include <QList>
-#include <QMatrix4x4>
-#include <QPointF>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QSGGeometry>
-#include <QSGGeometryNode>
-#include <QSGImageNode>
-#include <QSGNode>
-#include <QSGTexture>
-#include <QtCore/qtypes.h>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <memory>
-#include <span>
-#include <utility>
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.fonts;
 
 namespace telar::gui::qt {
   namespace {

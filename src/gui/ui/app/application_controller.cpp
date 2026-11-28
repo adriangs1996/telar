@@ -1,53 +1,15 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app;
 
-#include "application_controller.hpp"
-#include "application_effects.hpp"
-#include "platform/window.hpp"
-#include "ui/app/panes/terminal/terminal_item.hpp"
-#include "ui/kit/fonts/window_font_catalog.hpp"
-#include "ui/kit/input/key_adapter.hpp"
-#include "ui/kit/machines/machine_client.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "ui/kit/scene/window_animation_clock.hpp"
-#include "ui/kit/timing/deadline_timer.hpp"
-#include <QAbstractItemModel>
-#include <QClipboard>
-#include <QCryptographicHash>
-#include <QDir>
-#include <QEvent>
-#include <QFutureWatcher>
-#include <QGuiApplication>
-#include <QPointer>
-#include <QQuickItem>
-#include <QScreen>
-#include <QStringView>
-#include <QStyleHints>
-#include <QVariant>
-#include <QtCore/qbytearrayview.h>
-#include <QtCore/qchar.h>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qlist.h>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qobject.h>
-#include <QtCore/qobjectdefs.h>
-#include <QtCore/qstring.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <functional>
-#include <memory>
-#include <optional>
-#include <string_view>
-
+import std;
+import telar.gui.qt;
+import telar.gui.qt.platform;
+import telar.gui.ui.app.panes.terminal;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.input;
+import telar.gui.ui.kit.machines;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.scene;
+import telar.gui.ui.kit.timing;
 import telar.gui.foundation.terminal;
 import telar.gui.application;
 import telar.wire.vocabulary;
@@ -56,6 +18,7 @@ import telar.gui.foundation.core;
 import telar.base.memory.allocators;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -262,7 +225,7 @@ namespace telar::gui::qt {
     });
 
     connect(&documents_, &DocumentsController::measured, this, [this](qulonglong pane_id) {
-      emit terminals_.terminalChanged(pane_id);
+      terminals_.terminalChanged(pane_id);
       frames_.request();
     });
 
@@ -454,9 +417,9 @@ namespace telar::gui::qt {
       }
 
       if (action == window_actions::Action::process_picker) {
-        emit monitor_.filterRequested();
+        monitor_.filterRequested();
       } else if (action != window_actions::Action::monitor && !monitor_.perform(action)) {
-        status_.report(QStringLiteral("Select a process in the monitor, then run the action again"));
+        status_.report(u"Select a process in the monitor, then run the action again"_s);
       }
     });
   }
@@ -849,7 +812,7 @@ namespace telar::gui::qt {
       break;
     case application::Change::terminal:
       attachments_.reconcileFrame(session().changedPane());
-      emit terminals_.terminalChanged(session().changedPane());
+      terminals_.terminalChanged(session().changedPane());
       if (sessionMut().takeChromeChange() && !refresh_timer_.isActive()) {
         refresh_timer_.start();
       }
@@ -879,7 +842,7 @@ namespace telar::gui::qt {
       }
 
       askExplorer(session().changedPane());
-      emit editors_.editorChanged(session().changedPane());
+      editors_.editorChanged(session().changedPane());
       break;
     case application::Change::peek:
       peek_.synchronize();
@@ -888,14 +851,14 @@ namespace telar::gui::qt {
     case application::Change::document:
       documents_.publish(session().changedPane());
       // Inline documents take rows of the view, or give them back.
-      emit terminals_.terminalChanged(session().changedPane());
+      terminals_.terminalChanged(session().changedPane());
       frames_.request();
       break;
     case application::Change::copy_mode:
       copy_.publishSearch();
       status_.publish();
       if (const auto& copy = application::terminal::copy_mode::view(session()).state()) {
-        emit terminals_.terminalChanged(copy->pane_id);
+        terminals_.terminalChanged(copy->pane_id);
       }
 
       break;
@@ -945,10 +908,10 @@ namespace telar::gui::qt {
 
   void ApplicationController::refreshElementBars() {
     components_.refreshElementBars({
-        {QStringLiteral("workspace"), workspaces_.context().value(QStringLiteral("name"))},
-        {QStringLiteral("machine"), machine_chrome_.active().value(QStringLiteral("label"))},
-        {QStringLiteral("tab_count"), tabs_.count()},
-        {QStringLiteral("sidebar_visible"), display_.sidebarVisible()},
+        {u"workspace"_s, workspaces_.context().value(u"name"_s)},
+        {u"machine"_s, machine_chrome_.active().value(u"label"_s)},
+        {u"tab_count"_s, tabs_.count()},
+        {u"sidebar_visible"_s, display_.sidebarVisible()},
     });
   }
 
@@ -988,7 +951,7 @@ namespace telar::gui::qt {
     status_.publish();
     attachments_.publishGeometry();
     notifications_.publishView();
-    emit terminals_.refreshed();
+    terminals_.refreshed();
     frames_.reconsider();
   }
 
@@ -1052,7 +1015,7 @@ namespace telar::gui::qt {
     // signal rather than in a slot of it.
     cache_.colors.reset();
     cache_.font.reset();
-    emit configurationChanged();
+    configurationChanged();
   }
 
   // Each pane delegate reads the theme a score of times; it is built once per configuration.

@@ -1,24 +1,8 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.design.controls;
 
-#include "native_progress_ring.hpp"
-#include "ui/kit/scene/rounded_paints_scene.hpp"
-#include <QColor>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QSGNode>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <functional>
-#include <limits>
-#include <memory>
-#include <optional>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.scene;
 import telar.base.ds;
 
 namespace telar::gui::qt {
@@ -45,7 +29,7 @@ namespace telar::gui::qt {
     if (color.isValid() && color_ != color) {
       color_ = color;
       update();
-      emit colorChanged();
+      colorChanged();
     }
   }
 
@@ -55,7 +39,7 @@ namespace telar::gui::qt {
       if (!std::equal_to<>{}(fraction_, bounded)) {
         fraction_ = bounded;
         update();
-        emit fractionChanged();
+        fractionChanged();
       }
     }
   }
@@ -64,7 +48,7 @@ namespace telar::gui::qt {
     if (std::isfinite(turns) && std::abs(turns) <= static_cast<qreal>(std::numeric_limits<float>::max()) && !std::equal_to<>{}(turns_, turns)) {
       turns_ = turns;
       update();
-      emit turnsChanged();
+      turnsChanged();
     }
   }
 
@@ -76,7 +60,7 @@ namespace telar::gui::qt {
     if (std::isfinite(width) && width >= 0 && width <= static_cast<qreal>(std::numeric_limits<float>::max()) && !std::equal_to<>{}(stroke_width_, width)) {
       stroke_width_ = width;
       update();
-      emit strokeWidthChanged();
+      strokeWidthChanged();
     }
   }
 
@@ -88,7 +72,7 @@ namespace telar::gui::qt {
     if (color.isValid() && track_color_ != color) {
       track_color_ = color;
       update();
-      emit trackColorChanged();
+      trackColorChanged();
     }
   }
 

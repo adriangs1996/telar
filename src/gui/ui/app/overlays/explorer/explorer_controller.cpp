@@ -1,32 +1,21 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.overlays.explorer;
 
-#include "explorer_controller.hpp"
-#include "ui/kit/input/key_adapter.hpp"
-#include "ui/kit/models/glyph_icon.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QClipboard>
-#include <QDateTime>
-#include <QDir>
-#include <QDrag>
-#include <QGuiApplication>
-#include <QKeyEvent>
-#include <QStandardPaths>
-#include <QVarLengthArray>
-#include <QVariantList>
-#include <algorithm>
-#include <chrono>
-#include <exception>
-#include <string_view>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.qt.platform;
+import telar.gui.ui.kit.input;
+import telar.gui.ui.kit.models;
 import telar.gui.application;
 import telar.gui.foundation.icons;
 import telar.gui.foundation.system;
+import telar.base.memory.containers;
+import telar.gui.foundation.actions;
+import telar.gui.ui.kit.machines;
+import telar.tbc;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
+
   namespace {
 
     namespace explorer = application::explorer;
@@ -64,7 +53,7 @@ namespace telar::gui::qt {
       QVariantList result;
 
       for (const auto& actor : actors) {
-        result.push_back(QVariantMap{{QStringLiteral("chip"), fixedText(actor.chip)}, {QStringLiteral("tone"), QString::fromLatin1(actor_tones[static_cast<std::size_t>(actor.tone)])}});
+        result.push_back(QVariantMap{{u"chip"_s, fixedText(actor.chip)}, {u"tone"_s, QString::fromLatin1(actor_tones[static_cast<std::size_t>(actor.tone)])}});
       }
 
       return result;
@@ -74,17 +63,17 @@ namespace telar::gui::qt {
     QString letter(FileState state) {
       switch (state) {
       case FileState::modified:
-        return QStringLiteral("M");
+        return u"M"_s;
       case FileState::added:
-        return QStringLiteral("A");
+        return u"A"_s;
       case FileState::deleted:
-        return QStringLiteral("D");
+        return u"D"_s;
       case FileState::renamed:
-        return QStringLiteral("R");
+        return u"R"_s;
       case FileState::untracked:
-        return QStringLiteral("?");
+        return u"?"_s;
       case FileState::conflicted:
-        return QStringLiteral("!");
+        return u"!"_s;
       case FileState::unchanged:
       case FileState::ignored:
         break;
@@ -168,7 +157,7 @@ namespace telar::gui::qt {
       std::string_view group;
       const auto close = [&] {
         if (!keys.isEmpty()) {
-          result.push_back(QVariantMap{{QStringLiteral("title"), toQString(group)}, {QStringLiteral("keys"), keys}});
+          result.push_back(QVariantMap{{u"title"_s, toQString(group)}, {u"keys"_s, keys}});
           keys.clear();
         }
       };
@@ -180,7 +169,7 @@ namespace telar::gui::qt {
           group = line.group;
         }
 
-        keys.push_back(QVariantMap{{QStringLiteral("keys"), fixedText(line.keys)}, {QStringLiteral("label"), toQString(line.label)}});
+        keys.push_back(QVariantMap{{u"keys"_s, fixedText(line.keys)}, {u"label"_s, toQString(line.label)}});
       }
 
       close();
@@ -227,7 +216,7 @@ namespace telar::gui::qt {
         promised_(memory),
         waited_(memory),
         outside_(platform::file_promises ? explorer::Outside::promises : explorer::Outside::caches),
-        drag_cache_(QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/dragged")),
+        drag_cache_(QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + u"/dragged"_s),
         home_(QDir::homePath().toUtf8()),
         scene_(memory),
         away_(memory) {
@@ -247,7 +236,7 @@ namespace telar::gui::qt {
     shown_ = machines.active();
     // The keys are the ones of the configuration as it is now: a reload changes them here.
     if (explorer::configure(view_, store_.session().configuration.explorer_keys)) {
-      emit helpChanged();
+      helpChanged();
     }
 
     explorer::clear(scene_);
@@ -331,7 +320,7 @@ namespace telar::gui::qt {
 
     revision_ = view_.revision;
     publish();
-    emit changed();
+    changed();
     return true;
   }
 
@@ -361,47 +350,47 @@ namespace telar::gui::qt {
       const auto status = explorer::status(view_, cache, context, index);
 
       result.push_back(QVariantMap{
-          {QStringLiteral("index"), static_cast<int>(index)},
-          {QStringLiteral("current"), status.current},
-          {QStringLiteral("machine"), fixedText(header.machine)},
-          {QStringLiteral("local"), header.local},
-          {QStringLiteral("lead"), fixedText(header.lead)},
-          {QStringLiteral("last"), fixedText(header.last)},
-          {QStringLiteral("repository"), header.repository},
-          {QStringLiteral("branch"), fixedText(header.branch)},
-          {QStringLiteral("distance"), fixedText(header.distance)},
-          {QStringLiteral("away"), header.away},
-          {QStringLiteral("staged"), header.staged},
-          {QStringLiteral("unstaged"), header.unstaged},
-          {QStringLiteral("untracked"), header.untracked},
-          {QStringLiteral("mode"), toQString(status.mode)},
-          {QStringLiteral("modeKind"), QString::fromLatin1(mode_names[static_cast<std::size_t>(status.kind)])},
-          {QStringLiteral("following"), fixedText(status.following)},
-          {QStringLiteral("rootMachine"), fixedText(status.machine)},
-          {QStringLiteral("follows"), status.follows},
-          {QStringLiteral("root"), fixedText(status.root)},
-          {QStringLiteral("rootPath"), toQString(window.root.view())},
-          {QStringLiteral("pending"), status.pending},
-          {QStringLiteral("flags"), fixedText(status.flags)},
-          {QStringLiteral("filter"), fixedText(status.filter)},
-          {QStringLiteral("total"), fixedText(status.total)},
-          {QStringLiteral("keys"), fixedText(status.keys)},
-          {QStringLiteral("chosen"), status.chosen},
-          {QStringLiteral("carried"), status.carried},
-          {QStringLiteral("position"), status.position},
-          {QStringLiteral("count"), status.count},
-          {QStringLiteral("loading"), window.loading},
-          {QStringLiteral("hiddenEntries"), window.hidden_entries},
-          {QStringLiteral("ignoredEntries"), window.ignored_entries},
-          {QStringLiteral("top"), static_cast<int>(window.top)},
-          {QStringLiteral("rows"), static_cast<int>(window.rows.size())},
-          {QStringLiteral("page"), static_cast<int>(window.page)},
+          {u"index"_s, static_cast<int>(index)},
+          {u"current"_s, status.current},
+          {u"machine"_s, fixedText(header.machine)},
+          {u"local"_s, header.local},
+          {u"lead"_s, fixedText(header.lead)},
+          {u"last"_s, fixedText(header.last)},
+          {u"repository"_s, header.repository},
+          {u"branch"_s, fixedText(header.branch)},
+          {u"distance"_s, fixedText(header.distance)},
+          {u"away"_s, header.away},
+          {u"staged"_s, header.staged},
+          {u"unstaged"_s, header.unstaged},
+          {u"untracked"_s, header.untracked},
+          {u"mode"_s, toQString(status.mode)},
+          {u"modeKind"_s, QString::fromLatin1(mode_names[static_cast<std::size_t>(status.kind)])},
+          {u"following"_s, fixedText(status.following)},
+          {u"rootMachine"_s, fixedText(status.machine)},
+          {u"follows"_s, status.follows},
+          {u"root"_s, fixedText(status.root)},
+          {u"rootPath"_s, toQString(window.root.view())},
+          {u"pending"_s, status.pending},
+          {u"flags"_s, fixedText(status.flags)},
+          {u"filter"_s, fixedText(status.filter)},
+          {u"total"_s, fixedText(status.total)},
+          {u"keys"_s, fixedText(status.keys)},
+          {u"chosen"_s, status.chosen},
+          {u"carried"_s, status.carried},
+          {u"position"_s, status.position},
+          {u"count"_s, status.count},
+          {u"loading"_s, window.loading},
+          {u"hiddenEntries"_s, window.hidden_entries},
+          {u"ignoredEntries"_s, window.ignored_entries},
+          {u"top"_s, static_cast<int>(window.top)},
+          {u"rows"_s, static_cast<int>(window.rows.size())},
+          {u"page"_s, static_cast<int>(window.page)},
           // Where the list stands in its rows, in hundredths of one of the design's pixels: how
           // tall they all are, how much of them is above the first one shown, and its own room.
-          {QStringLiteral("extent"), window.rows.empty() ? 0 : static_cast<int>(window.rows[window.rows.size() - 1].offset + explorer::tall(window.rows[window.rows.size() - 1].kind))},
-          {QStringLiteral("above"), window.top < window.rows.size() ? static_cast<int>(window.rows[window.top].offset) : 0},
-          {QStringLiteral("room"), static_cast<int>(window.room)},
-          {QStringLiteral("lens"), static_cast<int>(window.lens)},
+          {u"extent"_s, window.rows.empty() ? 0 : static_cast<int>(window.rows[window.rows.size() - 1].offset + explorer::tall(window.rows[window.rows.size() - 1].kind))},
+          {u"above"_s, window.top < window.rows.size() ? static_cast<int>(window.rows[window.top].offset) : 0},
+          {u"room"_s, static_cast<int>(window.room)},
+          {u"lens"_s, static_cast<int>(window.lens)},
       });
     }
 
@@ -419,10 +408,10 @@ namespace telar::gui::qt {
 
     for (const auto& lens : explorer::lenses(view_, cacheOf(machine), explorer::contextOf(around, machine))) {
       result.push_back(QVariantMap{
-          {QStringLiteral("name"), toQString(lens.name)},
-          {QStringLiteral("count"), lens.count},
-          {QStringLiteral("counted"), lens.counted},
-          {QStringLiteral("current"), lens.current},
+          {u"name"_s, toQString(lens.name)},
+          {u"count"_s, lens.count},
+          {u"counted"_s, lens.counted},
+          {u"current"_s, lens.current},
       });
     }
 
@@ -441,28 +430,28 @@ namespace telar::gui::qt {
 
   QVariantMap ExplorerController::describeLine() const {
     QVariantMap result{
-        {QStringLiteral("mode"), QString::fromLatin1(mode_names[static_cast<std::size_t>(view_.mode)])},
-        {QStringLiteral("message"), view_.message.view().empty() ? toQString(explorer::idle_message) : fixedText(view_.message)},
+        {u"mode"_s, QString::fromLatin1(mode_names[static_cast<std::size_t>(view_.mode)])},
+        {u"message"_s, view_.message.view().empty() ? toQString(explorer::idle_message) : fixedText(view_.message)},
         // What it says now, and nothing when it says nothing: a line being typed shows it beside itself.
-        {QStringLiteral("said"), fixedText(view_.message)},
-        {QStringLiteral("tone"), QString::fromLatin1(tone_names[static_cast<std::size_t>(view_.tone)])},
-        {QStringLiteral("prefill"), toQString(view_.mode == Mode::insert ? view_.draft.view() : view_.prefill.view())},
-        {QStringLiteral("caret"), QString::fromLatin1(caret_names[static_cast<std::size_t>(view_.caret)])},
-        {QStringLiteral("overwrite"), view_.overwrite},
-        {QStringLiteral("edits"), static_cast<int>(view_.edits.size())},
-        {QStringLiteral("revision"), static_cast<qulonglong>(view_.revision)},
+        {u"said"_s, fixedText(view_.message)},
+        {u"tone"_s, QString::fromLatin1(tone_names[static_cast<std::size_t>(view_.tone)])},
+        {u"prefill"_s, toQString(view_.mode == Mode::insert ? view_.draft.view() : view_.prefill.view())},
+        {u"caret"_s, QString::fromLatin1(caret_names[static_cast<std::size_t>(view_.caret)])},
+        {u"overwrite"_s, view_.overwrite},
+        {u"edits"_s, static_cast<int>(view_.edits.size())},
+        {u"revision"_s, static_cast<qulonglong>(view_.revision)},
         // The command line `<Tab>` completed, and how many times it did: the field takes it when
         // the count grows.
-        {QStringLiteral("completion"), toQString(view_.completion.view())},
-        {QStringLiteral("completed"), static_cast<int>(view_.completed)},
+        {u"completion"_s, toQString(view_.completion.view())},
+        {u"completed"_s, static_cast<int>(view_.completed)},
     };
 
     if (!view_.windows.empty()) {
       const auto& window = *view_.windows[view_.current];
 
-      result.insert(QStringLiteral("window"), static_cast<int>(view_.current));
-      result.insert(QStringLiteral("cursor"), static_cast<int>(window.cursor));
-      result.insert(QStringLiteral("filter"), toQString(window.filter.view()));
+      result.insert(u"window"_s, static_cast<int>(view_.current));
+      result.insert(u"cursor"_s, static_cast<int>(window.cursor));
+      result.insert(u"filter"_s, toQString(window.filter.view()));
     }
 
     return result;
@@ -481,7 +470,7 @@ namespace telar::gui::qt {
     for (std::size_t index = 0; index < hints.count; ++index) {
       const auto& hint = hints.items[index];
 
-      result.push_back(QVariantMap{{QStringLiteral("keys"), fixedText(hint.keys)}, {QStringLiteral("label"), fixedText(hint.label)}, {QStringLiteral("enabled"), hint.enabled}});
+      result.push_back(QVariantMap{{u"keys"_s, fixedText(hint.keys)}, {u"label"_s, fixedText(hint.label)}, {u"enabled"_s, hint.enabled}});
     }
 
     return result;
@@ -496,7 +485,7 @@ namespace telar::gui::qt {
     const auto& cache = cacheOf(machine);
     const auto look = explorer::preview(view_, cache, explorer::contextOf(around, machine), static_cast<std::uint64_t>(QDateTime::currentSecsSinceEpoch()));
     if (!look.shown) {
-      return {{QStringLiteral("shown"), false}};
+      return {{u"shown"_s, false}};
     }
 
     QVariantList facts;
@@ -505,11 +494,11 @@ namespace telar::gui::qt {
       const auto& fact = look.facts[index];
 
       facts.push_back(QVariantMap{
-          {QStringLiteral("label"), toQString(fact.label)},
-          {QStringLiteral("value"), fixedText(fact.value)},
-          {QStringLiteral("detail"), fixedText(fact.detail)},
-          {QStringLiteral("added"), fact.added},
-          {QStringLiteral("removed"), fact.removed},
+          {u"label"_s, toQString(fact.label)},
+          {u"value"_s, fixedText(fact.value)},
+          {u"detail"_s, fixedText(fact.detail)},
+          {u"added"_s, fact.added},
+          {u"removed"_s, fact.removed},
       });
     }
 
@@ -522,7 +511,7 @@ namespace telar::gui::qt {
       const auto line = rest.substr(0, end);
       const auto tone = look.diff ? explorer::toneOf(line) : DiffTone::context;
 
-      lines.push_back(QVariantMap{{QStringLiteral("text"), toQString(line)}, {QStringLiteral("tone"), QString::fromLatin1(diff_tones[static_cast<std::size_t>(tone)])}});
+      lines.push_back(QVariantMap{{u"text"_s, toQString(line)}, {u"tone"_s, QString::fromLatin1(diff_tones[static_cast<std::size_t>(tone)])}});
       rest.remove_prefix(end == std::string_view::npos ? rest.size() : end + 1);
     }
 
@@ -531,10 +520,10 @@ namespace telar::gui::qt {
 
     for (const auto& touch : look.activity.view().first(look.activity_count)) {
       activity.push_back(QVariantMap{
-          {QStringLiteral("actors"), actorChips({&touch.actor, 1})},
-          {QStringLiteral("who"), fixedText(touch.who)},
-          {QStringLiteral("verb"), fixedText(touch.verb)},
-          {QStringLiteral("ago"), fixedText(touch.ago)},
+          {u"actors"_s, actorChips({&touch.actor, 1})},
+          {u"who"_s, fixedText(touch.who)},
+          {u"verb"_s, fixedText(touch.verb)},
+          {u"ago"_s, fixedText(touch.ago)},
       });
     }
 
@@ -544,27 +533,27 @@ namespace telar::gui::qt {
 
     for (const auto& entry : look.heavy.view().first(look.heavy_count)) {
       heavy.push_back(QVariantMap{
-          {QStringLiteral("name"), fixedText(entry.name) + (entry.directory ? QStringLiteral("/") : QString{})},
-          {QStringLiteral("tag"), toQString(entry.tag)},
-          {QStringLiteral("size"), fixedText(entry.size)},
-          {QStringLiteral("share"), entry.share / hundredths},
+          {u"name"_s, fixedText(entry.name) + (entry.directory ? u"/"_s : QString{})},
+          {u"tag"_s, toQString(entry.tag)},
+          {u"size"_s, fixedText(entry.size)},
+          {u"share"_s, entry.share / hundredths},
       });
     }
 
     QVariantMap result{
-        {QStringLiteral("shown"), true},
-        {QStringLiteral("activity"), activity},
-        {QStringLiteral("heavy"), heavy},
-        {QStringLiteral("directory"), look.directory},
-        {QStringLiteral("name"), fixedText(look.name)},
-        {QStringLiteral("path"), fixedText(look.path)},
-        {QStringLiteral("facts"), facts},
-        {QStringLiteral("panes"), numbers(look.panes.view().first(look.pane_count))},
-        {QStringLiteral("title"), toQString(look.title)},
-        {QStringLiteral("lines"), lines},
-        {QStringLiteral("diff"), look.diff},
-        {QStringLiteral("waiting"), look.waiting},
-        {QStringLiteral("note"), toQString(look.note)},
+        {u"shown"_s, true},
+        {u"activity"_s, activity},
+        {u"heavy"_s, heavy},
+        {u"directory"_s, look.directory},
+        {u"name"_s, fixedText(look.name)},
+        {u"path"_s, fixedText(look.path)},
+        {u"facts"_s, facts},
+        {u"panes"_s, numbers(look.panes.view().first(look.pane_count))},
+        {u"title"_s, toQString(look.title)},
+        {u"lines"_s, lines},
+        {u"diff"_s, look.diff},
+        {u"waiting"_s, look.waiting},
+        {u"note"_s, toQString(look.note)},
     };
 
     // A pane is no file: its preview has no icon.
@@ -584,11 +573,11 @@ namespace telar::gui::qt {
       const auto& line = look.lines[index];
 
       lines.push_back(QVariantMap{
-          {QStringLiteral("label"), fixedText(line.label)},
-          {QStringLiteral("keys"), fixedText(line.keys)},
-          {QStringLiteral("enabled"), line.enabled},
-          {QStringLiteral("rule"), line.rule},
-          {QStringLiteral("current"), line.current},
+          {u"label"_s, fixedText(line.label)},
+          {u"keys"_s, fixedText(line.keys)},
+          {u"enabled"_s, line.enabled},
+          {u"rule"_s, line.rule},
+          {u"current"_s, line.current},
       });
     }
 
@@ -599,11 +588,11 @@ namespace telar::gui::qt {
     const auto& window = *view_.windows[view_.current];
 
     return {
-        {QStringLiteral("lines"), lines},
-        {QStringLiteral("window"), static_cast<int>(view_.current)},
-        {QStringLiteral("row"), static_cast<int>(window.cursor) - static_cast<int>(window.top)},
-        {QStringLiteral("x"), menu_at_.x()},
-        {QStringLiteral("y"), menu_at_.y()},
+        {u"lines"_s, lines},
+        {u"window"_s, static_cast<int>(view_.current)},
+        {u"row"_s, static_cast<int>(window.cursor) - static_cast<int>(window.top)},
+        {u"x"_s, menu_at_.x()},
+        {u"y"_s, menu_at_.y()},
     };
   }
 
@@ -626,21 +615,21 @@ namespace telar::gui::qt {
           return toQString(path.substr(root.size() + 1));
         }
 
-        return home.size() > 1 && path.starts_with(home) && path.size() > home.size() && path[home.size()] == '/' ? QStringLiteral("~") + toQString(path.substr(home.size())) : toQString(path);
+        return home.size() > 1 && path.starts_with(home) && path.size() > home.size() && path[home.size()] == '/' ? u"~"_s + toQString(path.substr(home.size())) : toQString(path);
       };
 
       const auto note = explorer::planNote(view_, cacheOf(step.machine), step, {.touched = explorer::touchedSince(cacheOf(step.source_machine != 0 ? step.source_machine : step.machine), step), .edited = around.edited, .machine = context.machine, .source = step.source_machine != 0 ? explorer::contextOf(around, step.source_machine).machine : std::string_view{}});
 
       result.push_back(QVariantMap{
-          {QStringLiteral("verb"), toQString(explorer::verbText(step.verb))},
+          {u"verb"_s, toQString(explorer::verbText(step.verb))},
           // What comes from another machine says which, as scp writes it.
-          {QStringLiteral("source"), step.source_machine != 0 ? toQString(explorer::contextOf(around, step.source_machine).machine) + QLatin1Char(':') + toQString(step.source.view()) : shown(step.source.view())},
-          {QStringLiteral("target"), shown(step.target.view())},
-          {QStringLiteral("directory"), step.directory},
-          {QStringLiteral("machine"), several ? toQString(context.machine) : QString{}},
-          {QStringLiteral("size"), fixedText(note.size)},
-          {QStringLiteral("warning"), fixedText(note.warning)},
-          {QStringLiteral("note"), fixedText(note.note)},
+          {u"source"_s, step.source_machine != 0 ? toQString(explorer::contextOf(around, step.source_machine).machine) + QLatin1Char(':') + toQString(step.source.view()) : shown(step.source.view())},
+          {u"target"_s, shown(step.target.view())},
+          {u"directory"_s, step.directory},
+          {u"machine"_s, several ? toQString(context.machine) : QString{}},
+          {u"size"_s, fixedText(note.size)},
+          {u"warning"_s, fixedText(note.warning)},
+          {u"note"_s, fixedText(note.note)},
       });
     }
 
@@ -687,38 +676,38 @@ namespace telar::gui::qt {
     const auto look = explorer::look(view_, cache, context, pick);
     const bool entry = look.kind == RowKind::entry || look.kind == RowKind::added || look.kind == RowKind::change || look.kind == RowKind::match;
     QVariantMap result{
-        {QStringLiteral("kind"), QString::fromLatin1(kind_names[static_cast<std::size_t>(look.kind)])},
-        {QStringLiteral("index"), static_cast<int>(pick.row)},
-        {QStringLiteral("depth"), static_cast<int>(look.depth)},
-        {QStringLiteral("directory"), look.directory},
-        {QStringLiteral("expanded"), look.expanded},
-        {QStringLiteral("selected"), look.selected},
-        {QStringLiteral("marked"), look.marked},
-        {QStringLiteral("ignored"), look.ignored},
-        {QStringLiteral("removed"), look.removed},
-        {QStringLiteral("renamed"), look.renamed},
-        {QStringLiteral("added"), look.added},
-        {QStringLiteral("arriving"), look.arriving},
-        {QStringLiteral("lead"), fixedText(look.lead)},
-        {QStringLiteral("name"), fixedText(look.name)},
-        {QStringLiteral("tone"), QString::fromLatin1(diff_tones[static_cast<std::size_t>(look.tone)])},
-        {QStringLiteral("staged"), letter(look.unstaged == FileState::untracked ? look.unstaged : look.staged)},
-        {QStringLiteral("unstaged"), letter(look.unstaged)},
-        {QStringLiteral("below"), look.below},
-        {QStringLiteral("linesAdded"), look.lines_added},
-        {QStringLiteral("linesRemoved"), look.lines_removed},
-        {QStringLiteral("size"), fixedText(look.size)},
-        {QStringLiteral("share"), static_cast<double>(look.share) / whole_share},
-        {QStringLiteral("measured"), look.measured},
-        {QStringLiteral("partial"), look.partial},
-        {QStringLiteral("marks"), fixedText(look.marks)},
-        {QStringLiteral("panes"), numbers(look.panes.view().first(look.pane_count))},
-        {QStringLiteral("note"), fixedText(look.note)},
-        {QStringLiteral("actors"), actorChips(look.actors.view().first(look.actor_count))},
-        {QStringLiteral("editor"), QString::fromLatin1(editor_holds[static_cast<std::size_t>(look.editor)])},
-        {QStringLiteral("verb"), fixedText(look.verb)},
-        {QStringLiteral("ago"), fixedText(look.ago)},
-        {QStringLiteral("editing"), view_.mode == Mode::insert && pick.window == view_.current && look.selected},
+        {u"kind"_s, QString::fromLatin1(kind_names[static_cast<std::size_t>(look.kind)])},
+        {u"index"_s, static_cast<int>(pick.row)},
+        {u"depth"_s, static_cast<int>(look.depth)},
+        {u"directory"_s, look.directory},
+        {u"expanded"_s, look.expanded},
+        {u"selected"_s, look.selected},
+        {u"marked"_s, look.marked},
+        {u"ignored"_s, look.ignored},
+        {u"removed"_s, look.removed},
+        {u"renamed"_s, look.renamed},
+        {u"added"_s, look.added},
+        {u"arriving"_s, look.arriving},
+        {u"lead"_s, fixedText(look.lead)},
+        {u"name"_s, fixedText(look.name)},
+        {u"tone"_s, QString::fromLatin1(diff_tones[static_cast<std::size_t>(look.tone)])},
+        {u"staged"_s, letter(look.unstaged == FileState::untracked ? look.unstaged : look.staged)},
+        {u"unstaged"_s, letter(look.unstaged)},
+        {u"below"_s, look.below},
+        {u"linesAdded"_s, look.lines_added},
+        {u"linesRemoved"_s, look.lines_removed},
+        {u"size"_s, fixedText(look.size)},
+        {u"share"_s, static_cast<double>(look.share) / whole_share},
+        {u"measured"_s, look.measured},
+        {u"partial"_s, look.partial},
+        {u"marks"_s, fixedText(look.marks)},
+        {u"panes"_s, numbers(look.panes.view().first(look.pane_count))},
+        {u"note"_s, fixedText(look.note)},
+        {u"actors"_s, actorChips(look.actors.view().first(look.actor_count))},
+        {u"editor"_s, QString::fromLatin1(editor_holds[static_cast<std::size_t>(look.editor)])},
+        {u"verb"_s, fixedText(look.verb)},
+        {u"ago"_s, fixedText(look.ago)},
+        {u"editing"_s, view_.mode == Mode::insert && pick.window == view_.current && look.selected},
     };
 
     if (entry) {
@@ -726,7 +715,7 @@ namespace telar::gui::qt {
     }
 
     if (look.hit_count > 0) {
-      result.insert(QStringLiteral("hit"), hitLetters(look));
+      result.insert(u"hit"_s, hitLetters(look));
     }
 
     return result;
@@ -752,8 +741,8 @@ namespace telar::gui::qt {
 
           // Where the row starts below the first one shown, and how tall it is, in hundredths of
           // one of the design's pixels.
-          drawn.insert(QStringLiteral("offset"), static_cast<int>(window.rows[row].offset - window.rows[window.top].offset));
-          drawn.insert(QStringLiteral("tall"), static_cast<int>(explorer::tall(window.rows[row].kind)));
+          drawn.insert(u"offset"_s, static_cast<int>(window.rows[row].offset - window.rows[window.top].offset));
+          drawn.insert(u"tall"_s, static_cast<int>(explorer::tall(window.rows[row].kind)));
           records.push_back(std::move(drawn));
         }
       }
@@ -765,7 +754,7 @@ namespace telar::gui::qt {
     const auto tell = [this](auto& shown, auto described, void (ExplorerController::*told)()) {
       if (shown != described) {
         shown = std::move(described);
-        emit(this->*told)();
+        (this->*told)();
       }
     };
 
@@ -832,16 +821,16 @@ namespace telar::gui::qt {
       const auto& look = looks.items[index];
 
       result.push_back(QVariantMap{
-          {QStringLiteral("id"), look.id},
-          {QStringLiteral("name"), fixedText(look.name)},
-          {QStringLiteral("route"), fixedText(look.route)},
-          {QStringLiteral("progress"), fixedText(look.progress)},
-          {QStringLiteral("share"), static_cast<double>(look.share) / whole_share},
-          {QStringLiteral("rate"), fixedText(look.rate)},
-          {QStringLiteral("phase"), toQString(look.phase)},
-          {QStringLiteral("ended"), look.ended},
-          {QStringLiteral("failed"), look.failed},
-          {QStringLiteral("more"), index + 1 == looks.count ? static_cast<int>(looks.more) : 0},
+          {u"id"_s, look.id},
+          {u"name"_s, fixedText(look.name)},
+          {u"route"_s, fixedText(look.route)},
+          {u"progress"_s, fixedText(look.progress)},
+          {u"share"_s, static_cast<double>(look.share) / whole_share},
+          {u"rate"_s, fixedText(look.rate)},
+          {u"phase"_s, toQString(look.phase)},
+          {u"ended"_s, look.ended},
+          {u"failed"_s, look.failed},
+          {u"more"_s, index + 1 == looks.count ? static_cast<int>(looks.more) : 0},
       });
     }
 
@@ -867,7 +856,7 @@ namespace telar::gui::qt {
     const bool shows = action.kind == explorer::ActionKind::open || action.kind == explorer::ActionKind::focus_pane;
 
     if (sent && shows && action.machine != scene_.shown && action.machine != 0 && keepsMachine(store_, static_cast<std::size_t>(action.machine - 1))) {
-      emit machineRequested(store_.machines().token(static_cast<application::machines::Machines::Slot>(action.machine - 1)));
+      machineRequested(store_.machines().token(static_cast<application::machines::Machines::Slot>(action.machine - 1)));
     }
   }
 
@@ -886,9 +875,9 @@ namespace telar::gui::qt {
     store_.touch();
     revision_ = view_.revision;
     publish();
-    emit changed();
+    changed();
     if (effect == Effect::closed || !view_.open) {
-      emit closed();
+      closed();
     }
   }
 
@@ -900,7 +889,7 @@ namespace telar::gui::qt {
     // The keys a chord has no name for: F2 renames, as `cw` does, and the menu key or Shift+F10
     // asks for the menu of the selected row.
     if (key == Qt::Key_F2) {
-      type(QStringLiteral("cw"));
+      type(u"cw"_s);
       return true;
     }
 
@@ -927,7 +916,7 @@ namespace telar::gui::qt {
 
       finish(explorer::press(view_, explorerCacheMut(store_, away_, machine), explorer::contextOf(around, machine), chord));
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
 
     return true;
@@ -956,7 +945,7 @@ namespace telar::gui::qt {
 
       finish(explorer::submit(view_, explorerCacheMut(store_, away_, machine), explorer::contextOf(around, machine), {bytes.constData(), static_cast<std::size_t>(bytes.size())}));
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
   }
 
@@ -1052,7 +1041,7 @@ namespace telar::gui::qt {
 
       finish(explorer::chooseMenu(view_, explorerCacheMut(store_, away_, machine), explorer::contextOf(around, machine), static_cast<std::size_t>(line)));
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
   }
 
@@ -1123,7 +1112,7 @@ namespace telar::gui::qt {
     const auto machine = machineOf(pick.window);
     const auto aimed = explorer::aim(view_, cacheOf(machine), explorer::contextOf(around, machine), {.window = pick.window, .row = pick.row, .copy = copy, .move = move});
 
-    return {{QStringLiteral("count"), static_cast<int>(aimed.count)}, {QStringLiteral("row"), aimed.row ? static_cast<int>(*aimed.row) : -1}, {QStringLiteral("copy"), aimed.copy}};
+    return {{u"count"_s, static_cast<int>(aimed.count)}, {u"row"_s, aimed.row ? static_cast<int>(*aimed.row) : -1}, {u"copy"_s, aimed.copy}};
   }
 
   void ExplorerController::drop(int window, int row, bool copy, bool move) {
@@ -1431,7 +1420,7 @@ namespace telar::gui::qt {
 
       finish(explorer::activate(view_, explorerCacheMut(store_, away_, machine), explorer::contextOf(around, machine), {.window = static_cast<std::size_t>(window), .row = static_cast<std::size_t>(row)}));
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
   }
 
@@ -1459,7 +1448,7 @@ namespace telar::gui::qt {
 
     explorer::resize(view_, {.window = static_cast<std::size_t>(window), .room = static_cast<std::uint32_t>(std::clamp(room, 1, most_room))});
     publish();
-    emit changed();
+    changed();
   }
 
   void ExplorerController::scroll(int window, int rows) {
@@ -1469,7 +1458,7 @@ namespace telar::gui::qt {
 
     explorer::scroll(view_, {.window = static_cast<std::size_t>(window), .count = rows});
     publish();
-    emit changed();
+    changed();
   }
 
   void ExplorerController::type(const QString& keys) {
@@ -1492,7 +1481,7 @@ namespace telar::gui::qt {
   }
 
   void ExplorerController::run(const QString& command) {
-    type(QStringLiteral(":"));
+    type(u":"_s);
     submit(command);
   }
 
@@ -1533,7 +1522,7 @@ namespace telar::gui::qt {
     }
 
     if (!explorer::available(store_.session())) {
-      emit failed(QStringLiteral("This machine's runtime does not answer the explorer; update telar there"));
+      failed(u"This machine's runtime does not answer the explorer; update telar there"_s);
       return;
     }
 
@@ -1551,15 +1540,15 @@ namespace telar::gui::qt {
     static_cast<void>(refresh());
     revision_ = view_.revision;
     publish();
-    emit changed();
+    changed();
     if (opening) {
-      emit opened();
+      opened();
     }
   }
 
   void ExplorerController::reveal(std::string_view path, std::string_view directory) {
     if (!explorer::available(store_.session())) {
-      emit failed(QStringLiteral("This machine's runtime does not answer the explorer; update telar there"));
+      failed(u"This machine's runtime does not answer the explorer; update telar there"_s);
       return;
     }
 
@@ -1574,7 +1563,7 @@ namespace telar::gui::qt {
     }
 
     if (!revealed) {
-      emit failed(QStringLiteral("The explorer waits for an answer: it stays where it is"));
+      failed(u"The explorer waits for an answer: it stays where it is"_s);
       return;
     }
 
@@ -1615,8 +1604,8 @@ namespace telar::gui::qt {
 
     revision_ = view_.revision;
     publish();
-    emit changed();
-    emit this->closed();
+    changed();
+    this->closed();
     return true;
   }
 
@@ -1640,7 +1629,7 @@ namespace telar::gui::qt {
       if (carried) {
         if (auto described = describeTransfers(explorer::around(scene_)); described != transfers_) {
           transfers_ = std::move(described);
-          emit transfersChanged();
+          transfersChanged();
         }
 
         store_.touch();
@@ -1653,7 +1642,7 @@ namespace telar::gui::qt {
     if (refresh() || carried || revision_ != view_.revision || edited_ != scene_.edited_revision) {
       revision_ = view_.revision;
       publish();
-      emit changed();
+      changed();
     }
   }
 
@@ -1677,7 +1666,7 @@ namespace telar::gui::qt {
     static_cast<void>(refresh());
     revision_ = view_.revision;
     publish();
-    emit changed();
+    changed();
   }
 
   void ExplorerController::nextMachine(int window) {
@@ -1686,7 +1675,7 @@ namespace telar::gui::qt {
     }
 
     select(window, static_cast<int>(view_.windows[static_cast<std::size_t>(window)]->cursor), false, false);
-    type(QStringLiteral("gm"));
+    type(u"gm"_s);
   }
 
   void ExplorerController::toggleFollow(int window) {
@@ -1695,7 +1684,7 @@ namespace telar::gui::qt {
     }
 
     select(window, static_cast<int>(view_.windows[static_cast<std::size_t>(window)]->cursor), false, false);
-    run(QStringLiteral("follow"));
+    run(u"follow"_s);
   }
 
 }

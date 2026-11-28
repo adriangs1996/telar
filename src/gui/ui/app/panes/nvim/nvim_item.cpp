@@ -1,41 +1,19 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.nvim;
 
-#include "nvim_item.hpp"
-#include "nvim_keys.hpp"
-#include "ui/kit/input/key_adapter.hpp"
-#include "ui/kit/models/glyph_icon.hpp"
-#include "ui/kit/models/path_label_runs.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QCursor>
-#include <QDebug>
-#include <QGuiApplication>
-#include <QHoverEvent>
-#include <QInputMethod>
-#include <QInputMethodEvent>
-#include <QMouseEvent>
-#include <QQuickWindow>
-#include <QVariantList>
-#include <QWheelEvent>
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <exception>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.input;
+import telar.gui.ui.kit.models;
 import telar.gui.foundation.core;
 import telar.gui.foundation.fonts;
 import telar.gui.foundation.keys;
 import telar.gui.foundation.terminal;
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.icons;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -54,18 +32,18 @@ namespace telar::gui::qt {
     QString kindName(const nvim::Grid& grid) {
       switch (grid.placement) {
       case nvim::NvimPlacement::window:
-        return QStringLiteral("window");
+        return u"window"_s;
       case nvim::NvimPlacement::floating:
-        return QStringLiteral("float");
+        return u"float"_s;
       case nvim::NvimPlacement::message:
-        return QStringLiteral("message");
+        return u"message"_s;
       case nvim::NvimPlacement::external:
-        return QStringLiteral("external");
+        return u"external"_s;
       case nvim::NvimPlacement::hidden:
-        return QStringLiteral("hidden");
+        return u"hidden"_s;
       }
 
-      return QStringLiteral("hidden");
+      return u"hidden"_s;
     }
 
     int layerOf(const nvim::Grid& grid) noexcept {
@@ -92,7 +70,7 @@ namespace telar::gui::qt {
     // The bytes of a path the query matched that fall in its part from `start` to `end`, counted
     // from `start`. A match names at most max_match_positions of them, which the wire bounds.
     QVariantMap textRun(std::string_view text, bool matched) {
-      return {{QStringLiteral("text"), shown(text)}, {QStringLiteral("bold"), matched}};
+      return {{u"text"_s, shown(text)}, {u"bold"_s, matched}};
     }
 
     // A line of a file in parts, each place the query is in it bold, as the search found it.
@@ -122,22 +100,22 @@ namespace telar::gui::qt {
     QString messageKind(nvim::NvimMessageKind kind) {
       switch (kind) {
       case nvim::NvimMessageKind::error:
-        return QStringLiteral("error");
+        return u"error"_s;
       case nvim::NvimMessageKind::warning:
-        return QStringLiteral("warning");
+        return u"warning"_s;
       case nvim::NvimMessageKind::confirm:
-        return QStringLiteral("confirm");
+        return u"confirm"_s;
       case nvim::NvimMessageKind::progress:
-        return QStringLiteral("progress");
+        return u"progress"_s;
       case nvim::NvimMessageKind::search_count:
-        return QStringLiteral("search");
+        return u"search"_s;
       case nvim::NvimMessageKind::list:
-        return QStringLiteral("list");
+        return u"list"_s;
       case nvim::NvimMessageKind::plain:
-        return QStringLiteral("plain");
+        return u"plain"_s;
       }
 
-      return QStringLiteral("plain");
+      return u"plain"_s;
     }
 
     Byte mouseModifiers(Qt::KeyboardModifiers native) noexcept {
@@ -172,9 +150,9 @@ namespace telar::gui::qt {
     QString promptKind(nvim::NvimPromptKind kind) {
       switch (kind) {
       case nvim::NvimPromptKind::select:
-        return QStringLiteral("select");
+        return u"select"_s;
       case nvim::NvimPromptKind::input:
-        return QStringLiteral("input");
+        return u"input"_s;
       case nvim::NvimPromptKind::none:
         return {};
       }
@@ -228,7 +206,7 @@ namespace telar::gui::qt {
       qsizetype next = 0;
       const auto close = [&] {
         if (!run.isEmpty()) {
-          runs.append(QVariantMap{{QStringLiteral("text"), run}, {QStringLiteral("matched"), marking}});
+          runs.append(QVariantMap{{u"text"_s, run}, {u"matched"_s, marking}});
           run.clear();
         }
       };
@@ -247,7 +225,7 @@ namespace telar::gui::qt {
 
       close();
       if (next < typed.size()) {
-        runs = {QVariantMap{{QStringLiteral("text"), word}, {QStringLiteral("matched"), false}}};
+        runs = {QVariantMap{{u"text"_s, word}, {u"matched"_s, false}}};
       }
 
       return runs;
@@ -274,10 +252,10 @@ namespace telar::gui::qt {
         };
 
         shown_runs.append(QVariantMap{
-            {QStringLiteral("text"), shown(text.substr(start, bytes))},
-            {QStringLiteral("color"), foreground.kind == CellColor::Kind::rgb ? QColor{foreground.channels[0], foreground.channels[1], foreground.channels[2]}.name() : QString{}},
-            {QStringLiteral("bold"), has(CellAttribute::bold)},
-            {QStringLiteral("italic"), has(CellAttribute::italic)},
+            {u"text"_s, shown(text.substr(start, bytes))},
+            {u"color"_s, foreground.kind == CellColor::Kind::rgb ? QColor{foreground.channels[0], foreground.channels[1], foreground.channels[2]}.name() : QString{}},
+            {u"bold"_s, has(CellAttribute::bold)},
+            {u"italic"_s, has(CellAttribute::italic)},
         });
 
         start += bytes;
@@ -292,7 +270,7 @@ namespace telar::gui::qt {
 
       records.reserve(static_cast<qsizetype>(entries.size()));
       for (const auto& entry : entries) {
-        QVariantMap record{{QStringLiteral("handle"), static_cast<qulonglong>(entry.handle)}, {QStringLiteral("name"), shown(entry.name.of(text))}, {QStringLiteral("modified"), entry.modified}, {QStringLiteral("diagnostics"), static_cast<int>(entry.diagnostics)}};
+        QVariantMap record{{u"handle"_s, static_cast<qulonglong>(entry.handle)}, {u"name"_s, shown(entry.name.of(text))}, {u"modified"_s, entry.modified}, {u"diagnostics"_s, static_cast<int>(entry.diagnostics)}};
 
         // A tab is shown by the file its window holds.
         putIcon(record, fileIcon(entry.name.of(text)));
@@ -316,8 +294,8 @@ namespace telar::gui::qt {
       cursor_on_ = !cursor_on_;
       blink_.start(cursor_on_ ? blink_cursor_.blink_on_ms : blink_cursor_.blink_off_ms);
       // A blink changes the cursor's layer alone: the cells stay as they were drawn.
-      caret_.insert(QStringLiteral("on"), cursor_on_);
-      emit caretChanged();
+      caret_.insert(u"on"_s, cursor_on_);
+      caretChanged();
     });
   }
 
@@ -342,7 +320,7 @@ namespace telar::gui::qt {
 
     measure();
     refresh(pane_id_);
-    emit controllerChanged();
+    controllerChanged();
   }
 
   void NvimItem::setPaneId(const QString& pane_id) {
@@ -363,7 +341,7 @@ namespace telar::gui::qt {
     status_shown_ = false;
     refresh(pane_id_);
     polish();
-    emit paneIdChanged();
+    paneIdChanged();
   }
 
   const nvim::Editor* NvimItem::editorState() const noexcept {
@@ -527,43 +505,43 @@ namespace telar::gui::qt {
       // each: the list reads its name and its folder apart, and cuts what does not fit.
       constexpr auto whole = std::numeric_limits<std::uint16_t>::max();
       QVariantMap row{
-          {QStringLiteral("runs"), pathLabelRuns(path, marks, whole)},
-          {QStringLiteral("name"), shown(path.substr(name_start))},
-          {QStringLiteral("directory"), shown(slash == std::string_view::npos ? std::string_view{} : path.substr(0, slash))},
-          {QStringLiteral("line"), static_cast<int>(match.line)},
-          {QStringLiteral("text"), shown(line)},
-          {QStringLiteral("textRuns"), match.line > 0 ? textRuns(line, query) : QVariantList{}},
+          {u"runs"_s, pathLabelRuns(path, marks, whole)},
+          {u"name"_s, shown(path.substr(name_start))},
+          {u"directory"_s, shown(slash == std::string_view::npos ? std::string_view{} : path.substr(0, slash))},
+          {u"line"_s, static_cast<int>(match.line)},
+          {u"text"_s, shown(line)},
+          {u"textRuns"_s, match.line > 0 ? textRuns(line, query) : QVariantList{}},
       };
 
       putIcon(row, fileIcon(path));
       putChange(row, match.change);
       if (browsing) {
-        row.insert(QStringLiteral("section"), match.open ? QStringLiteral("Open") : QStringLiteral("Files"));
+        row.insert(u"section"_s, match.open ? u"Open"_s : u"Files"_s);
       }
 
       if (match.current) {
-        row.insert(QStringLiteral("badge"), QStringLiteral("current"));
-        row.insert(QStringLiteral("badgeTone"), QStringLiteral("overlay1"));
+        row.insert(u"badge"_s, u"current"_s);
+        row.insert(u"badgeTone"_s, u"overlay1"_s);
       }
 
       rows.append(std::move(row));
     }
 
     picker_ = {
-        {QStringLiteral("open"), picker.open},
-        {QStringLiteral("source"), shown(sourceName(picker.source))},
-        {QStringLiteral("query"), shown(picker.query.view())},
-        {QStringLiteral("root"), shown(picker.root.view())},
-        {QStringLiteral("loading"), picker.awaited != 0},
-        {QStringLiteral("truncated"), picker.truncated},
-        {QStringLiteral("rows"), rows},
+        {u"open"_s, picker.open},
+        {u"source"_s, shown(sourceName(picker.source))},
+        {u"query"_s, shown(picker.query.view())},
+        {u"root"_s, shown(picker.root.view())},
+        {u"loading"_s, picker.awaited != 0},
+        {u"truncated"_s, picker.truncated},
+        {u"rows"_s, rows},
     };
 
     if (!picker.open) {
       preview_area_ = {};
     }
 
-    emit pickerChanged();
+    pickerChanged();
   }
 
   void NvimItem::send(const QString& keys) {
@@ -589,7 +567,7 @@ namespace telar::gui::qt {
       ++appearance_;
       // Where each grid goes is counted in cells of this font.
       layout_revision_ = 0;
-      emit metricsChanged();
+      metricsChanged();
       polish();
       refresh(pane_id_);
       // The preview covers the same pixels with the cells of this font.
@@ -599,7 +577,7 @@ namespace telar::gui::qt {
         previewPicker(preview_index_, pixels);
       }
     } catch (const std::exception& error) {
-      qWarning() << "Editor font:" << error.what();
+      telar::qt::warning() << "Editor font:" << error.what();
     }
   }
 
@@ -613,7 +591,7 @@ namespace telar::gui::qt {
           font_collection_.reset();
           ++appearance_;
           polish();
-          emit frameShown();
+          frameShown();
         });
       }
     }
@@ -623,7 +601,7 @@ namespace telar::gui::qt {
       if (font_collection_ != catalog->collection()) {
         font_collection_ = catalog->collection();
         fonts_ = ResidentFonts::shared(font_collection_);
-        emit frameShown();
+        frameShown();
       }
     }
   }
@@ -710,27 +688,27 @@ namespace telar::gui::qt {
       const auto bounds = gridBounds(*grid);
 
       records.append({
-          {QStringLiteral("key"), QString::number(grid->id)},
-          {QStringLiteral("gridId"), static_cast<int>(grid->id)},
-          {QStringLiteral("kind"), base ? QStringLiteral("base") : kindName(*grid)},
-          {QStringLiteral("x"), bounds.x()},
-          {QStringLiteral("y"), bounds.y()},
-          {QStringLiteral("width"), bounds.width()},
-          {QStringLiteral("height"), bounds.height()},
-          {QStringLiteral("layer"), base ? 0 : layerOf(*grid)},
+          {u"key"_s, QString::number(grid->id)},
+          {u"gridId"_s, static_cast<int>(grid->id)},
+          {u"kind"_s, base ? u"base"_s : kindName(*grid)},
+          {u"x"_s, bounds.x()},
+          {u"y"_s, bounds.y()},
+          {u"width"_s, bounds.width()},
+          {u"height"_s, bounds.height()},
+          {u"layer"_s, base ? 0 : layerOf(*grid)},
           // What a scrollbar shows of the window's buffer, without asking Neovim.
-          {QStringLiteral("topLine"), static_cast<qulonglong>(grid->top_line)},
-          {QStringLiteral("bottomLine"), static_cast<qulonglong>(grid->bottom_line)},
-          {QStringLiteral("lineCount"), static_cast<qulonglong>(grid->line_count)},
-          {QStringLiteral("scrolledLines"), static_cast<qlonglong>(grid->scrolled_lines)},
-          {QStringLiteral("marginTop"), grid->margin_top * font_.cell.height()},
-          {QStringLiteral("marginBottom"), grid->margin_bottom * font_.cell.height()},
+          {u"topLine"_s, static_cast<qulonglong>(grid->top_line)},
+          {u"bottomLine"_s, static_cast<qulonglong>(grid->bottom_line)},
+          {u"lineCount"_s, static_cast<qulonglong>(grid->line_count)},
+          {u"scrolledLines"_s, static_cast<qlonglong>(grid->scrolled_lines)},
+          {u"marginTop"_s, grid->margin_top * font_.cell.height()},
+          {u"marginBottom"_s, grid->margin_bottom * font_.cell.height()},
           // A float's frame, which the window draws in place of the cells of its border.
-          {QStringLiteral("border"), static_cast<int>(grid->border)},
-          {QStringLiteral("title"), shown(grid->title.view())},
-          {QStringLiteral("footer"), shown(grid->footer.view())},
+          {u"border"_s, static_cast<int>(grid->border)},
+          {u"title"_s, shown(grid->title.view())},
+          {u"footer"_s, shown(grid->footer.view())},
           // The float a picker asked for over its preview's cells: it is drawn over the picker.
-          {QStringLiteral("preview"), grid->placement == nvim::NvimPlacement::floating && preview_area_.columns != 0 && std::cmp_equal(grid->row, preview_area_.row) && std::cmp_equal(grid->column, preview_area_.column) && grid->width == preview_area_.columns && grid->height == preview_area_.rows},
+          {u"preview"_s, grid->placement == nvim::NvimPlacement::floating && preview_area_.columns != 0 && std::cmp_equal(grid->row, preview_area_.row) && std::cmp_equal(grid->column, preview_area_.column) && grid->width == preview_area_.columns && grid->height == preview_area_.rows},
       });
     }
 
@@ -743,11 +721,11 @@ namespace telar::gui::qt {
     const auto height = font_.cell.height();
     const auto add = [&](bool vertical, QRectF bounds) {
       separators.append(QVariantMap{
-          {QStringLiteral("vertical"), vertical},
-          {QStringLiteral("x"), bounds.x()},
-          {QStringLiteral("y"), bounds.y()},
-          {QStringLiteral("width"), bounds.width()},
-          {QStringLiteral("height"), bounds.height()},
+          {u"vertical"_s, vertical},
+          {u"x"_s, bounds.x()},
+          {u"y"_s, bounds.y()},
+          {u"width"_s, bounds.width()},
+          {u"height"_s, bounds.height()},
       });
     };
 
@@ -769,7 +747,7 @@ namespace telar::gui::qt {
 
     if (separators != separators_) {
       separators_ = std::move(separators);
-      emit separatorsChanged();
+      separatorsChanged();
     }
   }
 
@@ -793,10 +771,10 @@ namespace telar::gui::qt {
 
     for (const auto& separator : separators_) {
       const auto record = separator.toMap();
-      const QRectF bounds{record.value(QStringLiteral("x")).toReal(), record.value(QStringLiteral("y")).toReal(), record.value(QStringLiteral("width")).toReal(), record.value(QStringLiteral("height")).toReal()};
+      const QRectF bounds{record.value(u"x"_s).toReal(), record.value(u"y"_s).toReal(), record.value(u"width"_s).toReal(), record.value(u"height"_s).toReal()};
 
       if (bounds.contains(position)) {
-        return record.value(QStringLiteral("vertical")).toBool() ? Qt::SplitHCursor : Qt::SplitVCursor;
+        return record.value(u"vertical"_s).toBool() ? Qt::SplitHCursor : Qt::SplitVCursor;
       }
     }
 
@@ -827,7 +805,7 @@ namespace telar::gui::qt {
 
     if (bounds != cursor_rect_) {
       cursor_rect_ = bounds;
-      emit cursorChanged();
+      cursorChanged();
       if (hasActiveFocus()) {
         QGuiApplication::inputMethod()->update(Qt::ImCursorRectangle);
       }
@@ -841,7 +819,7 @@ namespace telar::gui::qt {
 
     if (const auto mode = shown(editor.mode.view()); mode != mode_) {
       mode_ = mode;
-      emit modeChanged();
+      modeChanged();
     }
   }
 
@@ -865,35 +843,35 @@ namespace telar::gui::qt {
     const auto shape = [&] {
       switch (cursor.shape) {
       case CursorShape::bar:
-        return QStringLiteral("bar");
+        return u"bar"_s;
       case CursorShape::underline:
-        return QStringLiteral("underline");
+        return u"underline"_s;
       case CursorShape::default_shape:
       case CursorShape::block:
       case CursorShape::hollow:
         break;
       }
 
-      return QStringLiteral("block");
+      return u"block"_s;
     }();
 
     const auto* configuration = controller_ == nullptr ? nullptr : &controller_->configuration();
     const auto color = configuration == nullptr ? QColor{} : toQColor(configuration->theme.cursor);
     const auto text_color = configuration == nullptr ? QColor{} : toQColor(configuration->theme.cursor_text.valueOr(configuration->theme.background));
     QVariantMap caret{
-        {QStringLiteral("visible"), grid != nullptr && cursor.visible},
-        {QStringLiteral("on"), cursor_on_},
-        {QStringLiteral("shape"), shape},
-        {QStringLiteral("percentage"), static_cast<int>(cursor.percentage)},
-        {QStringLiteral("text"), text.trimmed().isEmpty() ? QString{} : text},
-        {QStringLiteral("wide"), wide},
-        {QStringLiteral("color"), color},
-        {QStringLiteral("textColor"), text_color},
+        {u"visible"_s, grid != nullptr && cursor.visible},
+        {u"on"_s, cursor_on_},
+        {u"shape"_s, shape},
+        {u"percentage"_s, static_cast<int>(cursor.percentage)},
+        {u"text"_s, text.trimmed().isEmpty() ? QString{} : text},
+        {u"wide"_s, wide},
+        {u"color"_s, color},
+        {u"textColor"_s, text_color},
     };
 
     if (caret != caret_) {
       caret_ = std::move(caret);
-      emit caretChanged();
+      caretChanged();
     }
   }
 
@@ -927,20 +905,20 @@ namespace telar::gui::qt {
 
     cmdline_revision_ = editor.cmdline_revision;
     cmdline_ = {
-        {QStringLiteral("visible"), line.visible},
-        {QStringLiteral("level"), static_cast<int>(line.level)},
-        {QStringLiteral("first"), line.first == 0 ? QString{} : QString{QChar::fromLatin1(line.first)}},
-        {QStringLiteral("special"), line.special == 0 ? QString{} : QString{QChar::fromLatin1(line.special)}},
-        {QStringLiteral("prompt"), shown(line.prompt.view())},
-        {QStringLiteral("text"), shown(text)},
-        {QStringLiteral("runs"), textRuns(text, line.runs)},
+        {u"visible"_s, line.visible},
+        {u"level"_s, static_cast<int>(line.level)},
+        {u"first"_s, line.first == 0 ? QString{} : QString{QChar::fromLatin1(line.first)}},
+        {u"special"_s, line.special == 0 ? QString{} : QString{QChar::fromLatin1(line.special)}},
+        {u"prompt"_s, shown(line.prompt.view())},
+        {u"text"_s, shown(text)},
+        {u"runs"_s, textRuns(text, line.runs)},
         // The cursor counted in the characters QML lays out, not in Neovim's bytes.
-        {QStringLiteral("position"), shown(text.substr(0, std::min<std::size_t>(line.position, text.size()))).size()},
-        {QStringLiteral("indent"), static_cast<int>(line.indent)},
-        {QStringLiteral("block"), shown(line.block.view())},
+        {u"position"_s, shown(text.substr(0, std::min<std::size_t>(line.position, text.size()))).size()},
+        {u"indent"_s, static_cast<int>(line.indent)},
+        {u"block"_s, shown(line.block.view())},
     };
 
-    emit cmdlineChanged();
+    cmdlineChanged();
   }
 
   void NvimItem::projectMenu(const nvim::Editor& editor) {
@@ -960,10 +938,10 @@ namespace telar::gui::qt {
       const auto kind = item.kind.of(text);
       const auto word = shown(item.word.of(text));
       QVariantMap entry{
-          {QStringLiteral("word"), word},
-          {QStringLiteral("runs"), wordRuns({.word = word, .typed = typed})},
-          {QStringLiteral("kind"), shown(kind)},
-          {QStringLiteral("menu"), shown(item.menu.of(text))},
+          {u"word"_s, word},
+          {u"runs"_s, wordRuns({.word = word, .typed = typed})},
+          {u"kind"_s, shown(kind)},
+          {u"menu"_s, shown(item.menu.of(text))},
       };
 
       // What the item is, by the icon of its kind; an item that says no kind has none. A file
@@ -987,19 +965,19 @@ namespace telar::gui::qt {
     }
 
     popup_menu_ = {
-        {QStringLiteral("visible"), menu.visible},
-        {QStringLiteral("selected"), menu.selected},
-        {QStringLiteral("first"), static_cast<int>(menu.first)},
-        {QStringLiteral("total"), static_cast<int>(menu.total)},
-        {QStringLiteral("info"), shown(menu.info.view())},
-        {QStringLiteral("onCmdline"), on_cmdline},
-        {QStringLiteral("column"), menu.column},
-        {QStringLiteral("x"), anchor.x()},
-        {QStringLiteral("y"), anchor.y()},
-        {QStringLiteral("items"), items},
+        {u"visible"_s, menu.visible},
+        {u"selected"_s, menu.selected},
+        {u"first"_s, static_cast<int>(menu.first)},
+        {u"total"_s, static_cast<int>(menu.total)},
+        {u"info"_s, shown(menu.info.view())},
+        {u"onCmdline"_s, on_cmdline},
+        {u"column"_s, menu.column},
+        {u"x"_s, anchor.x()},
+        {u"y"_s, anchor.y()},
+        {u"items"_s, items},
     };
 
-    emit popupMenuChanged();
+    popupMenuChanged();
   }
 
   void NvimItem::projectMessages(const nvim::Editor& editor) {
@@ -1020,20 +998,20 @@ namespace telar::gui::qt {
 
       items.append(QVariantMap{
           // A string: a number of QML holds 53 bits.
-          {QStringLiteral("key"), QString::number(message.key)},
-          {QStringLiteral("kind"), messageKind(message.kind)},
-          {QStringLiteral("text"), shown(message.text.of(text)).trimmed()},
+          {u"key"_s, QString::number(message.key)},
+          {u"kind"_s, messageKind(message.kind)},
+          {u"text"_s, shown(message.text.of(text)).trimmed()},
       });
     }
 
     messages_ = {
-        {QStringLiteral("mode"), shown(messages.mode.view())},
-        {QStringLiteral("command"), shown(messages.command.view())},
-        {QStringLiteral("ruler"), shown(messages.ruler.view())},
-        {QStringLiteral("items"), items},
+        {u"mode"_s, shown(messages.mode.view())},
+        {u"command"_s, shown(messages.command.view())},
+        {u"ruler"_s, shown(messages.ruler.view())},
+        {u"items"_s, items},
     };
 
-    emit messagesChanged();
+    messagesChanged();
   }
 
   void NvimItem::projectTabs(const nvim::Editor& editor) {
@@ -1046,13 +1024,13 @@ namespace telar::gui::qt {
 
     tabs_revision_ = editor.tabs_revision;
     tabline_ = {
-        {QStringLiteral("currentTab"), static_cast<qulonglong>(tabs.current_tab)},
-        {QStringLiteral("currentBuffer"), static_cast<qulonglong>(tabs.current_buffer)},
-        {QStringLiteral("tabs"), tabRecords(tabs.tabs.view(), text)},
-        {QStringLiteral("buffers"), tabRecords(tabs.buffers.view(), text)},
+        {u"currentTab"_s, static_cast<qulonglong>(tabs.current_tab)},
+        {u"currentBuffer"_s, static_cast<qulonglong>(tabs.current_buffer)},
+        {u"tabs"_s, tabRecords(tabs.tabs.view(), text)},
+        {u"buffers"_s, tabRecords(tabs.buffers.view(), text)},
     };
 
-    emit tablineChanged();
+    tablineChanged();
   }
 
   void NvimItem::projectStatus(const nvim::Editor& editor) {
@@ -1071,8 +1049,8 @@ namespace telar::gui::qt {
     status_row_ = row.valueOr(0);
     status_revision_ = revision;
     if (!present) {
-      status_line_ = {{QStringLiteral("visible"), false}};
-      emit statusLineChanged();
+      status_line_ = {{u"visible"_s, false}};
+      statusLineChanged();
       return;
     }
 
@@ -1101,32 +1079,32 @@ namespace telar::gui::qt {
       };
 
       tokens.append(QVariantMap{
-          {QStringLiteral("text"), shown(token.text.of(text))},
-          {QStringLiteral("color"), named(token.ink)},
-          {QStringLiteral("bold"), has(CellAttribute::bold)},
-          {QStringLiteral("italic"), has(CellAttribute::italic)},
-          {QStringLiteral("icon"), token.icon},
-          {QStringLiteral("gap"), static_cast<int>(token.gap)},
+          {u"text"_s, shown(token.text.of(text))},
+          {u"color"_s, named(token.ink)},
+          {u"bold"_s, has(CellAttribute::bold)},
+          {u"italic"_s, has(CellAttribute::italic)},
+          {u"icon"_s, token.icon},
+          {u"gap"_s, static_cast<int>(token.gap)},
       });
     }
 
     for (const auto& piece : line.pieces) {
       (piece.right ? right : left)
           .append(QVariantMap{
-              {QStringLiteral("first"), static_cast<int>(piece.first)},
-              {QStringLiteral("count"), static_cast<int>(piece.count)},
+              {u"first"_s, static_cast<int>(piece.first)},
+              {u"count"_s, static_cast<int>(piece.count)},
           });
     }
 
     status_line_ = {
-        {QStringLiteral("visible"), true},
-        {QStringLiteral("row"), static_cast<int>(*row)},
-        {QStringLiteral("tokens"), tokens},
-        {QStringLiteral("left"), left},
-        {QStringLiteral("right"), right},
+        {u"visible"_s, true},
+        {u"row"_s, static_cast<int>(*row)},
+        {u"tokens"_s, tokens},
+        {u"left"_s, left},
+        {u"right"_s, right},
     };
 
-    emit statusLineChanged();
+    statusLineChanged();
   }
 
   void NvimItem::projectPrompt(const nvim::Editor& editor) {
@@ -1144,15 +1122,15 @@ namespace telar::gui::qt {
     }
 
     prompt_ = {
-        {QStringLiteral("id"), static_cast<qulonglong>(prompt.id)},
-        {QStringLiteral("kind"), promptKind(prompt.kind)},
-        {QStringLiteral("title"), shown(prompt.title.view())},
-        {QStringLiteral("origin"), shown(prompt.origin.view())},
-        {QStringLiteral("initial"), shown(prompt.initial.view())},
-        {QStringLiteral("choices"), choices},
+        {u"id"_s, static_cast<qulonglong>(prompt.id)},
+        {u"kind"_s, promptKind(prompt.kind)},
+        {u"title"_s, shown(prompt.title.view())},
+        {u"origin"_s, shown(prompt.origin.view())},
+        {u"initial"_s, shown(prompt.initial.view())},
+        {u"choices"_s, choices},
     };
 
-    emit promptChanged();
+    promptChanged();
   }
 
   void NvimItem::refresh(qulonglong pane_id) {
@@ -1177,10 +1155,10 @@ namespace telar::gui::qt {
     confirmPrediction(*editor);
     if (!ready_ && editor->frame != 0) {
       ready_ = true;
-      emit readyChanged();
+      readyChanged();
     }
 
-    emit frameShown();
+    frameShown();
   }
 
   void NvimItem::keyPressEvent(QKeyEvent* event) {
@@ -1259,7 +1237,7 @@ namespace telar::gui::qt {
     if (text != prediction_ || origin != prediction_origin_) {
       prediction_ = text;
       prediction_origin_ = origin;
-      emit predictionChanged();
+      predictionChanged();
     }
   }
 
@@ -1306,7 +1284,7 @@ namespace telar::gui::qt {
       restartBlink(*editor);
     }
 
-    emit frameShown();
+    frameShown();
   }
 
   void NvimItem::focusOutEvent(QFocusEvent* event) {
@@ -1318,7 +1296,7 @@ namespace telar::gui::qt {
     blink_.stop();
     cursor_on_ = true;
     held_.reset();
-    emit frameShown();
+    frameShown();
   }
 
   // The topmost grid under a point, and the cell of it there.
@@ -1372,7 +1350,7 @@ namespace telar::gui::qt {
   }
 
   void NvimItem::mousePressEvent(QMouseEvent* event) {
-    emit pressed();
+    pressed();
     forceActiveFocus(Qt::MouseFocusReason);
     point(*event, nvim::NvimMouseAction::press);
     held_ = buttonOf(event->button());

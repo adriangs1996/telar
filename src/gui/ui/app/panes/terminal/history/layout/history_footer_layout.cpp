@@ -1,46 +1,27 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.panes.terminal.history.layout;
 
-#include "history_footer_layout.hpp"
-#include "ui/design/history_hint_projection.hpp"
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QString>
-#include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qstringliteral.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <limits>
-#include <span>
-#include <string_view>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.design;
 import telar.gui.application;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
+
   namespace {
 
     QString actionName(application::history::HistoryFooterAction action) {
       switch (action) {
       case application::history::HistoryFooterAction::none:
-        return QStringLiteral("none");
+        return u"none"_s;
       case application::history::HistoryFooterAction::submit:
-        return QStringLiteral("submit");
+        return u"submit"_s;
       case application::history::HistoryFooterAction::alternate:
-        return QStringLiteral("alternate");
+        return u"alternate"_s;
       case application::history::HistoryFooterAction::inspect:
-        return QStringLiteral("inspect");
+        return u"inspect"_s;
       case application::history::HistoryFooterAction::visit:
-        return QStringLiteral("visit");
+        return u"visit"_s;
       }
 
       return {};
@@ -63,8 +44,8 @@ namespace telar::gui::qt {
     if (input_ != input) {
       input_ = input;
       prepareLabels();
-      emit inputChanged();
-      emit labelsChanged();
+      inputChanged();
+      labelsChanged();
       polish();
     }
   }
@@ -76,7 +57,7 @@ namespace telar::gui::qt {
   void HistoryFooterLayout::setMeasurements(const QVariantMap& measurements) {
     if (measurements_ != measurements) {
       measurements_ = measurements;
-      emit measurementsChanged();
+      measurementsChanged();
       polish();
     }
   }
@@ -90,20 +71,20 @@ namespace telar::gui::qt {
   }
 
   void HistoryFooterLayout::prepareLabels() {
-    const auto state = input_.value(QStringLiteral("state")).toMap();
+    const auto state = input_.value(u"state"_s).toMap();
     const application::history::HistoryFooterOptions options{
-        .key_style = state.value(QStringLiteral("macStyle")).toBool() ? application::history::HistoryKeyStyle::mac : application::history::HistoryKeyStyle::pc,
-        .offset = static_cast<std::uint32_t>(std::min(state.value(QStringLiteral("offset")).toULongLong(), qulonglong{std::numeric_limits<std::uint32_t>::max()})),
-        .count = static_cast<std::uint16_t>(std::clamp(state.value(QStringLiteral("count")).toInt(), 0, static_cast<int>(std::numeric_limits<std::uint16_t>::max()))),
-        .inspecting = state.value(QStringLiteral("inspecting")).toBool(),
-        .enter_runs = state.value(QStringLiteral("enterRuns")).toBool(),
-        .has_more = state.value(QStringLiteral("hasMore")).toBool(),
-        .fuzzy = state.value(QStringLiteral("matchFuzzy")).toBool(),
-        .has_query = !state.value(QStringLiteral("query")).toString().isEmpty(),
+        .key_style = state.value(u"macStyle"_s).toBool() ? application::history::HistoryKeyStyle::mac : application::history::HistoryKeyStyle::pc,
+        .offset = static_cast<std::uint32_t>(std::min(state.value(u"offset"_s).toULongLong(), qulonglong{std::numeric_limits<std::uint32_t>::max()})),
+        .count = static_cast<std::uint16_t>(std::clamp(state.value(u"count"_s).toInt(), 0, static_cast<int>(std::numeric_limits<std::uint16_t>::max()))),
+        .inspecting = state.value(u"inspecting"_s).toBool(),
+        .enter_runs = state.value(u"enterRuns"_s).toBool(),
+        .has_more = state.value(u"hasMore"_s).toBool(),
+        .fuzzy = state.value(u"matchFuzzy"_s).toBool(),
+        .has_query = !state.value(u"query"_s).toString().isEmpty(),
     };
 
     footer_ = application::history::HistoryFooter::resolve(options);
-    choice_ = {.index = static_cast<std::size_t>(std::max(0, state.value(QStringLiteral("selection")).toInt())), .revision = state.value(QStringLiteral("revision")).toString().toULongLong()};
+    choice_ = {.index = static_cast<std::size_t>(std::max(0, state.value(u"selection"_s).toInt())), .revision = state.value(u"revision"_s).toString().toULongLong()};
 
     range_ = footerLabel(application::history::HistoryFooter::range(options).view());
     hints_.clear();
@@ -111,9 +92,9 @@ namespace telar::gui::qt {
       const auto hint = footer_.hints[index];
 
       hints_.append(QVariantMap{
-          {QStringLiteral("key"), footerLabel(hint.key)},
-          {QStringLiteral("word"), footerLabel(hint.word)},
-          {QStringLiteral("action"), actionName(hint.action)},
+          {u"key"_s, footerLabel(hint.key)},
+          {u"word"_s, footerLabel(hint.word)},
+          {u"action"_s, actionName(hint.action)},
       });
     }
   }
@@ -131,13 +112,13 @@ namespace telar::gui::qt {
 
     auto result = historyHintStyle(ratio_);
 
-    result.insert(QStringLiteral("hints"), hints);
-    result.insert(QStringLiteral("hintCount"), static_cast<qulonglong>(geometry_.count));
-    result.insert(QStringLiteral("separator"), logical(geometry_.separator));
-    result.insert(QStringLiteral("range"), logical(geometry_.range));
-    result.insert(QStringLiteral("error"), logical(geometry_.error));
-    result.insert(QStringLiteral("showRange"), geometry_.range_visible);
-    result.insert(QStringLiteral("showError"), geometry_.error_visible);
+    result.insert(u"hints"_s, hints);
+    result.insert(u"hintCount"_s, static_cast<qulonglong>(geometry_.count));
+    result.insert(u"separator"_s, logical(geometry_.separator));
+    result.insert(u"range"_s, logical(geometry_.range));
+    result.insert(u"error"_s, logical(geometry_.error));
+    result.insert(u"showRange"_s, geometry_.range_visible);
+    result.insert(u"showError"_s, geometry_.error_visible);
 
     return result;
   }
@@ -164,7 +145,7 @@ namespace telar::gui::qt {
   }
 
   void HistoryFooterLayout::updatePolish() {
-    const auto ratio = input_.value(QStringLiteral("ratio"), 1).toDouble();
+    const auto ratio = input_.value(u"ratio"_s, 1).toDouble();
     if (!std::isfinite(ratio) || ratio <= 0) {
       return;
     }
@@ -174,7 +155,7 @@ namespace telar::gui::qt {
     ChromeMetrics chrome;
 
     chrome.ratio = static_cast<float>(ratio * density_);
-    const auto small = input_.value(QStringLiteral("smallPixels")).toDouble() * density_;
+    const auto small = input_.value(u"smallPixels"_s).toDouble() * density_;
 
     chrome.small = std::isfinite(small) ? static_cast<std::uint16_t>(std::clamp(std::round(small), qreal{0}, qreal{std::numeric_limits<std::uint16_t>::max()})) : 0;
     const auto advance = [this](const QVariant& value) {
@@ -183,22 +164,22 @@ namespace telar::gui::qt {
       return std::isfinite(measured) && measured > 0 ? static_cast<float>(measured * density_) : 0;
     };
 
-    const auto state = input_.value(QStringLiteral("state")).toMap();
-    const auto hints = measurements_.value(QStringLiteral("hints")).toList();
+    const auto state = input_.value(u"state"_s).toMap();
+    const auto hints = measurements_.value(u"hints"_s).toList();
     application::history::HistoryFooterMeasurements measured;
 
     measured.count = std::min(static_cast<std::size_t>(hints_.size()), application::history::HistoryFooter::capacity);
-    measured.range = advance(measurements_.value(QStringLiteral("range")));
-    measured.empty = state.value(QStringLiteral("count")).toInt() == 0;
-    measured.error = !state.value(QStringLiteral("error")).toString().isEmpty();
+    measured.range = advance(measurements_.value(u"range"_s));
+    measured.empty = state.value(u"count"_s).toInt() == 0;
+    measured.error = !state.value(u"error"_s).toString().isEmpty();
     for (std::size_t index = 0; index < measured.count; ++index) {
       const auto hint = hints.value(static_cast<qsizetype>(index)).toMap();
 
-      measured.hints.atMut(index) = {.key = advance(hint.value(QStringLiteral("key"))), .word = advance(hint.value(QStringLiteral("word")))};
+      measured.hints.atMut(index) = {.key = advance(hint.value(u"key"_s)), .word = advance(hint.value(u"word"_s))};
     }
 
     geometry_ = application::history::HistoryFooterGeometry::derive({.width = static_cast<float>(width() * density_), .height = static_cast<float>(height() * density_)}, chrome, measured);
-    emit layoutChanged();
+    layoutChanged();
   }
 
   void HistoryFooterLayout::componentComplete() {

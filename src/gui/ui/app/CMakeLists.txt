@@ -1,37 +1,27 @@
 telar_add_qml_sources(gui-quick
   SOURCES
     activity_selection.cpp
-    activity_selection.hpp
     application_controller.cpp
-    application_controller.hpp
     application_effects.cpp
     application_wiring.cpp
     dialogs.cpp
-    dialogs.hpp
     frame_presenter.cpp
-    frame_presenter.hpp
     key_bindings.cpp
     machine_roster.cpp
-    machine_roster.hpp
     machines_coordinator.cpp
-    machines_coordinator.hpp
     pointer_dispatcher.cpp
     terminal_host.cpp
     window_animation.cpp
     window_commands.cpp
-    window_commands.hpp
     window_display.cpp
-    window_display.hpp
     window_status.cpp
-    window_status.hpp
   QML_FILES
     CommandDialog.qml
     Main.qml
   FP_CONTRACT_OFF
-    window_display.cpp
-  REGISTERS)
-
+    window_display.cpp)
 add_subdirectory(chrome)
 add_subdirectory(panes)
 add_subdirectory(overlays)
 add_subdirectory(pickers)
+

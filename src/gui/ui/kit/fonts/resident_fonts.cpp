@@ -1,28 +1,12 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.fonts;
 
-#include "resident_fonts.hpp"
-#include "chrome_fonts.hpp"
-#include "font_asset.hpp"
-#include "font_collection.hpp"
-#include "font_source.hpp"
-#include <QHash>
-#include <QString>
-#include <QtCore/qstringliteral.h>
-#include <array>
-#include <cstddef>
-#include <cstring>
-#include <memory>
-#include <optional>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
-
+import std;
+import telar.gui.qt;
 import telar.base.ds;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
+
   namespace {
 
     std::shared_ptr<const FontAsset> checkedPrimary(const std::shared_ptr<const FontCollection>& collection) {
@@ -40,13 +24,13 @@ namespace telar::gui::qt {
     }
 
     std::shared_ptr<const FontAsset> textSource() {
-      [[clang::no_destroy]] static const auto source = std::make_shared<const FontAsset>(FontData{.bytes = loadFontBytes(QStringLiteral(":/telar/fonts/JetBrainsMono-Regular.ttf"))});
+      [[clang::no_destroy]] static const auto source = std::make_shared<const FontAsset>(FontData{.bytes = loadFontBytes(u":/telar/fonts/JetBrainsMono-Regular.ttf"_s)});
 
       return source;
     }
 
     std::shared_ptr<const FontAsset> symbolSource() {
-      [[clang::no_destroy]] static const auto source = std::make_shared<const FontAsset>(FontData{.bytes = loadFontBytes(QStringLiteral(":/telar/fonts/SymbolsNerdFontMono-Regular.ttf"))});
+      [[clang::no_destroy]] static const auto source = std::make_shared<const FontAsset>(FontData{.bytes = loadFontBytes(u":/telar/fonts/SymbolsNerdFontMono-Regular.ttf"_s)});
 
       return source;
     }
@@ -161,7 +145,7 @@ namespace telar::gui::qt {
 #pragma clang diagnostic pop
 
     forgetExpired(sources);
-    const std::pair key{family.isEmpty() ? QStringLiteral("Telar Forma") : family, style};
+    const std::pair key{family.isEmpty() ? u"Telar Forma"_s : family, style};
     auto source = sources.value(key).lock();
     if (!source) {
       FontConfiguration configuration;

@@ -1,60 +1,9 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.kit.scene;
 
-#include "chrome_text_scene.hpp"
-#include "alpha_mask.hpp"
-#include "alpha_mask_material.hpp"
-#include "alpha_mask_vertex.hpp"
-#include "chrome_glyph_images.hpp"
-#include "platform/font.h"
-#include "qt_buffers.hpp"
-#include "scene_nodes.hpp"
-#include "tbc/view.hpp"
-#include "ui/kit/fonts/font_collection.hpp"
-#include "ui/kit/fonts/resident_fonts.hpp"
-#include <QColor>
-#include <QImage>
-#include <QList>
-#include <QMatrix4x4>
-#include <QPointF>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QSGGeometry>
-#include <QSGGeometryNode>
-#include <QSGImageNode>
-#include <QSGNode>
-#include <QSGOpacityNode>
-#include <QSGTexture>
-#include <QSGTransformNode>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qtversion.h>
-#include <QtCore/qtversionchecks.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <bit>
-#include <chrono>
-#include <cmath>
-#include <concepts>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <freetype/freetype.h>
-#include <functional>
-#include <ghostty/vt/unicode.h>
-#include <hb.h>
-#include <initializer_list>
-#include <limits>
-#include <memory>
-#include <optional>
-#include <span>
-#include <stdexcept>
-#include <string_view>
-#include <type_traits>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.tbc;
+import telar.gui.ui.kit.fonts;
 import telar.gui.foundation.core;
 import telar.wire.vocabulary;
 import telar.base.ds;
@@ -257,12 +206,7 @@ namespace telar::gui::qt {
           geometry_.allocate(vertices);
           capacity_ = vertices;
         } else {
-#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
           geometry_.setVertexCount(vertices);
-#else
-          geometry_.allocate(vertices);
-          capacity_ = vertices;
-#endif
         }
       }
 

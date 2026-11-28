@@ -1,36 +1,9 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.design.controls;
 
-#include "native_cell_text.hpp"
-#include "cell_text_grid.hpp"
-#include "ui/kit/fonts/font_collection.hpp"
-#include "ui/kit/fonts/resident_fonts.hpp"
-#include "ui/kit/fonts/window_font_catalog.hpp"
-#include "ui/kit/scene/chrome_text_scene.hpp"
-#include <QByteArray>
-#include <QColor>
-#include <QMetaObject>
-#include <QPointer>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QSGNode>
-#include <QString>
-#include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <limits>
-#include <memory>
-#include <optional>
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.scene;
 
 namespace telar::gui::qt {
 
@@ -65,7 +38,7 @@ namespace telar::gui::qt {
     if (text_ != text) {
       text_ = text;
       invalidateLayout();
-      emit textChanged();
+      textChanged();
     }
   }
 
@@ -73,7 +46,7 @@ namespace telar::gui::qt {
     if (grid_ != grid) {
       grid_ = grid;
       invalidateLayout();
-      emit gridChanged();
+      gridChanged();
     }
   }
 
@@ -81,7 +54,7 @@ namespace telar::gui::qt {
     if (color_ != color) {
       color_ = color;
       update();
-      emit colorChanged();
+      colorChanged();
     }
   }
 
@@ -90,14 +63,14 @@ namespace telar::gui::qt {
       bold_ = bold;
       ++revision_;
       update();
-      emit boldChanged();
+      boldChanged();
     }
   }
 
   void NativeCellText::setAvailable(bool available) {
     if (available_ != available) {
       available_ = available;
-      emit availabilityChanged();
+      availabilityChanged();
     }
   }
 

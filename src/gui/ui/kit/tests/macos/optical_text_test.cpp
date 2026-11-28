@@ -5,8 +5,6 @@ static_assert(true);
 
 #include "glyph_rasterizer.h"
 #include "platform/font.h"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/scene/optical_text.hpp"
 #include <QByteArray>
 #include <QColor>
 #include <QFile>
@@ -43,11 +41,14 @@ import telar.testing;
 import telar.gui.foundation.fonts;
 import telar.base.ds;
 import telar.gui.foundation.core;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.scene.optical_text;
 
 extern "C" {
 }
 
 namespace {
+  using Qt::StringLiterals::operator""_s;
 
   using telar::testing::check;
 
@@ -155,9 +156,9 @@ namespace {
   };
 
   void shapeGlyph(QTextLayout& layout, const QString& text, int pixel_height, GlyphStyle style) {
-    QFont font{QStringLiteral("JetBrains Mono")};
+    QFont font{u"JetBrains Mono"_s};
 
-    font.setStyleName(QStringLiteral("Regular"));
+    font.setStyleName(u"Regular"_s);
     font.setPixelSize(pixel_height);
     font.setBold(style == GlyphStyle::bold || style == GlyphStyle::bold_italic);
     font.setItalic(style == GlyphStyle::italic || style == GlyphStyle::bold_italic);
@@ -190,8 +191,8 @@ namespace {
 
       check(directory.isValid(), "Cannot create optical diagnostic directory");
       directory.setAutoRemove(false);
-      actual.save(directory.filePath(QStringLiteral("actual.png")));
-      expected.save(directory.filePath(QStringLiteral("expected.png")));
+      actual.save(directory.filePath(u"actual.png"_s));
+      expected.save(directory.filePath(u"expected.png"_s));
       std::cerr << "Glyph mismatch: scale=" << scale << " height=" << layout.font().pixelSize() << " style=" << static_cast<unsigned>(style) << " text=" << layout.text().toStdString() << " images=" << directory.path().toStdString() << '\n';
       throw std::runtime_error{"Optical text differs from the original CoreText glyph raster"};
     }
@@ -220,7 +221,7 @@ namespace {
     constexpr QColor translucent_blue{0, 0, 255, 64};
     QTextLayout layout;
 
-    shapeGlyph(layout, QStringLiteral("M"), pixel_height, GlyphStyle::regular);
+    shapeGlyph(layout, u"M"_s, pixel_height, GlyphStyle::regular);
     optical->begin({image_extent, image_extent}, 1, strength);
     optical->add(layout, origin, Qt::white);
     const auto mask = optical->snapshot();
@@ -289,7 +290,7 @@ namespace {
 
   void verifyRasters() {
     telar::gui::qt::bundledFonts();
-    QFile font{QStringLiteral(":/telar/fonts/JetBrainsMono-Regular.ttf")};
+    QFile font{u":/telar/fonts/JetBrainsMono-Regular.ttf"_s};
 
     check(font.open(QIODeviceBase::ReadOnly), "Bundled optical oracle font is missing");
     const auto bytes = font.readAll();

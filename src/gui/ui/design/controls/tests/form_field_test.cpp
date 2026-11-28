@@ -2,17 +2,7 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "clipboard_fixture.hpp"
-#include "frame_fixture.hpp"
 #include "platform/window_activation.hpp"
-#include "qml_fixture.hpp"
-#include "qt_case.hpp"
-#include "ui/design/controls/form_input_context.hpp"
-#include "ui/design/controls/native_form_field.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "ui/kit/text/utf16_encoding.hpp"
 #include <QClipboard>
 #include <QFont>
 #include <QGuiApplication>
@@ -49,8 +39,20 @@ static_assert(true);
 #include <utility>
 
 import telar.base.text.utf8;
+import telar.gui.ui.design.controls;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.text;
+import telar.gui.tests.clipboard_fixture;
+import telar.gui.tests.frame_fixture;
+import telar.gui.tests.qml_fixture;
+import telar.gui.tests.qt_case;
+import telar.base.ds;
+import telar.gui.foundation.text;
+import telar.gui.qt;
 
 namespace {
+  using Qt::StringLiterals::operator""_s;
 
   using namespace telar::gui::qt;
   using namespace telar::gui::test;
@@ -63,12 +65,12 @@ namespace {
   class FieldFixture {
   public:
     FieldFixture()
-        : item(createChrome(engine, QStringLiteral("FormTextField"), {
-                                                                         {QStringLiteral("colors"), themeColors({})},
-                                                                         {QStringLiteral("typography"), QVariantMap{{QStringLiteral("body"), body_pixels}, {QStringLiteral("primaryFamily"), QStringLiteral("JetBrains Mono")}, {QStringLiteral("primaryStyle"), QString{}}}},
-                                                                         {QStringLiteral("width"), field_width},
-                                                                         {QStringLiteral("height"), field_height},
-                                                                     })) {
+        : item(createChrome(engine, u"FormTextField"_s, {
+                                                            {u"colors"_s, themeColors({})},
+                                                            {u"typography"_s, QVariantMap{{u"body"_s, body_pixels}, {u"primaryFamily"_s, u"JetBrains Mono"_s}, {u"primaryStyle"_s, QString{}}}},
+                                                            {u"width"_s, field_width},
+                                                            {u"height"_s, field_height},
+                                                        })) {
       item->setParentItem(window.contentItem());
       window.resize(field_width, field_height);
     }
@@ -82,44 +84,50 @@ namespace {
     std::unique_ptr<QQuickItem> item;
   };
 
-  class FormFieldTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] FormFieldTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
-    Q_SLOT static void initTestCase() {
+  private:
+    [[qt::slot]] static void initTestCase() {
       bundledFonts();
-      QGuiApplication::setFont(QFont{QStringLiteral("IBM Plex Sans")});
+      QGuiApplication::setFont(QFont{u"IBM Plex Sans"_s});
     }
 
-    Q_SLOT static void init() {
-      QTest::failOnWarning(QRegularExpression{QStringLiteral(".*")});
+    [[qt::slot]] static void init() {
+      QTest::failOnWarning(QRegularExpression{u".*"_s});
     }
 
-    Q_SLOT static void formGeometryUsesTheBodyCellGrid() {
+    [[qt::slot]] static void formGeometryUsesTheBodyCellGrid() {
       FieldFixture fixture;
       auto& field = fixture.field();
 
       QVERIFY(showComponentWindow(fixture.window, wait_ms));
-      field.setText(QStringLiteral("telar"));
-      QTRY_VERIFY_WITH_TIMEOUT(field.layout().value(QStringLiteral("available")).toBool(), wait_ms);
-      const auto grid = field.layout().value(QStringLiteral("grid")).toMap();
-      const auto content = field.layout().value(QStringLiteral("content")).toRectF();
+      field.setText(u"telar"_s);
+      QTRY_VERIFY_WITH_TIMEOUT(field.layout().value(u"available"_s).toBool(), wait_ms);
+      const auto grid = field.layout().value(u"grid"_s).toMap();
+      const auto content = field.layout().value(u"content"_s).toRectF();
       constexpr qreal inset = 12;
 
       QCOMPARE(content.x(), inset);
       QCOMPARE(content.width(), field_width - (inset * 2));
-      QCOMPARE(grid.value(QStringLiteral("pixelHeight")).toDouble() * fixture.window.effectiveDevicePixelRatio(), std::round(body_pixels * fixture.window.effectiveDevicePixelRatio()));
+      QCOMPARE(grid.value(u"pixelHeight"_s).toDouble() * fixture.window.effectiveDevicePixelRatio(), std::round(body_pixels * fixture.window.effectiveDevicePixelRatio()));
       const auto density = fixture.window.effectiveDevicePixelRatio();
-      const auto line_height = grid.value(QStringLiteral("cellHeight")).toDouble();
+      const auto line_height = grid.value(u"cellHeight"_s).toDouble();
 
       QCOMPARE(content.y(), std::floor(((field_height * density) - (line_height * density)) / 2) / density);
       const QSignalSpy edited{&field, &NativeFormField::textEdited};
 
       field.select(1, 4);
-      QCOMPARE(field.selectedText(), QStringLiteral("ela"));
+      QCOMPARE(field.selectedText(), u"ela"_s);
       QVERIFY(waitForSynchronizedFrame(fixture.window, wait_ms));
-      const auto selection = field.layout().value(QStringLiteral("selection")).toRectF();
-      const auto caret = field.layout().value(QStringLiteral("caret")).toRectF();
-      const auto cell = grid.value(QStringLiteral("cellWidth")).toDouble();
+      const auto selection = field.layout().value(u"selection"_s).toRectF();
+      const auto caret = field.layout().value(u"caret"_s).toRectF();
+      const auto cell = grid.value(u"cellWidth"_s).toDouble();
 
       QCOMPARE(selection.x(), content.x() + cell);
       QCOMPARE(selection.width(), 3 * cell);
@@ -128,29 +136,29 @@ namespace {
       QCOMPARE(edited.size(), 0);
     }
 
-    Q_SLOT static void keyboardMovesAndDeletesWholeGraphemes() {
+    [[qt::slot]] static void keyboardMovesAndDeletesWholeGraphemes() {
       FieldFixture fixture;
       auto& field = fixture.field();
 
       QVERIFY(showComponentWindow(fixture.window, wait_ms));
       field.forceActiveFocus();
-      field.setText(QStringLiteral("a👩‍💻"));
+      field.setText(u"a👩‍💻"_s);
       QTest::keyClick(&fixture.window, Qt::Key_Backspace);
-      QCOMPARE(field.text(), QStringLiteral("a"));
+      QCOMPARE(field.text(), u"a"_s);
       QTest::keyClick(&fixture.window, Qt::Key_A, Qt::ControlModifier);
-      QCOMPARE(field.selectedText(), QStringLiteral("a"));
-      QKeyEvent composed{QEvent::KeyPress, Qt::Key_unknown, Qt::NoModifier, QStringLiteral("é")};
+      QCOMPARE(field.selectedText(), u"a"_s);
+      QKeyEvent composed{QEvent::KeyPress, Qt::Key_unknown, Qt::NoModifier, u"é"_s};
 
       QCoreApplication::sendEvent(&field, &composed);
-      QCOMPARE(field.text(), QStringLiteral("é"));
+      QCOMPARE(field.text(), u"é"_s);
       QTest::keyClick(&fixture.window, Qt::Key_Left, Qt::ShiftModifier);
-      QCOMPARE(field.selectedText(), QStringLiteral("é"));
+      QCOMPARE(field.selectedText(), u"é"_s);
       QTest::keyClick(&fixture.window, Qt::Key_Right, Qt::ControlModifier);
       QCOMPARE(field.selectionStart(), field.selectionEnd());
       QCOMPARE(field.cursorPosition(), static_cast<int>(field.text().size()));
     }
 
-    Q_SLOT static void compositionKeepsCommittedTextUntilCommit() {
+    [[qt::slot]] static void compositionKeepsCommittedTextUntilCommit() {
       FieldFixture fixture;
       auto& field = fixture.field();
 
@@ -158,90 +166,90 @@ namespace {
       activateWindow(fixture.window);
       QTRY_VERIFY_WITH_TIMEOUT(fixture.window.isActive(), wait_ms);
       field.forceActiveFocus();
-      field.setText(QStringLiteral("before after"));
-      const auto selected_length = static_cast<int>(QStringLiteral("before").size());
+      field.setText(u"before after"_s);
+      const auto selected_length = static_cast<int>(u"before"_s.size());
 
       field.select(0, selected_length);
       const QSignalSpy edited{&field, &NativeFormField::textEdited};
-      QInputMethodEvent preedit{QStringLiteral("中"), {{QInputMethodEvent::Cursor, 1, 1, {}}}};
+      QInputMethodEvent preedit{u"中"_s, {{QInputMethodEvent::Cursor, 1, 1, {}}}};
 
       QCoreApplication::sendEvent(&field, &preedit);
-      QCOMPARE(field.text(), QStringLiteral("before after"));
-      QCOMPARE(field.selectedText(), QStringLiteral("before"));
+      QCOMPARE(field.text(), u"before after"_s);
+      QCOMPARE(field.selectedText(), u"before"_s);
       QCOMPARE(field.inputMethodQuery(Qt::ImAbsolutePosition).toInt(), 0);
       QCOMPARE(field.inputMethodQuery(Qt::ImCursorPosition).toInt(), 0);
       QCOMPARE(field.inputMethodQuery(Qt::ImAnchorPosition).toInt(), 0);
-      QCOMPARE(field.inputMethodQuery(Qt::ImSurroundingText).toString(), QStringLiteral(" after"));
+      QCOMPARE(field.inputMethodQuery(Qt::ImSurroundingText).toString(), u" after"_s);
       QCOMPARE(field.inputMethodQuery(Qt::ImCurrentSelection).toString(), QString{});
       QCOMPARE(field.inputMethodQuery(Qt::ImTextBeforeCursor).toString(), QString{});
-      QCOMPARE(field.inputMethodQuery(Qt::ImTextAfterCursor).toString(), QStringLiteral(" after"));
+      QCOMPARE(field.inputMethodQuery(Qt::ImTextAfterCursor).toString(), u" after"_s);
       QCOMPARE(edited.size(), 0);
-      QTRY_VERIFY_WITH_TIMEOUT(field.layout().value(QStringLiteral("composing")).toBool(), wait_ms);
-      QCOMPARE(field.layout().value(QStringLiteral("text")).toString(), QStringLiteral("中 after"));
+      QTRY_VERIFY_WITH_TIMEOUT(field.layout().value(u"composing"_s).toBool(), wait_ms);
+      QCOMPARE(field.layout().value(u"text"_s).toString(), u"中 after"_s);
       QInputMethodEvent cancel;
 
       QCoreApplication::sendEvent(&field, &cancel);
-      QCOMPARE(field.text(), QStringLiteral("before after"));
-      QCOMPARE(field.selectedText(), QStringLiteral("before"));
+      QCOMPARE(field.text(), u"before after"_s);
+      QCOMPARE(field.selectedText(), u"before"_s);
       QInputMethodEvent commit;
 
-      commit.setCommitString(QStringLiteral("🧵"));
+      commit.setCommitString(u"🧵"_s);
       QCoreApplication::sendEvent(&field, &commit);
-      QCOMPARE(field.text(), QStringLiteral("🧵 after"));
+      QCOMPARE(field.text(), u"🧵 after"_s);
       QCOMPARE(edited.size(), 1);
-      field.setText(QStringLiteral("ab after"));
+      field.setText(u"ab after"_s);
       field.setCursorPosition(2);
       QInputMethodEvent replacement;
 
-      replacement.setCommitString(QStringLiteral("X"), -1, 1);
+      replacement.setCommitString(u"X"_s, -1, 1);
       QCoreApplication::sendEvent(&field, &replacement);
-      QCOMPARE(field.text(), QStringLiteral("aX after"));
+      QCOMPARE(field.text(), u"aX after"_s);
       QInputMethodEvent selected{QString{}, {{QInputMethodEvent::Selection, 0, 2, {}}}};
 
       QCoreApplication::sendEvent(&field, &selected);
-      QCOMPARE(field.selectedText(), QStringLiteral("aX"));
+      QCOMPARE(field.selectedText(), u"aX"_s);
     }
 
-    Q_SLOT static void inputContextProjectsSelectionAndProvisionalReplacement() {
-      const auto text = QStringLiteral("a🧵b");
-      const auto first = static_cast<int>(QStringLiteral("a").size());
-      const auto last = static_cast<int>(QStringLiteral("a🧵").size());
+    [[qt::slot]] static void inputContextProjectsSelectionAndProvisionalReplacement() {
+      const auto text = u"a🧵b"_s;
+      const auto first = static_cast<int>(u"a"_s.size());
+      const auto last = static_cast<int>(u"a🧵"_s.size());
       const auto confirmed = FormInputContext::capture(text, last, first);
 
       QCOMPARE(confirmed.text, text);
       QCOMPARE(confirmed.cursor, last);
       QCOMPARE(confirmed.anchor, first);
-      QCOMPARE(confirmed.selectedText(), QStringLiteral("🧵"));
-      QCOMPARE(confirmed.beforeCursor(), QStringLiteral("a🧵"));
-      QCOMPARE(confirmed.afterCursor(), QStringLiteral("b"));
+      QCOMPARE(confirmed.selectedText(), u"🧵"_s);
+      QCOMPARE(confirmed.beforeCursor(), u"a🧵"_s);
+      QCOMPARE(confirmed.afterCursor(), u"b"_s);
 
       const auto backward = FormInputContext::capture(text, first, last);
 
-      QCOMPARE(backward.selectedText(), QStringLiteral("🧵"));
-      QCOMPARE(backward.beforeCursor(), QStringLiteral("a"));
-      QCOMPARE(backward.afterCursor(), QStringLiteral("🧵b"));
+      QCOMPARE(backward.selectedText(), u"🧵"_s);
+      QCOMPARE(backward.beforeCursor(), u"a"_s);
+      QCOMPARE(backward.afterCursor(), u"🧵b"_s);
 
       const auto provisional = FormInputContext::capture(text, last, first, FormInputContext::Replacement{.first = first, .last = last});
 
-      QCOMPARE(provisional.text, QStringLiteral("ab"));
+      QCOMPARE(provisional.text, u"ab"_s);
       QCOMPARE(provisional.cursor, first);
       QCOMPARE(provisional.anchor, first);
       QVERIFY(provisional.selectedText().isEmpty());
-      QCOMPARE(provisional.beforeCursor(), QStringLiteral("a"));
-      QCOMPARE(provisional.afterCursor(), QStringLiteral("b"));
-      QCOMPARE(text, QStringLiteral("a🧵b"));
+      QCOMPARE(provisional.beforeCursor(), u"a"_s);
+      QCOMPARE(provisional.afterCursor(), u"b"_s);
+      QCOMPARE(text, u"a🧵b"_s);
     }
 
-    Q_SLOT static void cancellationAndFocusLossPreserveCommittedSelection() {
+    [[qt::slot]] static void cancellationAndFocusLossPreserveCommittedSelection() {
       const FieldFixture fixture;
       auto& field = fixture.field();
-      const auto committed = QStringLiteral("before after");
-      const auto selected = QStringLiteral("before");
+      const auto committed = u"before after"_s;
+      const auto selected = u"before"_s;
 
       field.setText(committed);
       field.select(0, static_cast<int>(selected.size()));
       const QSignalSpy edited{&field, &NativeFormField::textEdited};
-      QInputMethodEvent preedit{QStringLiteral("中"), {{QInputMethodEvent::Cursor, 1, 1, {}}}};
+      QInputMethodEvent preedit{u"中"_s, {{QInputMethodEvent::Cursor, 1, 1, {}}}};
 
       QCoreApplication::sendEvent(&field, &preedit);
       QVERIFY(field.cancelComposition());
@@ -260,7 +268,7 @@ namespace {
       QCOMPARE(edited.size(), 0);
     }
 
-    Q_SLOT static void pasteNormalizesLinesAndBoundsUtf8Bytes() {
+    [[qt::slot]] static void pasteNormalizesLinesAndBoundsUtf8Bytes() {
       auto* clipboard = QGuiApplication::clipboard();
       auto saved = copyClipboard();
       const auto restore = qScopeGuard([clipboard, saved = std::move(saved)] mutable {
@@ -274,26 +282,26 @@ namespace {
       constexpr int maximum_bytes = 8;
 
       field.setMaximumBytes(maximum_bytes);
-      clipboard->setText(QStringLiteral("a\r\nb\rc\nd"));
+      clipboard->setText(u"a\r\nb\rc\nd"_s);
       field.paste();
-      QCOMPARE(field.text(), QStringLiteral("a b c d"));
+      QCOMPARE(field.text(), u"a b c d"_s);
       field.selectAll();
-      clipboard->setText(QStringLiteral("1234567🧵"));
+      clipboard->setText(u"1234567🧵"_s);
       const QSignalSpy limited{&field, &NativeFormField::limitReached};
 
       field.paste();
-      QCOMPARE(field.text(), QStringLiteral("1234567"));
+      QCOMPARE(field.text(), u"1234567"_s);
       QCOMPARE(limited.size(), 1);
-      QCOMPARE(limited.front().front().toULongLong(), static_cast<qulonglong>(QStringLiteral("1234567🧵").toUtf8().size()));
-      field.setText(QStringLiteral("a🧵"));
+      QCOMPARE(limited.front().front().toULongLong(), static_cast<qulonglong>(u"1234567🧵"_s.toUtf8().size()));
+      field.setText(u"a🧵"_s);
       field.select(1, 3);
       field.copy();
-      QCOMPARE(clipboard->text(), QStringLiteral("🧵"));
+      QCOMPARE(clipboard->text(), u"🧵"_s);
       field.cut();
-      QCOMPARE(field.text(), QStringLiteral("a"));
+      QCOMPARE(field.text(), u"a"_s);
     }
 
-    Q_SLOT static void utf16PrefixMatchesQtEncodingAndScalarBoundaries() {
+    [[qt::slot]] static void utf16PrefixMatchesQtEncodingAndScalarBoundaries() {
       QString text;
 
       for (std::uint32_t unit = 0; unit <= std::numeric_limits<char16_t>::max(); ++unit) {
@@ -302,7 +310,7 @@ namespace {
 
       const auto high = QChar{telar::gui::Utf16Prefix::first_high_surrogate};
       const auto low = QChar{telar::gui::Utf16Prefix::first_low_surrogate};
-      const telar::ds::Array samples{text, QStringLiteral("aé中🧵z"), QString{high}, QString{low}, QString{high} + low, QString{low} + high, QStringLiteral("a") + high + QStringLiteral("🧵z"), QStringLiteral("a") + low + QStringLiteral("🧵z")};
+      const telar::ds::Array samples{text, u"aé中🧵z"_s, QString{high}, QString{low}, QString{high} + low, QString{low} + high, u"a"_s + high + u"🧵z"_s, u"a"_s + low + u"🧵z"_s};
       constexpr telar::ds::Array<std::size_t, 10> capacities{0, 1, 2, 3, 4, 8, 127, 128, 256, 512};
 
       for (const auto& sample : samples) {
@@ -321,15 +329,15 @@ namespace {
       }
     }
 
-    Q_SLOT static void pointerUsesCellMidpointsAndPreservesWholeGraphemes() {
+    [[qt::slot]] static void pointerUsesCellMidpointsAndPreservesWholeGraphemes() {
       FieldFixture fixture;
       auto& field = fixture.field();
 
       QVERIFY(showComponentWindow(fixture.window, wait_ms));
-      field.setText(QStringLiteral("a🧵b"));
+      field.setText(u"a🧵b"_s);
       QVERIFY(waitForSynchronizedFrame(fixture.window, wait_ms));
-      const auto content = field.layout().value(QStringLiteral("content")).toRectF();
-      const auto cell = field.layout().value(QStringLiteral("grid")).toMap().value(QStringLiteral("cellWidth")).toDouble();
+      const auto content = field.layout().value(u"content"_s).toRectF();
+      const auto cell = field.layout().value(u"grid"_s).toMap().value(u"cellWidth"_s).toDouble();
       constexpr qreal before_midpoint = 1.75;
       constexpr qreal after_midpoint = 2.25;
       const auto left = field.mapToScene(QPointF{content.x() + (before_midpoint * cell), content.center().y()}).toPoint();
@@ -346,7 +354,7 @@ namespace {
       QTest::mousePress(&fixture.window, Qt::LeftButton, Qt::NoModifier, left);
       QTest::mouseMove(&fixture.window, right);
       QTest::mouseRelease(&fixture.window, Qt::LeftButton, Qt::NoModifier, right);
-      QCOMPARE(field.selectedText(), QStringLiteral("🧵"));
+      QCOMPARE(field.selectedText(), u"🧵"_s);
     }
   };
 
@@ -363,4 +371,6 @@ namespace {
 
 }
 
+#ifndef TELAR_MOC_RUN
 #include "form_field_test.moc"
+#endif

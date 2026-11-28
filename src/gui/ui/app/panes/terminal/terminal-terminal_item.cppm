@@ -1,0 +1,561 @@
+export module telar.gui.ui.app.panes.terminal:terminal_item;
+
+import std;
+import telar.gui.qt;
+import :terminal_controller;
+import telar.gui.ui.app.panes.terminal.links;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.motion;
+import telar.gui.foundation.core;
+import telar.gui.foundation.keys;
+import telar.gui.foundation.terminal;
+import telar.gui.application;
+import telar.base.ds;
+import telar.wire.vocabulary;
+import telar.gui.ui.kit.cell_scene;
+
+extern "C++" namespace telar::gui::test {
+  class TerminalCursor;
+}
+
+export namespace telar::gui::qt {
+
+  class [[qt::object, qt_qml_named("TerminalView")]] TerminalItem : public QQuickItem {
+  public:
+    static const QMetaObject staticMetaObject;
+    [[nodiscard]] const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
+
+    // The text an input method is composing; telar's command editor shows it at its caret.
+    // Where telar's command editor draws its caret, in this item's coordinates, for the input method.
+    // The commands the shell ran whose prompts are on screen, each drawn as a separator over
+    // its last row; every command, for the rail beside the pane; and the row the command at
+    // the editor's prompt will have its separator on, or -1. Only while telar's editor stands
+    // in for the shell's.
+    // The same separators as a model keyed by command, for the delegates that draw them: a
+    // command that moves or changes updates its delegate instead of every delegate being built
+    // again.
+    // The documents drawn in place of the rows they stand for: id, and the display rows they take
+    // once placed, or placed false for one the view is yet to measure. `documentRows` holds, by
+    // id, the drawn row where each placed one starts, which moves as the view scrolls.
+    // The drawn rows a remote shell's session covers, as {row, rows} runs: from the ssh that
+    // opened it to its last command's output, or to the live end while it lasts.
+    // Where telar's prompt line stands: the first row of the shell's hidden prompt, or -1; the
+    // live cursor's row, where a running program prints, or -1 when it is out of view; the
+    // screen's rows; and the rows of scrollback below the view. They change with every line a
+    // program prints, so they notify apart from the blocks, which rebuild the separators.
+    // How far the rows are drawn above their places, in logical pixels: the part of the top row
+    // a view scrolled by pixels went past. What is drawn over the rows moves up as far.
+    // For the way back to the live end: the rows of output that arrived, and how the commands
+    // that finished ended, since the view left it.
+    // The command whose output the top row shows while its separator is above the view, pinned
+    // to the top: its separator's fields, and `push`, how far the next separator pushes it up.
+    // A segment per command, its share of the scrollback, and the view's: for the rail.
+    // While a fold opens or closes in view: the first drawn row still moving into place, -1 when
+    // none, and how far below its place it is, in logical pixels.
+    // Where the scrollback search's matches are, as shares of the rows shown, for the rail.
+    explicit TerminalItem(QQuickItem* parent = nullptr);
+    ~TerminalItem() override;
+    TerminalItem(const TerminalItem&) = delete;
+    TerminalItem& operator=(const TerminalItem&) = delete;
+    TerminalItem(TerminalItem&&) = delete;
+    TerminalItem& operator=(TerminalItem&&) = delete;
+
+    [[nodiscard]] TerminalController* controller() const noexcept;
+    void setController(TerminalController* controller);
+    [[nodiscard]] QString paneId() const;
+    [[nodiscard]] std::uint64_t paneIdentity() const noexcept;
+    void setPaneId(const QString& identity);
+    [[nodiscard]] QSizeF cellSize() const noexcept;
+    [[nodiscard]] bool backgroundProvided() const noexcept;
+    void setBackgroundProvided(bool provided);
+    [[nodiscard]] QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
+    // The next key press skips the input method so a binding receives it, composing or not.
+    void bypassInputMethod() noexcept;
+    [[nodiscard]] QString hoveredLink() const;
+    [[nodiscard]] QVariantMap linkPreview() const;
+    [[qt::invokable]] void setLinkPreviewBounds(const QRectF& bounds);
+    [[nodiscard]] QString preeditText() const;
+    [[nodiscard]] QRectF promptCaret() const noexcept;
+    void setPromptCaret(const QRectF& caret);
+    [[nodiscard]] QVariantList separators() const;
+
+    [[tbc::hot_path]] [[nodiscard]] inline QAbstractItemModel* separatorRows() noexcept {
+      return &separator_rows_;
+    }
+
+    [[tbc::hot_path]] [[nodiscard]] inline QVariantList documents() const {
+      return documents_;
+    }
+
+    [[tbc::hot_path]] [[nodiscard]] inline QVariantMap documentRows() const {
+      return document_rows_;
+    }
+
+    [[nodiscard]] QVariantList rail() const;
+    [[nodiscard]] QVariantList remoteRows() const;
+    [[nodiscard]] int promptRow() const noexcept;
+
+    [[tbc::hot_path]] [[nodiscard]] inline int promptTop() const noexcept {
+      return prompt_top_;
+    }
+
+    [[tbc::hot_path]] [[nodiscard]] inline int cursorRow() const noexcept {
+      return cursor_row_;
+    }
+
+    [[tbc::hot_path]] [[nodiscard]] inline int rows() const noexcept {
+      return rows_;
+    }
+
+    [[tbc::hot_path]] [[nodiscard]] inline int rowsBelow() const noexcept {
+      return rows_below_;
+    }
+
+    // Selects the command at `index` among the rail's, oldest first, and shows it.
+    [[qt::invokable]] void selectBlock(int index);
+    // Folds or unfolds the output of the command at `index`.
+    [[qt::invokable]] void toggleFold(int index);
+    // Copies the command at `index`, or its output.
+    [[qt::invokable]] void copyBlock(int index, bool command);
+    // A click on something drawn over the terminal: its pane comes forward and takes the keys.
+    [[qt::invokable]] void focusFromPointer();
+    // Glides back to the live end and follows the output again.
+    [[qt::invokable]] void scrollToEnd();
+    // Glides to show the scrollback's `fraction`, its middle there; or moves there at once, as
+    // a dragged rail does.
+    [[qt::invokable]] void scrollToFraction(qreal fraction, bool glide);
+
+    [[tbc::hot_path]] [[nodiscard]] inline qreal scrollShift() const noexcept {
+      return shift_;
+    }
+
+    [[tbc::hot_path]] [[nodiscard]] inline int rowsArrived() const noexcept {
+      return rows_arrived_;
+    }
+
+    [[tbc::hot_path]] [[nodiscard]] inline QVariantList finishedBelow() const {
+      return finished_below_;
+    }
+
+    [[tbc::hot_path]] [[nodiscard]] inline QVariantMap stickyBlock() const {
+      return sticky_block_;
+    }
+
+    [[tbc::hot_path]] [[nodiscard]] inline QVariantList railSegments() const {
+      return rail_segments_;
+    }
+
+    [[tbc::hot_path]] [[nodiscard]] inline int foldFrom() const noexcept {
+      return fold_from_;
+    }
+
+    [[tbc::hot_path]] [[nodiscard]] inline qreal foldOffset() const noexcept {
+      return fold_offset_;
+    }
+
+    [[tbc::hot_path]] [[nodiscard]] inline QVariantList railMatches() const {
+      return rail_matches_;
+    }
+
+    [[tbc::hot_path]] [[nodiscard]] inline qreal railTop() const noexcept {
+      return rail_top_;
+    }
+
+    [[tbc::hot_path]] [[nodiscard]] inline qreal railHeight() const noexcept {
+      return rail_height_;
+    }
+
+    [[nodiscard]] ds::Option<application::terminal::links::PresentedLink> prepareLinkPresentation() const;
+
+    // What the window routes to the terminal, as its parent: the keys its bindings leave, the
+    // frame it prepared and presents, and the pointer the window's dispatcher hands it.
+    //
+    // Whether an input method composes text; the keys it takes reach no binding but those it
+    // captures.
+    [[nodiscard]] bool composing() const noexcept;
+    // Types a key press the window left to the terminal: a clipboard shortcut, telar's command
+    // editor, or the bytes the pane's program reads. The key, when the program received it.
+    ds::Option<TerminalKey> type(const QKeyEvent& event);
+
+    // The platform's clipboard and Command keys: copy, paste, the editor's text commands and
+    // stepping through the commands; false when `event` is none of them.
+    bool clipboardKey(const QKeyEvent& event);
+    // The cursor shows at once after a key, and blinks again from there.
+    void wakeCursor();
+
+    [[tbc::hot_path]] [[nodiscard]] inline const application::TerminalPreparation& preparedFrame() const noexcept {
+      return prepared_frame_;
+    }
+
+    void presentFrame(const application::TerminalPreparation& preparation);
+    [[nodiscard]] application::terminal::input::ChildMouseView childMouseView() const;
+    void releaseMouse();
+    [[nodiscard]] static unsigned mouseModifiers(Qt::KeyboardModifiers modifiers) noexcept;
+    void observeLinkPointer(QPointF position, Qt::KeyboardModifiers modifiers);
+    void cancelLinkGesture() noexcept;
+    // Drops the scroll the wheel accumulated, when another view takes the wheel.
+    void resetWheel() noexcept;
+
+    [[qt::signal]] void documentsChanged();
+    [[qt::signal]] void controllerChanged();
+    [[qt::signal]] void paneIdChanged();
+    [[qt::signal]] void backgroundProvidedChanged();
+    [[qt::signal]] void linkHoverChanged();
+    [[qt::signal]] void preeditChanged();
+    [[qt::signal]] void promptCaretChanged();
+    [[qt::signal]] void blocksChanged();
+    [[qt::signal]] void placeChanged();
+    [[qt::signal]] void scrollChanged();
+    [[qt::signal]] void stickyChanged();
+    [[qt::signal]] void matchesChanged();
+    // A command's command or output was copied, or had nothing to copy: `what` is "command" or
+    // "output".
+    [[qt::signal]] void blockCopied(int index, const QString& what, bool copied);
+
+  protected:
+    void updatePolish() override;
+    void itemChange(ItemChange change, const ItemChangeData& data) override;
+    QSGNode* updatePaintNode(QSGNode* previous, UpdatePaintNodeData* update_data) override;
+    void geometryChange(const QRectF& current, const QRectF& previous) override;
+    void keyPressEvent(QKeyEvent* event) override;
+    void keyReleaseEvent(QKeyEvent* event) override;
+    void inputMethodEvent(QInputMethodEvent* event) override;
+    void focusInEvent(QFocusEvent* event) override;
+    void focusOutEvent(QFocusEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseDoubleClickEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+    void mouseUngrabEvent() override;
+    void wheelEvent(QWheelEvent* event) override;
+    void hoverMoveEvent(QHoverEvent* event) override;
+    void hoverEnterEvent(QHoverEvent* event) override;
+    void hoverLeaveEvent(QHoverEvent* event) override;
+
+  private:
+    friend class test::TerminalCursor;
+
+    static constexpr std::size_t physical_key_capacity = 128;
+    static constexpr unsigned mouse_shift = 4;
+    static constexpr unsigned mouse_alt = 8;
+    static constexpr unsigned mouse_control = 16;
+
+    void measure();
+    void refreshFonts();
+    // Asks the catalog for the faces `cells` need beyond the primary one: the fonts and the catalog
+    // alone, so the rows read stay borrowed while it asks.
+    static void requestRowFonts(ResidentFonts& fonts, WindowFontCatalog& catalog, std::span<const CellValue> cells);
+    void refresh();
+    void refreshBlocks();
+
+    // Emits blockCopied for a copy of one of this pane's blocks since the last one it told of.
+    void announceBlockCopy();
+    void resizeTerminal();
+    void synchronizeFocus();
+    void releaseKeys();
+    void invalidateMachine();
+    bool send(const QByteArray& bytes, application::PaneInputSource source = application::PaneInputSource::keyboard);
+    [[nodiscard]] application::terminal::input::ChildMouseSample childMouseSample(const QMouseEvent& event, application::terminal::input::MousePhase phase, application::terminal::input::MouseButton button) const;
+    void mousePacket(unsigned button, QPointF position, bool released);
+    ds::Option<TerminalKey> sendKeyPress(const QKeyEvent& event, const InputModes& modes);
+    void sendCommittedText(const QString& text);
+    void dispatchWheel(const QWheelEvent& event, std::int32_t lines);
+
+    // ---- scrolling by pixels (terminal_scroll.cpp) ----
+    // A row the view draws: its row from the top of the scrollback, and where it comes from.
+    struct ViewRow {
+      std::uint64_t row = 0;
+      std::int32_t screen_row = -1;
+      bool exists = false;
+    };
+
+    // Whether the view draws rows by their place in a scrollback the runtime sends apart from
+    // its screen, scrolled by pixels and folded; else the screen's rows as they are.
+    [[nodiscard]] bool mapsRows() const noexcept;
+    [[nodiscard]] bool smoothScroll() const noexcept;
+    // Takes in what changed in the pane: rows dropped, folds, a view moved by someone else.
+    void synchronizeScroll();
+    // A wheel or trackpad over a scrollback the view scrolls itself; whether it took it.
+    bool scrollWheel(const QWheelEvent& event);
+    // A trackpad's gesture of `event`, rows `cell` tall, at `now`.
+    void scrollGesture(const QWheelEvent& event, double cell, ScrollTime now);
+    // Where the live end was when the view left it: a move down that reaches it comes back to
+    // the live end and follows the output again, however much arrived meanwhile.
+    [[nodiscard]] double leftEnd() const;
+    [[nodiscard]] std::uint64_t rowsSinceLeftEnd() const;
+    // Moves the motion to this frame and the view with it.
+    void advanceScroll();
+    void applyScroll(bool driven);
+    void startScrollFrames();
+    void bindScrollClock();
+    void layoutRows();
+    void requestViewRows(bool moving);
+    void refreshScrollViews(bool segments_changed = true);
+    void followDroppedRows(bool following);
+    // Keeps the row at the top through changed folds; whether a fold, not a document, changed.
+    bool anchorFolds();
+    void followRuntimeView(bool following);
+    // A fold opened or closed under a shown separator: what is below it moves into place.
+    void startFoldMotion(application::FoldMap<>::Span span, bool closed);
+    void advanceFoldMotion();
+    void placeFoldMotion();
+    // The folds the view draws: the pane's, or while one moves, those it moves through.
+    [[nodiscard]] const application::FoldMap<>& viewFolds() const noexcept;
+
+    [[tbc::hot_path]] [[nodiscard]] inline bool animating() const noexcept {
+      return motion_.moving() || fold_motion_.hasValue();
+    }
+
+    [[nodiscard]] ScrollTime scrollTime() const;
+
+    struct Arrivals {
+      int rows = 0;
+      QVariantList finished;
+    };
+
+    [[nodiscard]] QVariantList railSegmentsFor(std::uint64_t shown) const;
+    [[nodiscard]] QVariantMap pinnedBlock() const;
+    // The search's matches on the rows drawn, and on the rail.
+    void markMatches();
+    [[nodiscard]] ds::Option<std::size_t> drawnRowOf(std::uint64_t row, std::uint64_t first) const;
+    Arrivals arrivalsSince(bool at_end, bool telar);
+    [[nodiscard]] std::uint64_t scrollNow() const;
+    [[nodiscard]] double rowHeight() const noexcept;
+    [[nodiscard]] double scrollLimit() const;
+    [[nodiscard]] std::uint32_t runtimeOffset(std::uint64_t top) const;
+    // The screen row drawn at `drawn`, the row under a pointer counted from the view's top.
+    [[nodiscard]] ds::Option<std::size_t> screenRowAt(double drawn) const noexcept;
+    [[nodiscard]] std::uint64_t viewRevision(const application::Pane<Memory>& current) const noexcept;
+    // The rows a scrolled or folded view draws, put together as a screen with their links, for
+    // the links under the pointer; nothing while the view draws the screen's own rows.
+    [[nodiscard]] const Screen<Memory>* drawnScreen() const;
+    [[nodiscard]] std::uint64_t drawnScreenKey() const noexcept;
+    void appendDrawnRow(std::size_t index) const;
+    // The cell drawn at `position`, counted from the top of the scrollback; on a row past the
+    // last that exists, that last row.
+    [[nodiscard]] ds::Option<CopyPoint> cellAt(QPointF position) const noexcept;
+    // Copy mode's selection over the rows the view draws, counted as the scene counts them.
+    [[nodiscard]] CellSelection drawnSelection(const application::terminal::copy_mode::CopyState& copy) const noexcept;
+    [[nodiscard]] application::terminal::copy_mode::CopyPointerInput pointerInput(QPointF position, application::terminal::copy_mode::CopyPointerKind kind, bool left_button = true, std::int32_t rows = 0) const noexcept;
+    // The pane, reached through the controller QML owns, which this item knows by address only.
+    [[nodiscard]] [[tbc::raw]] const application::Pane<Memory>* pane() const noexcept;
+    // The first command of the remote session the pane is in, counting the ssh that opened it;
+    // past the last command when the pane's shell is its own. Its separators name the host.
+    [[nodiscard]] static std::size_t liveSession(const application::Pane<Memory>& pane) noexcept;
+    void refreshLinkHover();
+    void clearLinkHover();
+    bool beginLinkPress(const QMouseEvent& event);
+    void finishLinkRelease(const QMouseEvent& event);
+    [[nodiscard]] TerminalSurface terminalSurface() const;
+    [[nodiscard]] bool linkEligible() const noexcept;
+    [[nodiscard]] static application::terminal::links::LinkModifiers linkModifiers(Qt::KeyboardModifiers modifiers) noexcept;
+
+    struct ResolvedLink {
+      application::terminal::links::LinkAffordance affordance = application::terminal::links::LinkAffordance::text;
+      ds::Option<application::terminal::links::LinkHit> hit;
+    };
+
+    [[nodiscard]] ResolvedLink resolveLink(QPointF position, application::terminal::links::LinkModifiers modifiers) const;
+    [[nodiscard]] ds::Option<CellPosition> visibleCellAt(QPointF position) const noexcept;
+
+    struct LinkStamp {
+      CellPosition cell;
+      ViewVersion version;
+      TerminalSurface surface;
+      std::uint64_t screen_revision;
+      Qt::KeyboardModifiers modifiers;
+      std::uint64_t presentation_revision;
+      bool frame_presented;
+
+      bool operator==(const LinkStamp&) const = default;
+    };
+
+    // QML makes the item, so it owns the memory its row buffers live in.
+    SystemAllocator memory_;
+    MemoryAdapter<SystemAllocator> adapter_{memory_};
+    TerminalController* controller_ = nullptr;
+    std::uint64_t pane_id_ = 0;
+    ds::Vec<std::uint8_t, Memory> hidden_rows_{adapter_};
+    QVariantList separators_;
+    ListModel separator_rows_;
+    QVariantList documents_;
+    QVariantMap document_rows_;
+    QVariantList rail_;
+    QVariantList remote_rows_;
+    int prompt_row_ = -1;
+    int prompt_top_ = -1;
+    int cursor_row_ = -1;
+    int rows_ = 0;
+    int rows_below_ = 0;
+    QSizeF shown_cell_;
+    // The view's position in pixels over the rows it shows, and what it draws at it: the shown
+    // row at its top, the part of it scrolled past, and each row drawn.
+    ScrollMotion motion_;
+    QMetaObject::Connection scroll_frame_connection_;
+    // The runtime's view as this item last asked for it or saw it: another value moved the view.
+    ds::Option<std::uint32_t> expected_offset_;
+    std::uint64_t viewport_requests_ = 0;
+    std::uint64_t top_row_ = 0;
+    qreal shift_ = 0;
+    std::uint64_t fold_revision_ = 0;
+    ds::Vec<ViewRow, Memory> view_rows_{adapter_};
+    // Whether the motion is the user's, which moves the runtime's view after it; else the
+    // runtime's view moved first and the motion catches up.
+    bool driven_ = false;
+    bool scroll_frame_requested_ = false;
+    QTimer scroll_release_;
+    // Since the view left the live end: the scrollback's stable rows then, and the commands
+    // running then.
+    ds::Option<std::uint64_t> away_rows_;
+    // The rows the scrollback held, counted from its first row ever, when a wheel or gesture
+    // took the view away from the live end; none while the view follows the output.
+    ds::Option<std::uint64_t> left_end_rows_;
+    ds::Vec<std::uint64_t, Memory> away_running_{adapter_};
+    int rows_arrived_ = 0;
+    // The serial of the last block copy this view announced.
+    std::uint64_t block_copy_serial_ = 0;
+    QVariantList finished_below_;
+    QVariantMap sticky_block_;
+    QVariantList rail_segments_;
+    qreal rail_top_ = 0;
+    qreal rail_height_ = 1;
+    ds::Vec<TerminalRow, Memory> drawn_rows_{adapter_};
+
+    // A command's output folding or unfolding in view: its rows from `first`, how tall the part
+    // in view is at its fullest, and since when it moves.
+    struct FoldMotion {
+      std::uint32_t first = 0;
+      std::uint32_t count = 0;
+      bool closing = false;
+      double height = 0;
+      double duration_ms = 0;
+      ScrollTime start;
+    };
+
+    ds::Option<FoldMotion> fold_motion_;
+    // The folds as drawn while one moves: its output shown down to the moving edge.
+    application::FoldMap<> transit_folds_{adapter_};
+    std::size_t fold_shown_ = 0;
+    double fold_height_ = 0;
+    int fold_fade_row_ = -1;
+    float fold_fade_ = 1;
+    ds::Vec<application::FoldMap<>::Span, Memory> shown_folds_{adapter_};
+    // The row at the view's top, counted from the top of the scrollback, as the view last placed
+    // itself: what stays in place when folds change.
+    ds::Option<std::uint64_t> top_anchor_;
+    ds::Vec<float, Memory> row_offsets_{adapter_};
+    ds::Vec<MatchMark, Memory> match_marks_{adapter_};
+    QVariantList rail_matches_;
+    int fold_from_ = -1;
+    qreal fold_offset_ = 0;
+
+    struct [[tbc::shared]] DrawnCache {
+      [[tbc::hot_path]] inline explicit DrawnCache(Memory& memory)
+          : spans(memory),
+            flags(memory),
+            links(memory),
+            runs(memory),
+            uris(memory) {}
+
+      ds::Option<Screen<Memory>> screen;
+      std::uint64_t screen_key = 0;
+      ds::Vec<std::span<const CellValue>, Memory> spans;
+      ds::Vec<Byte, Memory> flags;
+      ds::Vec<MetadataLink, Memory> links;
+      ds::Vec<MetadataRun, Memory> runs;
+      ds::Vec<Byte, Memory> uris;
+    };
+
+    mutable DrawnCache drawn_{adapter_};
+    ds::Vec<float, Memory> revealed_rows_{adapter_};
+    TerminalFont font_;
+    FontGrid font_grid_;
+    std::shared_ptr<const FontCollection> font_collection_;
+    std::shared_ptr<ResidentFonts> fonts_;
+    QPointer<WindowFontCatalog> font_catalog_;
+    QMetaObject::Connection font_catalog_connection_;
+    QList<std::uint64_t> font_row_revisions_;
+    qreal font_scale_ = 1;
+    QTimer blink_;
+    QMetaObject::Connection window_activity_connection_;
+    std::uint64_t appearance_ = 1;
+    bool cursor_on_ = true;
+    bool selecting_ = false;
+    bool keyboard_ = false;
+    bool background_provided_ = false;
+    bool window_active_ = false;
+    bool input_method_bypassed_ = false;
+
+    struct PressedKey {
+      int key = 0;
+      Qt::KeyboardModifiers modifiers;
+      quint32 scan = 0;
+      quint32 native_key = 0;
+      quint32 native_modifiers = 0;
+      QString text;
+      ds::Option<TerminalKey> semantic = ds::none;
+
+      [[nodiscard]] QByteArray release(const InputModes& modes) const;
+
+      [[tbc::hot_path]] [[nodiscard]] inline bool matches(const QKeyEvent& event) const noexcept {
+        return key != 0 && (event.nativeScanCode() != 0 ? scan == event.nativeScanCode() : key == event.key());
+      }
+    };
+
+    ds::Array<PressedKey, physical_key_capacity> pressed_keys_;
+    WheelAccumulator wheel_;
+    QPointF selection_position_;
+    QString preedit_;
+    QRectF prompt_caret_;
+    application::terminal::links::LinkHover link_hover_;
+    std::shared_ptr<const application::terminal::links::LinkHit> shared_link_;
+    application::terminal::links::LinkGesture link_gesture_;
+    ds::Option<QPointF> link_pointer_;
+    ds::Option<LinkStamp> link_stamp_;
+    ds::Option<LinkPreview> link_preview_;
+    ds::Option<Rect> preview_cover_;
+    Qt::MouseButtons captured_link_buttons_;
+    std::uint64_t presented_frame_id_ = 0;
+    std::uint64_t presented_revision_ = 0;
+    application::TerminalPreparation prepared_frame_;
+    std::uint64_t link_presentation_revision_ = 0;
+
+  public:
+    static constexpr auto qt_properties = telar::qt::properties(
+        telar::qt::property("controller", &TerminalItem::controller).withWrite(&TerminalItem::setController).withNotify(&TerminalItem::controllerChanged),
+        telar::qt::property("paneId", &TerminalItem::paneId).withWrite(&TerminalItem::setPaneId).withNotify(&TerminalItem::paneIdChanged),
+        telar::qt::property("backgroundProvided", &TerminalItem::backgroundProvided).withWrite(&TerminalItem::setBackgroundProvided).withNotify(&TerminalItem::backgroundProvidedChanged),
+        telar::qt::property("hoveredLink", &TerminalItem::hoveredLink).withNotify(&TerminalItem::linkHoverChanged),
+        telar::qt::property("linkPreview", &TerminalItem::linkPreview).withNotify(&TerminalItem::linkHoverChanged),
+        telar::qt::property("preeditText", &TerminalItem::preeditText).withNotify(&TerminalItem::preeditChanged),
+        telar::qt::property("promptCaret", &TerminalItem::promptCaret).withWrite(&TerminalItem::setPromptCaret).withNotify(&TerminalItem::promptCaretChanged),
+        telar::qt::property("separators", &TerminalItem::separators).withNotify(&TerminalItem::blocksChanged),
+        telar::qt::property("separatorRows", &TerminalItem::separatorRows).constant(),
+        telar::qt::property("documents", &TerminalItem::documents).withNotify(&TerminalItem::documentsChanged),
+        telar::qt::property("documentRows", &TerminalItem::documentRows).withNotify(&TerminalItem::blocksChanged),
+        telar::qt::property("rail", &TerminalItem::rail).withNotify(&TerminalItem::blocksChanged),
+        telar::qt::property("remoteRows", &TerminalItem::remoteRows).withNotify(&TerminalItem::blocksChanged),
+        telar::qt::property("promptRow", &TerminalItem::promptRow).withNotify(&TerminalItem::blocksChanged),
+        telar::qt::property("cell", &TerminalItem::cellSize).withNotify(&TerminalItem::blocksChanged),
+        telar::qt::property("promptTop", &TerminalItem::promptTop).withNotify(&TerminalItem::placeChanged),
+        telar::qt::property("cursorRow", &TerminalItem::cursorRow).withNotify(&TerminalItem::placeChanged),
+        telar::qt::property("rows", &TerminalItem::rows).withNotify(&TerminalItem::placeChanged),
+        telar::qt::property("rowsBelow", &TerminalItem::rowsBelow).withNotify(&TerminalItem::placeChanged),
+        telar::qt::property("scrollShift", &TerminalItem::scrollShift).withNotify(&TerminalItem::scrollChanged),
+        telar::qt::property("rowsArrived", &TerminalItem::rowsArrived).withNotify(&TerminalItem::placeChanged),
+        telar::qt::property("finishedBelow", &TerminalItem::finishedBelow).withNotify(&TerminalItem::placeChanged),
+        telar::qt::property("stickyBlock", &TerminalItem::stickyBlock).withNotify(&TerminalItem::stickyChanged),
+        telar::qt::property("railSegments", &TerminalItem::railSegments).withNotify(&TerminalItem::blocksChanged),
+        telar::qt::property("foldFrom", &TerminalItem::foldFrom).withNotify(&TerminalItem::scrollChanged),
+        telar::qt::property("foldOffset", &TerminalItem::foldOffset).withNotify(&TerminalItem::scrollChanged),
+        telar::qt::property("railMatches", &TerminalItem::railMatches).withNotify(&TerminalItem::matchesChanged),
+        telar::qt::property("railTop", &TerminalItem::railTop).withNotify(&TerminalItem::scrollChanged),
+        telar::qt::property("railHeight", &TerminalItem::railHeight).withNotify(&TerminalItem::scrollChanged)
+    );
+  };
+
+}

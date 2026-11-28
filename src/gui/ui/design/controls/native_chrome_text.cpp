@@ -1,34 +1,9 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.design.controls;
 
-#include "native_chrome_text.hpp"
-#include "ui/kit/fonts/font_collection.hpp"
-#include "ui/kit/fonts/resident_fonts.hpp"
-#include "ui/kit/fonts/window_font_catalog.hpp"
-#include "ui/kit/scene/chrome_text_scene.hpp"
-#include <QByteArray>
-#include <QColor>
-#include <QMetaObject>
-#include <QPointF>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QSGNode>
-#include <QString>
-#include <QtCore/qnamespace.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <functional>
-#include <memory>
-#include <string_view>
+import std;
+import telar.gui.qt;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.scene;
 
 namespace telar::gui::qt {
 
@@ -67,7 +42,7 @@ namespace telar::gui::qt {
   void NativeChromeText::setCaption(bool caption) {
     if (caption_ != caption) {
       caption_ = caption;
-      emit layoutChanged();
+      layoutChanged();
       invalidateLayout();
     }
   }
@@ -96,7 +71,7 @@ namespace telar::gui::qt {
     const auto available = supported_ && !render_failed_ && (elide_ == Qt::ElideNone || elide_ == Qt::ElideRight);
     if (available_ != available) {
       available_ = available;
-      emit availabilityChanged();
+      availabilityChanged();
       update();
     }
   }
@@ -104,14 +79,14 @@ namespace telar::gui::qt {
   void NativeChromeText::setSupported(bool supported) {
     if (supported_ != supported) {
       supported_ = supported;
-      emit supportChanged();
+      supportChanged();
     }
   }
 
   void NativeChromeText::setText(const QString& text) {
     if (text_ != text) {
       text_ = text;
-      emit textChanged();
+      textChanged();
       invalidateLayout();
     }
   }
@@ -119,7 +94,7 @@ namespace telar::gui::qt {
   void NativeChromeText::setPixelSize(qreal size) {
     if (std::isfinite(size) && size > 0 && size <= static_cast<qreal>(ChromeMetrics::maximum_text) && !std::equal_to<>{}(pixel_size_, size)) {
       pixel_size_ = size;
-      emit pixelSizeChanged();
+      pixelSizeChanged();
       invalidateLayout();
     }
   }
@@ -127,7 +102,7 @@ namespace telar::gui::qt {
   void NativeChromeText::setColor(const QColor& color) {
     if (color_ != color) {
       color_ = color;
-      emit colorChanged();
+      colorChanged();
       update();
     }
   }
@@ -135,7 +110,7 @@ namespace telar::gui::qt {
   void NativeChromeText::setEmphasized(bool emphasized) {
     if (emphasized_ != emphasized) {
       emphasized_ = emphasized;
-      emit emphasizedChanged();
+      emphasizedChanged();
       invalidateLayout();
     }
   }
@@ -143,7 +118,7 @@ namespace telar::gui::qt {
   void NativeChromeText::setFadeWidth(qreal width) {
     if (std::isfinite(width) && width >= 0 && !std::equal_to<>{}(fade_width_, width)) {
       fade_width_ = width;
-      emit layoutChanged();
+      layoutChanged();
       update();
     }
   }
@@ -153,7 +128,7 @@ namespace telar::gui::qt {
     if (elide_ != mode) {
       elide_ = mode;
       fit_dirty_ = true;
-      emit layoutChanged();
+      layoutChanged();
       polish();
       update();
     }
@@ -163,7 +138,7 @@ namespace telar::gui::qt {
     const auto value = Qt::Alignment::fromInt(static_cast<Qt::Alignment::Int>(alignment));
     if (alignment_ != value) {
       alignment_ = value;
-      emit layoutChanged();
+      layoutChanged();
       update();
     }
   }
@@ -171,7 +146,7 @@ namespace telar::gui::qt {
   void NativeChromeText::setWholePixelCentering(bool enabled) {
     if (whole_pixel_centering_ != enabled) {
       whole_pixel_centering_ = enabled;
-      emit layoutChanged();
+      layoutChanged();
       update();
     }
   }

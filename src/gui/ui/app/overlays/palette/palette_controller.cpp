@@ -1,26 +1,18 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.overlays.palette;
 
-#include "palette_controller.hpp"
-#include "ui/design/controls/form_text_grid.hpp"
-#include "ui/kit/models/projection.hpp"
-#include "ui/kit/text/utf16_encoding.hpp"
-#include <QByteArray>
-#include <QChar>
-#include <QLatin1StringView>
-#include <QStringView>
-#include <QVariant>
-#include <algorithm>
-#include <span>
-#include <utility>
-
+import std;
+import telar.gui.qt;
+import telar.gui.ui.design.controls;
+import telar.gui.ui.kit.models;
+import telar.gui.ui.kit.text;
 import telar.gui.foundation.forms;
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
 
   namespace {
 
@@ -30,30 +22,30 @@ namespace telar::gui::qt {
 
     QString navigationKey(const NavigationTarget& target) {
       if (const auto* workspace = std::get_if<WorkspaceLocation>(&target)) {
-        return QStringLiteral("context:") + QString::number(workspace->id);
+        return u"context:"_s + QString::number(workspace->id);
       }
 
       if (const auto* tab = std::get_if<TabLocation>(&target)) {
-        return QStringLiteral("tab:") + QString::number(static_cast<int>(tab->workspace.kind)) + QLatin1Char(':') + QString::number(tab->workspace.id) + QLatin1Char(':') + QString::number(tab->tab_id);
+        return u"tab:"_s + QString::number(static_cast<int>(tab->workspace.kind)) + QLatin1Char(':') + QString::number(tab->workspace.id) + QLatin1Char(':') + QString::number(tab->tab_id);
       }
 
       const auto agent = std::get<AgentNavigationTarget>(target);
 
-      return QStringLiteral("agent:") + QString::number(agent.pane_id) + QLatin1Char(':') + QString::number(agent.pane_generation);
+      return u"agent:"_s + QString::number(agent.pane_id) + QLatin1Char(':') + QString::number(agent.pane_generation);
     }
 
     QString groupName(application::palette::PaletteRowKind kind) {
       switch (kind) {
       case application::palette::PaletteRowKind::context:
-        return QStringLiteral("Contexts");
+        return u"Contexts"_s;
       case application::palette::PaletteRowKind::tab:
-        return QStringLiteral("Tabs");
+        return u"Tabs"_s;
       case application::palette::PaletteRowKind::agent:
-        return QStringLiteral("Agents");
+        return u"Agents"_s;
       case application::palette::PaletteRowKind::action:
-        return QStringLiteral("Actions");
+        return u"Actions"_s;
       case application::palette::PaletteRowKind::machine:
-        return QStringLiteral("Machines");
+        return u"Machines"_s;
       case application::palette::PaletteRowKind::pick:
       case application::palette::PaletteRowKind::suggestion:
         return {};
@@ -67,20 +59,20 @@ namespace telar::gui::qt {
     QString kindName(application::palette::PaletteRowKind kind) {
       switch (kind) {
       case application::palette::PaletteRowKind::action:
-        return QStringLiteral("action");
+        return u"action"_s;
       case application::palette::PaletteRowKind::machine:
-        return QStringLiteral("machine");
+        return u"machine"_s;
       case application::palette::PaletteRowKind::suggestion:
-        return QStringLiteral("suggestion");
+        return u"suggestion"_s;
       case application::palette::PaletteRowKind::context:
       case application::palette::PaletteRowKind::tab:
       case application::palette::PaletteRowKind::agent:
       case application::palette::PaletteRowKind::pick:
-        return QStringLiteral("navigation");
+        return u"navigation"_s;
       }
 
       // A kind outside the enum shows the navigation shortcuts.
-      return QStringLiteral("navigation");
+      return u"navigation"_s;
     }
 
     application::palette::PaletteRowKind kindOf(const PaletteTarget& target) noexcept {
@@ -119,23 +111,23 @@ namespace telar::gui::qt {
         primary.remove_prefix(application::palette::NavigationLabel::tab_prefix.size());
       }
 
-      QString glyph = QStringLiteral("");
+      QString glyph = u""_s;
 
       if (kind == application::palette::PaletteRowKind::context) {
-        glyph = QStringLiteral("");
+        glyph = u""_s;
       } else if (kind == application::palette::PaletteRowKind::tab) {
-        glyph = QStringLiteral("");
+        glyph = u""_s;
       }
 
       return {
-          {QStringLiteral("key"), navigationKey(target)},
-          {QStringLiteral("kind"), static_cast<int>(kind)},
-          {QStringLiteral("icon"), glyph},
-          {QStringLiteral("primary"), toQString(primary)},
-          {QStringLiteral("secondary"), toQString(secondary)},
-          {QStringLiteral("hint"), QString{}},
-          {QStringLiteral("detailBelow"), false},
-          {QStringLiteral("shortcut"), false},
+          {u"key"_s, navigationKey(target)},
+          {u"kind"_s, static_cast<int>(kind)},
+          {u"icon"_s, glyph},
+          {u"primary"_s, toQString(primary)},
+          {u"secondary"_s, toQString(secondary)},
+          {u"hint"_s, QString{}},
+          {u"detailBelow"_s, false},
+          {u"shortcut"_s, false},
       };
     }
 
@@ -166,7 +158,7 @@ namespace telar::gui::qt {
 
   void PaletteController::setDisplay(const application::window::DisplayMetrics& display) {
     display_ = display;
-    emit changed();
+    changed();
   }
 
   void PaletteController::setCommands(QVariantList commands) {
@@ -184,7 +176,7 @@ namespace telar::gui::qt {
     selection_ = 0;
     ++revision_;
     static_cast<void>(updateResults());
-    emit changed();
+    changed();
   }
 
   void PaletteController::forget() noexcept {
@@ -193,7 +185,7 @@ namespace telar::gui::qt {
   }
 
   void PaletteController::publish() {
-    emit changed();
+    changed();
   }
 
   void PaletteController::reportQueryLimit(qulonglong requested_bytes) {
@@ -227,7 +219,7 @@ namespace telar::gui::qt {
     }
 
     static_cast<void>(updateResults());
-    emit changed();
+    changed();
 
     if (measured.bytes < measured.requested_bytes) {
       reportQueryLimit(static_cast<qulonglong>(measured.requested_bytes));
@@ -243,13 +235,13 @@ namespace telar::gui::qt {
     const auto selected = std::clamp(static_cast<qsizetype>(selection_) + delta, qsizetype{0}, last);
     if (std::cmp_not_equal(selected, selection_)) {
       selection_ = static_cast<std::size_t>(selected);
-      emit changed();
+      changed();
     }
   }
 
   void PaletteController::synchronize() {
     if (isOpen() && updateResults()) {
-      emit changed();
+      changed();
     }
   }
 
@@ -305,18 +297,18 @@ namespace telar::gui::qt {
   void PaletteController::collectActions(Matches& matches, std::string_view query) const {
     for (const auto& entry : commands_) {
       const auto command = entry.toMap();
-      const auto label = command.value(QStringLiteral("label")).toString().toUtf8();
+      const auto label = command.value(u"label"_s).toString().toUtf8();
       auto score = application::palette::PaletteScore::of(paletteBytes(label), query);
       if (!score) {
         continue;
       }
 
       // A short query is a guess: an action that closes something waits below every other match.
-      if (command.value(QStringLiteral("destructive")).toBool() && query.size() < destructive_query_bytes) {
+      if (command.value(u"destructive"_s).toBool() && query.size() < destructive_query_bytes) {
         score = std::max<std::uint32_t>(2, *score / 2);
       }
 
-      matches.addScored(PaletteAction{.value = command.value(QStringLiteral("action")).toInt()}, *score);
+      matches.addScored(PaletteAction{.value = command.value(u"action"_s).toInt()}, *score);
     }
   }
 
@@ -431,14 +423,14 @@ namespace telar::gui::qt {
   QVariantMap PaletteController::record(const PaletteTarget& target, std::string_view query) const {
     if (std::holds_alternative<PaletteAsk>(target)) {
       return {
-          {QStringLiteral("key"), QStringLiteral("suggest:query")},
-          {QStringLiteral("kind"), static_cast<int>(application::palette::PaletteRowKind::suggestion)},
-          {QStringLiteral("icon"), QStringLiteral("\uf0eb")},
-          {QStringLiteral("primary"), QStringLiteral("Suggest a command for \u201c") + toQString(query) + QStringLiteral("\u201d")},
-          {QStringLiteral("secondary"), QString{}},
-          {QStringLiteral("hint"), QString{}},
-          {QStringLiteral("shortcut"), false},
-          {QStringLiteral("detailBelow"), false},
+          {u"key"_s, u"suggest:query"_s},
+          {u"kind"_s, static_cast<int>(application::palette::PaletteRowKind::suggestion)},
+          {u"icon"_s, u"\uf0eb"_s},
+          {u"primary"_s, u"Suggest a command for \u201c"_s + toQString(query) + u"\u201d"_s},
+          {u"secondary"_s, QString{}},
+          {u"hint"_s, QString{}},
+          {u"shortcut"_s, false},
+          {u"detailBelow"_s, false},
       };
     }
 
@@ -449,17 +441,17 @@ namespace telar::gui::qt {
     if (const auto* action = std::get_if<PaletteAction>(&target)) {
       for (const auto& entry : commands_) {
         const auto command = entry.toMap();
-        if (command.value(QStringLiteral("action")).toInt() == action->value) {
+        if (command.value(u"action"_s).toInt() == action->value) {
           return {
-              {QStringLiteral("key"), QStringLiteral("action:") + QString::number(action->value)},
-              {QStringLiteral("kind"), static_cast<int>(application::palette::PaletteRowKind::action)},
-              {QStringLiteral("icon"), QStringLiteral("")},
-              {QStringLiteral("primary"), command.value(QStringLiteral("label"))},
-              {QStringLiteral("secondary"), QString{}},
-              {QStringLiteral("hint"), command.value(QStringLiteral("shortcut"))},
-              {QStringLiteral("shortcut"), true},
-              {QStringLiteral("detailBelow"), false},
-              {QStringLiteral("destructive"), command.value(QStringLiteral("destructive"))},
+              {u"key"_s, u"action:"_s + QString::number(action->value)},
+              {u"kind"_s, static_cast<int>(application::palette::PaletteRowKind::action)},
+              {u"icon"_s, u""_s},
+              {u"primary"_s, command.value(u"label"_s)},
+              {u"secondary"_s, QString{}},
+              {u"hint"_s, command.value(u"shortcut"_s)},
+              {u"shortcut"_s, true},
+              {u"detailBelow"_s, false},
+              {u"destructive"_s, command.value(u"destructive"_s)},
           };
         }
       }
@@ -512,27 +504,27 @@ namespace telar::gui::qt {
       label.append(found->workspace_label);
     }
 
-    result.insert(QStringLiteral("primary"), toQString(found->title.empty() ? std::string_view{found->provider_name} : std::string_view{found->title}));
-    result.insert(QStringLiteral("secondary"), toQString(label.view()));
-    result.insert(QStringLiteral("hint"), QString{});
-    result.insert(QStringLiteral("detailBelow"), true);
+    result.insert(u"primary"_s, toQString(found->title.empty() ? std::string_view{found->provider_name} : std::string_view{found->title}));
+    result.insert(u"secondary"_s, toQString(label.view()));
+    result.insert(u"hint"_s, QString{});
+    result.insert(u"detailBelow"_s, true);
 
     return result;
   }
 
   QVariantMap PaletteController::machineRecord(application::machines::MachinePickerTarget target) const {
     QVariantMap result{
-        {QStringLiteral("kind"), static_cast<int>(application::palette::PaletteRowKind::machine)},
-        {QStringLiteral("detailBelow"), false},
-        {QStringLiteral("shortcut"), false},
+        {u"kind"_s, static_cast<int>(application::palette::PaletteRowKind::machine)},
+        {u"detailBelow"_s, false},
+        {u"shortcut"_s, false},
     };
 
     if (!target.machine) {
-      result.insert(QStringLiteral("key"), QStringLiteral("machine:add"));
-      result.insert(QStringLiteral("icon"), QStringLiteral("+"));
-      result.insert(QStringLiteral("primary"), QStringLiteral("Add machine…"));
-      result.insert(QStringLiteral("secondary"), QStringLiteral("a label and its pairing address"));
-      result.insert(QStringLiteral("hint"), QString{});
+      result.insert(u"key"_s, u"machine:add"_s);
+      result.insert(u"icon"_s, u"+"_s);
+      result.insert(u"primary"_s, u"Add machine…"_s);
+      result.insert(u"secondary"_s, u"a label and its pairing address"_s);
+      result.insert(u"hint"_s, QString{});
 
       return result;
     }
@@ -542,34 +534,34 @@ namespace telar::gui::qt {
     QString state;
 
     if (!row.enabled) {
-      state = QStringLiteral("disabled · enter enables");
+      state = u"disabled · enter enables"_s;
     } else if (token.slot == store_.machines().active()) {
-      state = QStringLiteral("shown");
+      state = u"shown"_s;
     } else {
       switch (row.phase) {
       case application::machines::MachinePhase::connected:
-        state = row.cpu_percent ? QString::number(*row.cpu_percent) + QStringLiteral("% cpu") : QStringLiteral("connected");
+        state = row.cpu_percent ? QString::number(*row.cpu_percent) + u"% cpu"_s : u"connected"_s;
         break;
       case application::machines::MachinePhase::connecting:
-        state = QStringLiteral("connecting");
+        state = u"connecting"_s;
         break;
       case application::machines::MachinePhase::lost:
-        state = QStringLiteral("unreachable · enter retries");
+        state = u"unreachable · enter retries"_s;
         break;
       case application::machines::MachinePhase::failed:
-        state = row.needs_setup ? QStringLiteral("no telar for this build · enter sets it up") : QStringLiteral("failed · enter retries");
+        state = row.needs_setup ? u"no telar for this build · enter sets it up"_s : u"failed · enter retries"_s;
         break;
       case application::machines::MachinePhase::stopped:
-        state = QStringLiteral("disabled");
+        state = u"disabled"_s;
         break;
       }
     }
 
-    result.insert(QStringLiteral("key"), QStringLiteral("machine:") + QString::number(token.slot) + QLatin1Char(':') + QString::number(token.generation));
-    result.insert(QStringLiteral("icon"), row.attention ? QStringLiteral("●") : QStringLiteral("○"));
-    result.insert(QStringLiteral("primary"), toQString(row.label.view()));
-    result.insert(QStringLiteral("secondary"), row.destination.view().empty() ? QStringLiteral("this machine") : toQString(row.destination.view()));
-    result.insert(QStringLiteral("hint"), state);
+    result.insert(u"key"_s, u"machine:"_s + QString::number(token.slot) + QLatin1Char(':') + QString::number(token.generation));
+    result.insert(u"icon"_s, row.attention ? u"●"_s : u"○"_s);
+    result.insert(u"primary"_s, toQString(row.label.view()));
+    result.insert(u"secondary"_s, row.destination.view().empty() ? u"this machine"_s : toQString(row.destination.view()));
+    result.insert(u"hint"_s, state);
 
     return result;
   }
@@ -580,18 +572,18 @@ namespace telar::gui::qt {
     const auto selected = static_cast<qsizetype>(selection_);
 
     return {
-        {QStringLiteral("mode"), static_cast<int>(query.mode)},
-        {QStringLiteral("editorText"), query_},
-        {QStringLiteral("query"), toQString(query.text)},
-        {QStringLiteral("selection"), selected},
-        {QStringLiteral("selectedKey"), selected < rows_.size() ? rows_[selected].toMap().value(QStringLiteral("key")) : QVariant{}},
-        {QStringLiteral("selectedKind"), selected < rows_.size() ? kindName(kinds_[selection_]) : QString{}},
-        {QStringLiteral("revision"), QString::number(revision_)},
-        {QStringLiteral("count"), rows_.size()},
-        {QStringLiteral("maximumQueryBytes"), static_cast<qulonglong>(application::palette::PaletteQuery::maximum_bytes)},
-        {QStringLiteral("editorRestoreRevision"), editor_restore_.revision == 0 ? QString{} : QString::number(editor_restore_.revision)},
-        {QStringLiteral("editorAnchor"), editor_restore_.anchor},
-        {QStringLiteral("editorCursor"), editor_restore_.cursor},
+        {u"mode"_s, static_cast<int>(query.mode)},
+        {u"editorText"_s, query_},
+        {u"query"_s, toQString(query.text)},
+        {u"selection"_s, selected},
+        {u"selectedKey"_s, selected < rows_.size() ? rows_[selected].toMap().value(u"key"_s) : QVariant{}},
+        {u"selectedKind"_s, selected < rows_.size() ? kindName(kinds_[selection_]) : QString{}},
+        {u"revision"_s, QString::number(revision_)},
+        {u"count"_s, rows_.size()},
+        {u"maximumQueryBytes"_s, static_cast<qulonglong>(application::palette::PaletteQuery::maximum_bytes)},
+        {u"editorRestoreRevision"_s, editor_restore_.revision == 0 ? QString{} : QString::number(editor_restore_.revision)},
+        {u"editorAnchor"_s, editor_restore_.anchor},
+        {u"editorCursor"_s, editor_restore_.cursor},
     };
   }
 
@@ -617,32 +609,32 @@ namespace telar::gui::qt {
       const auto& placement = visible.rows[index];
       auto record = rows_[static_cast<qsizetype>(placement.index)].toMap();
 
-      record.insert(QStringLiteral("bounds"), local(placement.bounds));
-      record.insert(QStringLiteral("groupBounds"), local(placement.group));
-      record.insert(QStringLiteral("groupLabel"), groupName(kinds[placement.index]));
-      record.insert(QStringLiteral("selected"), placement.index == selection_);
+      record.insert(u"bounds"_s, local(placement.bounds));
+      record.insert(u"groupBounds"_s, local(placement.group));
+      record.insert(u"groupLabel"_s, groupName(kinds[placement.index]));
+      record.insert(u"selected"_s, placement.index == selection_);
       rows.append(QVariant{std::in_place_type<QVariantMap>, std::move(record)});
     }
 
     return {
-        {QStringLiteral("bounds"), toQRectF(geometry.bounds, density)},
-        {QStringLiteral("heading"), local(geometry.heading)},
-        {QStringLiteral("search"), local(geometry.search)},
-        {QStringLiteral("results"), local(geometry.results)},
-        {QStringLiteral("footer"), local(geometry.footer)},
-        {QStringLiteral("rows"), rows},
+        {u"bounds"_s, toQRectF(geometry.bounds, density)},
+        {u"heading"_s, local(geometry.heading)},
+        {u"search"_s, local(geometry.search)},
+        {u"results"_s, local(geometry.results)},
+        {u"footer"_s, local(geometry.footer)},
+        {u"rows"_s, rows},
     };
   }
 
   ds::Option<PaletteController::Choice> PaletteController::chosen(const QVariantMap& choice) const {
-    const auto key = choice.value(QStringLiteral("key")).toString();
-    const auto revision = choice.value(QStringLiteral("revision")).toString();
+    const auto key = choice.value(u"key"_s).toString();
+    const auto revision = choice.value(u"revision"_s).toString();
     if (!isOpen() || revision != QString::number(revision_)) {
       return ds::none;
     }
 
     const auto found = std::ranges::find_if(rows_, [&](const auto& entry) {
-      return entry.toMap().value(QStringLiteral("key")).toString() == key;
+      return entry.toMap().value(u"key"_s).toString() == key;
     });
     if (found == rows_.end()) {
       return ds::none;
@@ -654,14 +646,14 @@ namespace telar::gui::qt {
   }
 
   ds::Option<application::machines::MachinePickerTarget> PaletteController::chosenMachine(const QVariantMap& choice) const {
-    if (!isOpen() || choice.value(QStringLiteral("revision")).toString() != QString::number(revision_)) {
+    if (!isOpen() || choice.value(u"revision"_s).toString() != QString::number(revision_)) {
       return ds::none;
     }
 
-    const auto key = choice.value(QStringLiteral("key")).toString();
+    const auto key = choice.value(u"key"_s).toString();
 
     for (qsizetype index = 0; index < rows_.size(); ++index) {
-      if (rows_[index].toMap().value(QStringLiteral("key")).toString() == key) {
+      if (rows_[index].toMap().value(u"key"_s).toString() == key) {
         if (const auto* target = std::get_if<application::machines::MachinePickerTarget>(&targets_[static_cast<std::size_t>(index)])) {
           return *target;
         }
@@ -672,15 +664,15 @@ namespace telar::gui::qt {
   }
 
   PaletteController::Parent PaletteController::parentFor(const QVariantMap& choice, std::size_t index) const {
-    const auto cursor = choice.value(QStringLiteral("cursor"), query_.size()).toInt();
-    const auto anchor = choice.value(QStringLiteral("anchor"), cursor).toInt();
+    const auto cursor = choice.value(u"cursor"_s, query_.size()).toInt();
+    const auto anchor = choice.value(u"anchor"_s, cursor).toInt();
 
     return {.query = query_, .selection = index, .editor = {.anchor = std::clamp(anchor, 0, static_cast<int>(query_.size())), .cursor = std::clamp(cursor, 0, static_cast<int>(query_.size()))}};
   }
 
   void PaletteController::adoptParent(Parent parent) {
     parent_ = std::move(parent);
-    emit changed();
+    changed();
   }
 
   bool PaletteController::restoreParent() {
@@ -696,8 +688,8 @@ namespace telar::gui::qt {
     static_cast<void>(updateResults());
     editor_restore_ = parent.editor;
     editor_restore_.revision = ++revision_;
-    emit changed();
-    emit showRequested();
+    changed();
+    showRequested();
 
     return true;
   }
@@ -718,7 +710,7 @@ namespace telar::gui::qt {
         open(application::palette::PaletteMode::suggest);
         query_.append(task);
         static_cast<void>(updateResults());
-        emit showRequested();
+        showRequested();
         adoptParent(std::move(parent));
       });
 
@@ -726,7 +718,7 @@ namespace telar::gui::qt {
     }
 
     if (const auto* machine = std::get_if<application::machines::MachinePickerTarget>(&target)) {
-      emit machineRequested(*machine, choice.value(QStringLiteral("alternate"), false).toBool());
+      machineRequested(*machine, choice.value(u"alternate"_s, false).toBool());
 
       return;
     }
@@ -734,7 +726,7 @@ namespace telar::gui::qt {
     if (const auto* navigation = std::get_if<NavigationTarget>(&target)) {
       interact([&] {
         if (navigate(*navigation)) {
-          emit closeRequested();
+          closeRequested();
         }
       });
 
@@ -743,7 +735,7 @@ namespace telar::gui::qt {
 
     const auto action = std::get<PaletteAction>(target);
     if (action.value != suggestion_.value) {
-      emit actionRequested(action);
+      actionRequested(action);
 
       return;
     }
@@ -752,7 +744,7 @@ namespace telar::gui::qt {
       auto parent = parentFor(choice, found->index);
 
       open(application::palette::PaletteMode::suggest);
-      emit showRequested();
+      showRequested();
       adoptParent(std::move(parent));
     });
   }
@@ -800,7 +792,7 @@ namespace telar::gui::qt {
 
     interact([&] {
       if (application::palette::submit(store_.sessionMut(), query.text)) {
-        emit closeRequested();
+        closeRequested();
       }
 
       publish();
@@ -818,17 +810,17 @@ namespace telar::gui::qt {
     const auto query = application::palette::PaletteQuery::parse(paletteBytes(encoded));
 
     return {
-        {QStringLiteral("heading"), toQString(application::palette::SuggestionLabels::heading(phase))},
-        {QStringLiteral("message"), toQString(application::palette::SuggestionLabels::message(phase, suggestion.status))},
-        {QStringLiteral("button"), toQString(application::palette::SuggestionLabels::button(phase))},
-        {QStringLiteral("footer"), toQString(application::palette::SuggestionLabels::footer(phase))},
-        {QStringLiteral("text"), toQString(suggestion.text)},
-        {QStringLiteral("phase"), static_cast<int>(phase)},
-        {QStringLiteral("ready"), phase == application::palette::SuggestionPhase::ready},
-        {QStringLiteral("failed"), phase == application::palette::SuggestionPhase::failed},
-        {QStringLiteral("canSubmit"), application::palette::SuggestionLabels::canSubmit(phase, query.text)},
-        {QStringLiteral("revision"), suggestionRevision()},
-        {QStringLiteral("hasParent"), parent_.hasValue()},
+        {u"heading"_s, toQString(application::palette::SuggestionLabels::heading(phase))},
+        {u"message"_s, toQString(application::palette::SuggestionLabels::message(phase, suggestion.status))},
+        {u"button"_s, toQString(application::palette::SuggestionLabels::button(phase))},
+        {u"footer"_s, toQString(application::palette::SuggestionLabels::footer(phase))},
+        {u"text"_s, toQString(suggestion.text)},
+        {u"phase"_s, static_cast<int>(phase)},
+        {u"ready"_s, phase == application::palette::SuggestionPhase::ready},
+        {u"failed"_s, phase == application::palette::SuggestionPhase::failed},
+        {u"canSubmit"_s, application::palette::SuggestionLabels::canSubmit(phase, query.text)},
+        {u"revision"_s, suggestionRevision()},
+        {u"hasParent"_s, parent_.hasValue()},
     };
   }
 
@@ -857,25 +849,25 @@ namespace telar::gui::qt {
       SuggestionPreview preview{suggestion.text, geometry.preview, resolved.metrics};
 
       while (const auto line = preview.next()) {
-        lines.append(QVariantMap{{QStringLiteral("text"), toQString(line->text)}, {QStringLiteral("bounds"), local(line->bounds)}, {QStringLiteral("shortened"), line->shortened}});
+        lines.append(QVariantMap{{u"text"_s, toQString(line->text)}, {u"bounds"_s, local(line->bounds)}, {u"shortened"_s, line->shortened}});
       }
     }
 
     return {
-        {QStringLiteral("title"), local(geometry.title)},
-        {QStringLiteral("back"), local(geometry.back)},
-        {QStringLiteral("heading"), local(geometry.heading)},
-        {QStringLiteral("body"), local(geometry.body)},
-        {QStringLiteral("message"), local(geometry.message)},
-        {QStringLiteral("preview"), local(geometry.preview)},
-        {QStringLiteral("footer"), local(geometry.footer_caption)},
-        {QStringLiteral("button"), local(geometry.button)},
-        {QStringLiteral("separator"), local(geometry.separator)},
-        {QStringLiteral("previewRadius"), static_cast<double>(display_.chrome.textPx(application::palette::SuggestionGeometry::preview_radius)) / density},
-        {QStringLiteral("messageAlpha"), application::palette::SuggestionGeometry::message_alpha},
-        {QStringLiteral("titleAlpha"), application::palette::SuggestionGeometry::title_alpha},
-        {QStringLiteral("grid"), std::move(grid)},
-        {QStringLiteral("lines"), std::move(lines)},
+        {u"title"_s, local(geometry.title)},
+        {u"back"_s, local(geometry.back)},
+        {u"heading"_s, local(geometry.heading)},
+        {u"body"_s, local(geometry.body)},
+        {u"message"_s, local(geometry.message)},
+        {u"preview"_s, local(geometry.preview)},
+        {u"footer"_s, local(geometry.footer_caption)},
+        {u"button"_s, local(geometry.button)},
+        {u"separator"_s, local(geometry.separator)},
+        {u"previewRadius"_s, static_cast<double>(display_.chrome.textPx(application::palette::SuggestionGeometry::preview_radius)) / density},
+        {u"messageAlpha"_s, application::palette::SuggestionGeometry::message_alpha},
+        {u"titleAlpha"_s, application::palette::SuggestionGeometry::title_alpha},
+        {u"grid"_s, std::move(grid)},
+        {u"lines"_s, std::move(lines)},
     };
   }
 

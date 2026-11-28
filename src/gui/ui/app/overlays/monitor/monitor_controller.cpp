@@ -1,20 +1,18 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.overlays.monitor;
 
-#include "monitor_controller.hpp"
-#include "ui/kit/models/projection.hpp"
-#include <QClipboard>
-#include <QDir>
-#include <QGuiApplication>
-#include <QSizeF>
-#include <QStringList>
-#include <QVariantList>
-
+import telar.gui.qt;
+import telar.gui.ui.kit.models;
 import telar.gui.application;
+import telar.base.memory.containers;
+import telar.base.text.utf8;
+import telar.config.core;
+import telar.wire.vocabulary;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_ba;
+
+  using Qt::StringLiterals::operator""_s;
+
   namespace {
 
     namespace monitor = application::monitor;
@@ -65,14 +63,14 @@ namespace telar::gui::qt {
     // What a row's owner column reads as: no one's, an agent's by inheritance, or owned.
     QString ownership(ProcessOwner owner) {
       if (owner == ProcessOwner::none) {
-        return QStringLiteral("none");
+        return u"none"_s;
       }
 
-      return owner == ProcessOwner::agent_child ? QStringLiteral("inherited") : QStringLiteral("owned");
+      return owner == ProcessOwner::agent_child ? u"inherited"_s : u"owned"_s;
     }
 
     QString started(const ProcessInstance& instance) {
-      return QStringLiteral("%1.%2").arg(instance.started_seconds).arg(instance.started_microseconds, static_cast<int>(microsecond_digits), decimal, QLatin1Char('0'));
+      return u"%1.%2"_s.arg(instance.started_seconds).arg(instance.started_microseconds, static_cast<int>(microsecond_digits), decimal, QLatin1Char('0'));
     }
 
     template <std::size_t Capacity>
@@ -94,14 +92,14 @@ namespace telar::gui::qt {
     QString tone(Tone value) {
       switch (value) {
       case Tone::hot:
-        return QStringLiteral("hot");
+        return u"hot"_s;
       case Tone::warm:
-        return QStringLiteral("warm");
+        return u"warm"_s;
       case Tone::normal:
         break;
       }
 
-      return QStringLiteral("normal");
+      return u"normal"_s;
     }
 
     // The program a row names: the agent it runs when telar knows it, else the process's own name.
@@ -127,10 +125,10 @@ namespace telar::gui::qt {
     // A measure of a panel. Its tone says how much is taken, or left, or nothing, for a rate.
     QVariantMap meter(const QString& label, double share, const QString& value, Tone shown) {
       return {
-          {QStringLiteral("label"), label},
-          {QStringLiteral("fraction"), share},
-          {QStringLiteral("value"), value},
-          {QStringLiteral("tone"), tone(shown)},
+          {u"label"_s, label},
+          {u"fraction"_s, share},
+          {u"value"_s, value},
+          {u"tone"_s, tone(shown)},
       };
     }
 
@@ -145,15 +143,15 @@ namespace telar::gui::qt {
         part.remove_suffix(1);
       }
 
-      return QStringLiteral("%1 / %2").arg(toQString(part), text(whole));
+      return u"%1 / %2"_s.arg(toQString(part), text(whole));
     }
 
     QString rate(std::uint64_t bytes_per_second) {
-      return text(monitor::bytes(bytes_per_second)) + QStringLiteral("/s");
+      return text(monitor::bytes(bytes_per_second)) + u"/s"_s;
     }
 
     QString relative(const monitor::Relative& relative) {
-      return QStringLiteral("%1 (%2)").arg(text(relative.name)).arg(relative.pid);
+      return u"%1 (%2)"_s.arg(text(relative.name)).arg(relative.pid);
     }
 
   }
@@ -190,7 +188,7 @@ namespace telar::gui::qt {
     refresh();
     timer_.start();
     publish();
-    emit changed();
+    changed();
   }
 
   void MonitorController::machineChanged() {
@@ -212,7 +210,7 @@ namespace telar::gui::qt {
     refresh();
     timer_.start();
     publish();
-    emit changed();
+    changed();
   }
 
   QString MonitorController::cell(Column column, std::string_view value, std::string_view mark) const {
@@ -233,7 +231,7 @@ namespace telar::gui::qt {
     }
 
     publish();
-    emit changed();
+    changed();
 
     // The answer was to an older view: the view changed while it was asked, the rows shown moved
     // past it, or another process is selected.
@@ -268,7 +266,7 @@ namespace telar::gui::qt {
       } else if (slot.index >= state.offset && slot.index - state.offset < state.processes.size()) {
         records.push_back(processRecord(state.processes[slot.index - state.offset]));
       } else {
-        records.push_back({{QStringLiteral("kind"), QStringLiteral("pending")}, {QStringLiteral("key"), QStringLiteral("pending:%1").arg(row)}});
+        records.push_back({{u"kind"_s, u"pending"_s}, {u"key"_s, u"pending:%1"_s.arg(row)}});
       }
     }
 
@@ -302,18 +300,18 @@ namespace telar::gui::qt {
     };
 
     return {
-        {QStringLiteral("kind"), QStringLiteral("process")},
-        {QStringLiteral("key"), QStringLiteral("%1:%2").arg(row.instance.pid).arg(started(row.instance))},
-        {QStringLiteral("pid"), row.instance.pid},
-        {QStringLiteral("started"), started(row.instance)},
-        {QStringLiteral("selected"), row.instance.pid == view.selected.pid},
-        {QStringLiteral("foldable"), row.children > 0},
-        {QStringLiteral("folded"), row.folded > 0},
-        {QStringLiteral("cells"), cells},
-        {QStringLiteral("cpuTone"), row.measured ? tone(monitor::cpuTone(cpu)) : QStringLiteral("normal")},
-        {QStringLiteral("owner"), ownership(owner)},
+        {u"kind"_s, u"process"_s},
+        {u"key"_s, u"%1:%2"_s.arg(row.instance.pid).arg(started(row.instance))},
+        {u"pid"_s, row.instance.pid},
+        {u"started"_s, started(row.instance)},
+        {u"selected"_s, row.instance.pid == view.selected.pid},
+        {u"foldable"_s, row.children > 0},
+        {u"folded"_s, row.folded > 0},
+        {u"cells"_s, cells},
+        {u"cpuTone"_s, row.measured ? tone(monitor::cpuTone(cpu)) : u"normal"_s},
+        {u"owner"_s, ownership(owner)},
         // The runtime's own user reads quieter than another's.
-        {QStringLiteral("ownUser"), row.user_id == state.user_id},
+        {u"ownUser"_s, row.user_id == state.user_id},
     };
   }
 
@@ -328,7 +326,7 @@ namespace telar::gui::qt {
     // Without other users' processes it can not read, what the runtime misses is the kernel's time
     // and that of processes that ended between two readings.
     const auto hidden = state.unmeasured_count > 0;
-    const auto note = hidden ? QByteArray::number(state.unmeasured_count) + " processes of other users this user may not read" : QByteArrayLiteral("time no process listed spent");
+    const auto note = hidden ? QByteArray::number(state.unmeasured_count) + " processes of other users this user may not read" : "time no process listed spent"_ba;
     const QStringList cells{
         cell(Column::pid, {}),
         cell(Column::program, hidden ? "other users & kernel" : "kernel & ended"),
@@ -340,22 +338,22 @@ namespace telar::gui::qt {
         cell(Column::owner, "·"),
     };
 
-    return {{QStringLiteral("cells"), cells}};
+    return {{u"cells"_s, cells}};
   }
 
   QVariantMap MonitorController::groupRecord(const monitor::GroupRow& group) const {
     const auto& session = store_.session();
     const auto& cpu = columns_[static_cast<std::size_t>(Column::cpu)];
     const auto& memory = columns_[static_cast<std::size_t>(Column::memory)];
-    const auto title = group.owner == ProcessOwner::none ? QStringLiteral("no owner in telar") : text(monitor::ownerText(group.owner, monitor::ownerName(session, group.pane_id, group.owner).view()));
+    const auto title = group.owner == ProcessOwner::none ? u"no owner in telar"_s : text(monitor::ownerText(group.owner, monitor::ownerName(session, group.pane_id, group.owner).view()));
 
     return {
-        {QStringLiteral("kind"), QStringLiteral("group")},
-        {QStringLiteral("key"), QStringLiteral("group:%1:%2").arg(static_cast<int>(group.owner)).arg(group.pane_id)},
-        {QStringLiteral("title"), title},
-        {QStringLiteral("count"), QStringLiteral("%1 %2").arg(group.processes).arg(group.processes == 1 ? QStringLiteral("process") : QStringLiteral("processes"))},
-        {QStringLiteral("cpu"), text(monitor::fit(monitor::percent(group.cpu_permille).view(), cpu.cells, true))},
-        {QStringLiteral("memory"), text(monitor::fit(monitor::bytes(group.resident_bytes).view(), memory.cells, true))},
+        {u"kind"_s, u"group"_s},
+        {u"key"_s, u"group:%1:%2"_s.arg(static_cast<int>(group.owner)).arg(group.pane_id)},
+        {u"title"_s, title},
+        {u"count"_s, u"%1 %2"_s.arg(group.processes).arg(group.processes == 1 ? u"process"_s : u"processes"_s)},
+        {u"cpu"_s, text(monitor::fit(monitor::percent(group.cpu_permille).view(), cpu.cells, true))},
+        {u"memory"_s, text(monitor::fit(monitor::bytes(group.resident_bytes).view(), memory.cells, true))},
     };
   }
 
@@ -369,21 +367,21 @@ namespace telar::gui::qt {
 
     auto note = chips ? QString{} : text(machines.row(machines.active()).label);
     const auto add = [&](const QString& part) {
-      note += note.isEmpty() ? part : QStringLiteral(" · ") + part;
+      note += note.isEmpty() ? part : u" · "_s + part;
     };
 
     // The threads of the processes the runtime may not read are not counted.
-    const auto threads = state.unmeasured_count > 0 ? QStringLiteral("threads readable") : QStringLiteral("threads");
+    const auto threads = state.unmeasured_count > 0 ? u"threads readable"_s : u"threads"_s;
 
     if (state.revision != 0) {
-      add(QStringLiteral("%1 processes · %2 %3").arg(state.process_count).arg(state.thread_count).arg(threads));
+      add(u"%1 processes · %2 %3"_s.arg(state.process_count).arg(state.thread_count).arg(threads));
     } else if (available()) {
-      add(QStringLiteral("reading the processes…"));
+      add(u"reading the processes…"_s);
     } else {
-      add(QStringLiteral("this machine's runtime has no monitor; update telar there"));
+      add(u"this machine's runtime has no monitor; update telar there"_s);
     }
 
-    return {{QStringLiteral("note"), note}, {QStringLiteral("ready"), state.revision != 0}};
+    return {{u"note"_s, note}, {u"ready"_s, state.revision != 0}};
   }
 
   QVariantList MonitorController::machines() const {
@@ -400,17 +398,17 @@ namespace telar::gui::qt {
       QString status;
 
       if (!row.live) {
-        status = QStringLiteral("offline");
+        status = u"offline"_s;
       } else if (row.cpu_percent) {
         status = text(monitor::wholePercent(std::uint32_t{*row.cpu_percent} * decimal));
       }
 
       result.push_back(QVariantMap{
-          {QStringLiteral("slot"), static_cast<int>(slot)},
-          {QStringLiteral("label"), text(row.label)},
-          {QStringLiteral("status"), status},
-          {QStringLiteral("live"), row.live},
-          {QStringLiteral("active"), slot == machines.active()},
+          {u"slot"_s, static_cast<int>(slot)},
+          {u"label"_s, text(row.label)},
+          {u"status"_s, status},
+          {u"live"_s, row.live},
+          {u"active"_s, slot == machines.active()},
       });
     }
 
@@ -450,8 +448,8 @@ namespace telar::gui::qt {
     const auto disk_scale = state.disk_peaks.scale(monitor::disk_rate_floor);
     const auto network_scale = state.network_peaks.scale(monitor::network_rate_floor);
 
-    disks.push_back(meter(QStringLiteral("read ↓"), fraction(state.disk_read_per_second, disk_scale), rate(state.disk_read_per_second), Tone::normal));
-    disks.push_back(meter(QStringLiteral("write ↑"), fraction(state.disk_written_per_second, disk_scale), rate(state.disk_written_per_second), Tone::normal));
+    disks.push_back(meter(u"read ↓"_s, fraction(state.disk_read_per_second, disk_scale), rate(state.disk_read_per_second), Tone::normal));
+    disks.push_back(meter(u"write ↑"_s, fraction(state.disk_written_per_second, disk_scale), rate(state.disk_written_per_second), Tone::normal));
 
     ds::Array<std::uint8_t, monitor::shown_interfaces> shown{};
 
@@ -459,7 +457,7 @@ namespace telar::gui::qt {
       const auto& interface = state.interfaces[index];
       const auto total = interface.received_per_second + interface.sent_per_second;
 
-      network.push_back(meter(text(interface.name), fraction(total, network_scale), QStringLiteral("↓%1 ↑%2").arg(rate(interface.received_per_second), rate(interface.sent_per_second)), Tone::normal));
+      network.push_back(meter(text(interface.name), fraction(total, network_scale), u"↓%1 ↑%2"_s.arg(rate(interface.received_per_second), rate(interface.sent_per_second)), Tone::normal));
     }
 
     const auto used = fraction(state.memory_used_bytes, state.memory_total_bytes);
@@ -467,20 +465,20 @@ namespace telar::gui::qt {
     const auto swap = fraction(state.swap_used_bytes, state.swap_total_bytes);
     // What is available warns as it empties; the cache is memory the system takes back.
     const QVariantList memory{
-        meter(QStringLiteral("used"), used, portion(state.memory_used_bytes, state.memory_total_bytes), taken(used)),
-        meter(QStringLiteral("available"), available, text(monitor::bytes(state.memory_available_bytes)), monitor::headroomTone(available)),
-        meter(QStringLiteral("cached"), fraction(state.memory_cached_bytes, state.memory_total_bytes), text(monitor::bytes(state.memory_cached_bytes)), Tone::normal),
-        meter(QStringLiteral("swap"), swap, portion(state.swap_used_bytes, state.swap_total_bytes), taken(swap)),
+        meter(u"used"_s, used, portion(state.memory_used_bytes, state.memory_total_bytes), taken(used)),
+        meter(u"available"_s, available, text(monitor::bytes(state.memory_available_bytes)), monitor::headroomTone(available)),
+        meter(u"cached"_s, fraction(state.memory_cached_bytes, state.memory_total_bytes), text(monitor::bytes(state.memory_cached_bytes)), Tone::normal),
+        meter(u"swap"_s, swap, portion(state.swap_used_bytes, state.swap_total_bytes), taken(swap)),
     };
 
     return {
-        {QStringLiteral("cpu"), text(monitor::wholePercent(state.cpu_permille))},
-        {QStringLiteral("history"), history},
-        {QStringLiteral("cores"), cores},
-        {QStringLiteral("memoryTotal"), text(monitor::bytes(state.memory_total_bytes))},
-        {QStringLiteral("memory"), memory},
-        {QStringLiteral("disks"), disks},
-        {QStringLiteral("network"), network},
+        {u"cpu"_s, text(monitor::wholePercent(state.cpu_permille))},
+        {u"history"_s, history},
+        {u"cores"_s, cores},
+        {u"memoryTotal"_s, text(monitor::bytes(state.memory_total_bytes))},
+        {u"memory"_s, memory},
+        {u"disks"_s, disks},
+        {u"network"_s, network},
     };
   }
 
@@ -489,17 +487,17 @@ namespace telar::gui::qt {
     const auto& view = state.view;
 
     return {
-        {QStringLiteral("sort"), QString::fromLatin1(sort_names[static_cast<std::size_t>(view.sort)])},
-        {QStringLiteral("reverse"), view.reverse},
-        {QStringLiteral("scope"), QString::fromLatin1(scope_names[static_cast<std::size_t>(view.scope)])},
-        {QStringLiteral("layout"), QString::fromLatin1(layout_names[static_cast<std::size_t>(view.layout)])},
-        {QStringLiteral("filter"), text(view.filter)},
-        {QStringLiteral("selected"), view.selected.pid},
-        {QStringLiteral("all"), state.process_count},
-        {QStringLiteral("telar"), state.telar_count},
-        {QStringLiteral("agents"), state.agent_count},
+        {u"sort"_s, QString::fromLatin1(sort_names[static_cast<std::size_t>(view.sort)])},
+        {u"reverse"_s, view.reverse},
+        {u"scope"_s, QString::fromLatin1(scope_names[static_cast<std::size_t>(view.scope)])},
+        {u"layout"_s, QString::fromLatin1(layout_names[static_cast<std::size_t>(view.layout)])},
+        {u"filter"_s, text(view.filter)},
+        {u"selected"_s, view.selected.pid},
+        {u"all"_s, state.process_count},
+        {u"telar"_s, state.telar_count},
+        {u"agents"_s, state.agent_count},
         // The agents, and the processes they run with them when there are more.
-        {QStringLiteral("agentsNote"), state.agent_count == state.agents ? QString::number(state.agents) : QStringLiteral("%1 · %2 procs").arg(state.agents).arg(state.agent_count)},
+        {u"agentsNote"_s, state.agent_count == state.agents ? QString::number(state.agents) : u"%1 · %2 procs"_s.arg(state.agents).arg(state.agent_count)},
     };
   }
 
@@ -511,16 +509,16 @@ namespace telar::gui::qt {
       const auto& span = columns_[index];
       const auto& title = titles[index];
       const auto sorted = title.sort != nullptr && QLatin1StringView{title.sort} == QLatin1StringView{sort_names[static_cast<std::size_t>(view.sort)]};
-      const auto label = sorted ? QStringLiteral("%1 %2").arg(QLatin1StringView{title.title}, view.reverse ? QStringLiteral("▲") : QStringLiteral("▼")) : QString::fromLatin1(title.title);
+      const auto label = sorted ? u"%1 %2"_s.arg(QLatin1StringView{title.title}, view.reverse ? u"▲"_s : u"▼"_s) : QString::fromLatin1(title.title);
       const auto bytes = label.toUtf8();
 
       result.push_back(QVariantMap{
-          {QStringLiteral("x"), span.start * cell_width_},
-          {QStringLiteral("width"), span.cells * cell_width_},
-          {QStringLiteral("title"), text(monitor::fit(utf8(bytes), span.cells, span.right))},
-          {QStringLiteral("sort"), title.sort == nullptr ? QString{} : QString::fromLatin1(title.sort)},
-          {QStringLiteral("sorted"), sorted},
-          {QStringLiteral("owner"), title.column == Column::owner},
+          {u"x"_s, span.start * cell_width_},
+          {u"width"_s, span.cells * cell_width_},
+          {u"title"_s, text(monitor::fit(utf8(bytes), span.cells, span.right))},
+          {u"sort"_s, title.sort == nullptr ? QString{} : QString::fromLatin1(title.sort)},
+          {u"sorted"_s, sorted},
+          {u"owner"_s, title.column == Column::owner},
       });
     }
 
@@ -548,7 +546,7 @@ namespace telar::gui::qt {
     // The parent first: the nearest ancestors say the most, so a narrow detail cuts the root's end.
     for (const auto& ancestor : std::views::reverse(detail.keptLineage())) {
       if (std::cmp_equal(lineage.size(), shown_lineage)) {
-        lineage.push_back(QStringLiteral("…"));
+        lineage.push_back(u"…"_s);
         break;
       }
 
@@ -560,27 +558,27 @@ namespace telar::gui::qt {
     }
 
     if (detail.child_count > shown_children) {
-      children.push_back(QStringLiteral("+%1 more").arg(detail.child_count - shown_children));
+      children.push_back(u"+%1 more"_s.arg(detail.child_count - shown_children));
     }
 
     const auto home = local() ? home_.toUtf8() : QByteArray{};
     const auto owner = monitor::ownerText(process.owner, monitor::ownerName(session, process.pane_id, process.owner).view());
 
     return {
-        {QStringLiteral("pid"), process.instance.pid},
-        {QStringLiteral("program"), toQString(program(process))},
-        {QStringLiteral("state"), QString::fromLatin1(state_names[static_cast<std::size_t>(process.state)])},
-        {QStringLiteral("stopped"), process.state == monitor::ProcessState::stopped},
-        {QStringLiteral("nice"), process.nice},
-        {QStringLiteral("user"), text(process.user)},
-        {QStringLiteral("arguments"), text(monitor::abbreviateHome(detail.arguments.view(), utf8(home)))},
-        {QStringLiteral("directory"), text(monitor::abbreviateHome(detail.directory.view(), utf8(home)))},
-        {QStringLiteral("ports"), ports.isEmpty() ? QStringLiteral("none") : ports.join(QStringLiteral(", "))},
-        {QStringLiteral("usage"), process.measured ? QStringLiteral("%1 threads · %2").arg(process.threads).arg(text(monitor::bytes(process.resident_bytes))) : QStringLiteral("not readable by this user")},
-        {QStringLiteral("owner"), process.owner == ProcessOwner::none ? QStringLiteral("none: telar did not start it") : text(owner)},
-        {QStringLiteral("pane"), process.pane_id != 0},
-        {QStringLiteral("lineage"), lineage.isEmpty() ? QStringLiteral("none") : lineage.join(QStringLiteral(" ← "))},
-        {QStringLiteral("children"), children.isEmpty() ? QStringLiteral("none") : children.join(QStringLiteral(", "))},
+        {u"pid"_s, process.instance.pid},
+        {u"program"_s, toQString(program(process))},
+        {u"state"_s, QString::fromLatin1(state_names[static_cast<std::size_t>(process.state)])},
+        {u"stopped"_s, process.state == monitor::ProcessState::stopped},
+        {u"nice"_s, process.nice},
+        {u"user"_s, text(process.user)},
+        {u"arguments"_s, text(monitor::abbreviateHome(detail.arguments.view(), utf8(home)))},
+        {u"directory"_s, text(monitor::abbreviateHome(detail.directory.view(), utf8(home)))},
+        {u"ports"_s, ports.isEmpty() ? u"none"_s : ports.join(u", "_s)},
+        {u"usage"_s, process.measured ? u"%1 threads · %2"_s.arg(process.threads).arg(text(monitor::bytes(process.resident_bytes))) : u"not readable by this user"_s},
+        {u"owner"_s, process.owner == ProcessOwner::none ? u"none: telar did not start it"_s : text(owner)},
+        {u"pane"_s, process.pane_id != 0},
+        {u"lineage"_s, lineage.isEmpty() ? u"none"_s : lineage.join(u" ← "_s)},
+        {u"children"_s, children.isEmpty() ? u"none"_s : children.join(u", "_s)},
     };
   }
 
@@ -589,12 +587,12 @@ namespace telar::gui::qt {
     const auto& view = state.view;
     const auto count = monitor::rowCount(state.matched, state.groups.view(), view.layout);
     const auto last = std::min<std::size_t>(std::size_t{view.first} + view.visible, count);
-    const auto noun = view.layout == MonitorLayout::owner ? QStringLiteral("rows") : QStringLiteral("processes");
+    const auto noun = view.layout == MonitorLayout::owner ? u"rows"_s : u"processes"_s;
 
     return {
-        {QStringLiteral("count"), count == 0 ? QStringLiteral("no %1").arg(noun) : QStringLiteral("%1–%2 of %3 %4").arg(view.first + 1).arg(last).arg(count).arg(noun)},
-        {QStringLiteral("position"), count == 0 ? 0.0 : static_cast<double>(view.first) / static_cast<double>(count)},
-        {QStringLiteral("size"), count == 0 ? 1.0 : std::min(1.0, static_cast<double>(view.visible) / static_cast<double>(count))},
+        {u"count"_s, count == 0 ? u"no %1"_s.arg(noun) : u"%1–%2 of %3 %4"_s.arg(view.first + 1).arg(last).arg(count).arg(noun)},
+        {u"position"_s, count == 0 ? 0.0 : static_cast<double>(view.first) / static_cast<double>(count)},
+        {u"size"_s, count == 0 ? 1.0 : std::min(1.0, static_cast<double>(view.visible) / static_cast<double>(count))},
     };
   }
 
@@ -651,7 +649,7 @@ namespace telar::gui::qt {
 
     monitor::view(store_.sessionMut()).first = static_cast<std::uint32_t>(first);
     publish();
-    emit changed();
+    changed();
     if (!monitor::covers(monitor::state(store_.session()))) {
       refresh();
     }
@@ -848,7 +846,7 @@ namespace telar::gui::qt {
 
   void MonitorController::send(const ProcessInstance& process, ProcessSignal signal) {
     if (!monitor::signal(store_.sessionMut(), process, signal)) {
-      emit failed(QStringLiteral("The monitor is busy with another request; try again"));
+      failed(u"The monitor is busy with another request; try again"_s);
     }
   }
 
@@ -867,7 +865,7 @@ namespace telar::gui::qt {
         .target = target(selected),
     });
 
-    emit changed();
+    changed();
   }
 
   void MonitorController::confirm() {
@@ -878,7 +876,7 @@ namespace telar::gui::qt {
     const auto asked = *confirmation_;
 
     confirmation_ = ds::none;
-    emit changed();
+    changed();
     if (!showing() || !current(asked)) {
       return;
     }
@@ -891,7 +889,7 @@ namespace telar::gui::qt {
       send(asked.process, ProcessSignal::kill);
       break;
     case Confirmable::debug:
-      launch(asked.process, QStringLiteral("debug"));
+      launch(asked.process, u"debug"_s);
       break;
     }
   }
@@ -899,7 +897,7 @@ namespace telar::gui::qt {
   void MonitorController::cancel() {
     if (confirmation_) {
       confirmation_ = ds::none;
-      emit changed();
+      changed();
     }
   }
 
@@ -912,7 +910,7 @@ namespace telar::gui::qt {
   QString MonitorController::target(const ProcessInstance& process) const {
     const auto& state = monitor::state(store_.session());
     const auto named = [&](const monitor::ProcessRow& row) {
-      return QStringLiteral("%1 (%2)").arg(toQString(program(row))).arg(process.pid);
+      return u"%1 (%2)"_s.arg(toQString(program(row))).arg(process.pid);
     };
 
     for (const auto& row : state.processes) {
@@ -925,7 +923,7 @@ namespace telar::gui::qt {
       return named(state.detail->process);
     }
 
-    return QStringLiteral("pid %1").arg(process.pid);
+    return u"pid %1"_s.arg(process.pid);
   }
 
   QVariantMap MonitorController::confirmation() const {
@@ -934,8 +932,8 @@ namespace telar::gui::qt {
     }
 
     return {
-        {QStringLiteral("action"), QString::fromLatin1(confirmable_names[static_cast<std::size_t>(confirmation_->action)])},
-        {QStringLiteral("target"), confirmation_->target},
+        {u"action"_s, QString::fromLatin1(confirmable_names[static_cast<std::size_t>(confirmation_->action)])},
+        {u"target"_s, confirmation_->target},
     };
   }
 
@@ -945,7 +943,7 @@ namespace telar::gui::qt {
 
     // Until the selected process's detail arrives its nice value is not known.
     if (held == nullptr) {
-      emit failed(QStringLiteral("The process's priority is still being read; try again"));
+      failed(u"The process's priority is still being read; try again"_s);
       return;
     }
 
@@ -959,7 +957,7 @@ namespace telar::gui::qt {
     }
 
     if (!monitor::prioritize(store_.sessionMut(), chosen, std::clamp(nice, least_nice, most_nice))) {
-      emit failed(QStringLiteral("The monitor is busy with another request; try again"));
+      failed(u"The monitor is busy with another request; try again"_s);
     }
   }
 
@@ -972,13 +970,13 @@ namespace telar::gui::qt {
   void MonitorController::focusPane() {
     const auto* const held = monitor::selectedDetail(monitor::state(store_.session()));
     if (held == nullptr || held->process.pane_id == 0) {
-      emit failed(QStringLiteral("This process runs in no telar pane"));
+      failed(u"This process runs in no telar pane"_s);
       return;
     }
 
     const auto pane = held->process.pane_id;
 
-    emit closeRequested();
+    closeRequested();
     application::workbench::focusPane(store_.sessionMut(), pane);
   }
 
@@ -1000,15 +998,15 @@ namespace telar::gui::qt {
 
     // The new pane runs on the process's machine: its `telar` checks the instance again, runs the
     // tool, then leaves a shell.
-    const auto script = QStringLiteral("\"${TELAR_BIN_PATH:-telar}\" process review %1 --started %2 --tool %3; exec \"${SHELL:-/bin/sh}\" -l").arg(process.pid).arg(started(process), tool).toUtf8();
+    const auto script = u"\"${TELAR_BIN_PATH:-telar}\" process review %1 --started %2 --tool %3; exec \"${SHELL:-/bin/sh}\" -l"_s.arg(process.pid).arg(started(process), tool).toUtf8();
     const ds::Array<std::string_view, 3> arguments{"/bin/sh", "-c", utf8(script)};
     const auto pane = focused->id;
 
-    emit closeRequested();
+    closeRequested();
     try {
       application::workbench::launchSplit(store_.sessionMut(), pane, arguments);
     } catch (const std::exception& error) {
-      emit failed(QString::fromUtf8(error.what()));
+      failed(QString::fromUtf8(error.what()));
     }
   }
 
@@ -1021,7 +1019,7 @@ namespace telar::gui::qt {
 
     const auto chosen = static_cast<application::machines::Machines::Slot>(slot);
     if (chosen != machines.active()) {
-      emit machineRequested(machines.token(chosen));
+      machineRequested(machines.token(chosen));
     }
   }
 
@@ -1035,16 +1033,16 @@ namespace telar::gui::qt {
     switch (action) {
     // As with the monitor's own keys, TERM and KILL wait there for a yes.
     case Action::process_terminate:
-      ask(QStringLiteral("TERM"));
+      ask(u"TERM"_s);
       return true;
     case Action::process_kill:
-      ask(QStringLiteral("KILL"));
+      ask(u"KILL"_s);
       return true;
     case Action::process_stop:
-      signal(QStringLiteral("STOP"));
+      signal(u"STOP"_s);
       return true;
     case Action::process_continue:
-      signal(QStringLiteral("CONT"));
+      signal(u"CONT"_s);
       return true;
     case Action::process_lower_priority:
       lowerPriority();
@@ -1056,13 +1054,13 @@ namespace telar::gui::qt {
       focusPane();
       return true;
     case Action::process_review_stack:
-      review(QStringLiteral("stack"));
+      review(u"stack"_s);
       return true;
     case Action::process_review_files:
-      review(QStringLiteral("files"));
+      review(u"files"_s);
       return true;
     case Action::process_review_logs:
-      review(QStringLiteral("logs"));
+      review(u"logs"_s);
       return true;
     case Action::none:
     case Action::new_tab:
@@ -1125,7 +1123,7 @@ namespace telar::gui::qt {
 
   void MonitorController::close() {
     timer_.stop();
-    emit closeRequested();
+    closeRequested();
   }
 
 }

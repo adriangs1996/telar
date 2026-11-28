@@ -2,13 +2,6 @@
 // Keep textual ABI declarations and module imports in one clangd parse.
 static_assert(true);
 #endif
-
-#include "qml_fixture.hpp"
-#include "ui/app/chrome/metrics_projection.hpp"
-#include "ui/app/chrome/mode_bar/mode_projection.hpp"
-#include "ui/design/elements/component_projection.hpp"
-#include "ui/kit/fonts/bundled_fonts.hpp"
-#include "ui/kit/models/projection.hpp"
 #include <QColor>
 #include <QFont>
 #include <QGuiApplication>
@@ -40,6 +33,15 @@ import telar.gui.features.workbench;
 import telar.gui.features.status_bar;
 import telar.gui.features.components;
 import telar.base.ds;
+import telar.gui.ui.app.chrome;
+import telar.gui.ui.app.chrome.mode_bar;
+import telar.gui.ui.design.elements;
+import telar.gui.ui.kit.fonts;
+import telar.gui.ui.kit.models;
+import telar.gui.tests.qml_fixture;
+import telar.gui.foundation.actions;
+import telar.gui.foundation.core;
+import telar.gui.qt;
 
 namespace {
 
@@ -102,20 +104,26 @@ namespace {
     return label.property("text").toString() == QStringLiteral("7d") ? QStringLiteral("0%") : QStringLiteral("100%");
   }
 
-  class StatusBarTest final : public QObject {
-    Q_OBJECT
+  class [[qt::object]] StatusBarTest final : public QObject {
+  public:
+    static const QMetaObject staticMetaObject;
+    const QMetaObject* metaObject() const override;
+    void* qt_metacast(const char* name) override;
+    int qt_metacall(QMetaObject::Call call, int id, void** args) override;
+    static void qt_static_metacall(QObject* object, QMetaObject::Call call, int id, void** args);
 
   private:
-    Q_SLOT static void initTestCase() {
+  private:
+    [[qt::slot]] static void initTestCase() {
       bundledFonts();
       QGuiApplication::setFont(QFont{QStringLiteral("IBM Plex Sans")});
     }
 
-    Q_SLOT static void init() {
+    [[qt::slot]] static void init() {
       QTest::failOnWarning(QRegularExpression{QStringLiteral(".*")});
     }
 
-    Q_SLOT static void missingMetricsStayHiddenWithoutAController() {
+    [[qt::slot]] static void missingMetricsStayHiddenWithoutAController() {
       QQmlEngine engine;
       const auto bar = createChrome(engine, QStringLiteral("StatusBar"), barProperties(telar::gui::test::HostMetricsState{}.view()));
 
@@ -128,7 +136,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void metricsUseTheRuntimeValuesAndHideAnAbsentBattery() {
+    [[qt::slot]] static void metricsUseTheRuntimeValuesAndHideAnAbsentBattery() {
       QQmlEngine engine;
       telar::gui::test::HostMetricsState metrics;
 
@@ -149,7 +157,7 @@ namespace {
       QVERIFY(cpu->isVisible() && memory->isVisible());
     }
 
-    Q_SLOT static void modesReplaceMetricsAndDiagnosticsReserveSpace() {
+    [[qt::slot]] static void modesReplaceMetricsAndDiagnosticsReserveSpace() {
       QQmlEngine engine;
       telar::gui::test::HostMetricsState metrics;
 
@@ -166,7 +174,7 @@ namespace {
       QTRY_VERIFY_WITH_TIMEOUT(cpu->isVisible(), wait_ms);
     }
 
-    Q_SLOT static void diagnosticShowsThePointingCursor() {
+    [[qt::slot]] static void diagnosticShowsThePointingCursor() {
       QQuickWindow window;
       QQmlEngine engine;
       telar::gui::test::HostMetricsState metrics;
@@ -197,7 +205,7 @@ namespace {
     }
 
     // NOLINTNEXTLINE(readability-identifier-naming): Qt requires the _data suffix.
-    Q_SLOT static void inlineMetersLeadWithARing_data() {
+    [[qt::slot]] static void inlineMetersLeadWithARing_data() {
       constexpr qreal scaled_ratio = 1.5;
 
       QTest::addColumn<bool>("compact");
@@ -212,7 +220,7 @@ namespace {
       QTest::newRow("scaled") << false << true << QString{} << scaled_ratio;
     }
 
-    Q_SLOT static void inlineMetersLeadWithARing() {
+    [[qt::slot]] static void inlineMetersLeadWithARing() {
       QFETCH(const bool, compact);
       QFETCH(const bool, labelled);
       QFETCH(const QString, detail);
@@ -276,7 +284,7 @@ namespace {
       }
     }
 
-    Q_SLOT static void sparklinesOnlyShowTheLatestNineSamples() {
+    [[qt::slot]] static void sparklinesOnlyShowTheLatestNineSamples() {
       QQuickWindow window;
       QQmlEngine engine;
       BarContent content;
@@ -309,7 +317,7 @@ namespace {
       QCOMPARE(full_samples, 1);
     }
 
-    Q_SLOT static void onlyClickableGroupsGetAPillTintedByTheirAlert() {
+    [[qt::slot]] static void onlyClickableGroupsGetAPillTintedByTheirAlert() {
       constexpr std::uint16_t warning_value = 600;
       QQuickWindow window;
       QQmlEngine engine;
@@ -333,7 +341,7 @@ namespace {
       QCOMPARE(pill->height(), qreal{22});
     }
 
-    Q_SLOT static void summariesNameTheWorstEntryAndCountTheRest() {
+    [[qt::slot]] static void summariesNameTheWorstEntryAndCountTheRest() {
       constexpr std::uint16_t disk_value = 300;
       constexpr std::uint16_t net_value = 920;
       constexpr std::uint16_t gpu_value = 990;
@@ -371,7 +379,7 @@ namespace {
       QVERIFY(!window.grabWindow().isNull());
     }
 
-    Q_SLOT static void liveMetricsAndResizesRenderWithoutQmlErrors() {
+    [[qt::slot]] static void liveMetricsAndResizesRenderWithoutQmlErrors() {
       QQuickWindow window;
       QQmlEngine engine;
       telar::gui::test::HostMetricsState metrics;
@@ -402,4 +410,6 @@ namespace {
 }
 
 QTEST_MAIN(StatusBarTest)
+#ifndef TELAR_MOC_RUN
 #include "status_bar_test.moc"
+#endif

@@ -1,38 +1,17 @@
-#ifdef __clangd__
-// Keep textual ABI declarations and module imports in one clangd parse.
-static_assert(true);
-#endif
+module telar.gui.ui.app.chrome.mode_bar;
 
-#include "native_mode_layout.hpp"
-#include "tbc/view.hpp"
-#include "ui/design/history_hint_projection.hpp"
-#include <QByteArray>
-#include <QQuickItem>
-#include <QQuickWindow>
-#include <QRectF>
-#include <QString>
-#include <QVariantList>
-#include <QVariantMap>
-#include <QtCore/qcontainerfwd.h>
-#include <QtCore/qtmetamacros.h>
-#include <QtCore/qtypes.h>
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <exception>
-#include <functional>
-#include <limits>
-#include <stdexcept>
-#include <string_view>
-
+import std;
+import telar.gui.qt;
+import telar.tbc;
+import telar.gui.ui.design;
 import telar.gui.foundation.actions;
 import telar.gui.application;
 import telar.base.ds;
+import telar.gui.foundation.core;
 
 namespace telar::gui::qt {
+  using Qt::StringLiterals::operator""_s;
+
   namespace {
 
     static_assert(application::status_bar::ModeBarLabels::capacity <= application::status_bar::ModeBarMeasurements::capacity);
@@ -44,16 +23,16 @@ namespace telar::gui::qt {
     // The hint views the label it writes into the storage, region `a`.
     // A hint's label as UTF-8, which the hint views once every label is stored.
     QByteArray hintLabel(const QVariantMap& value) {
-      return value.value(QStringLiteral("label")).toString().toUtf8();
+      return value.value(u"label"_s).toString().toUtf8();
     }
 
     tbc::val_a<application::status_bar::ModeHint> readHint(const QVariantMap& value, tbc::ref_a<QByteArray> label) {
-      const auto kind = value.value(QStringLiteral("key")).toInt();
+      const auto kind = value.value(u"key"_s).toInt();
       if (kind < static_cast<int>(KeyChord::Key::character) || kind > static_cast<int>(KeyChord::Key::back_tab)) {
         throw std::invalid_argument{"InvalidModeHintKey"};
       }
 
-      return {.key = {.key = static_cast<KeyChord::Key>(kind), .character = value.value(QStringLiteral("character")).toUInt(), .modifiers = value.value(QStringLiteral("modifiers")).toUInt()}, .label = {label.constData(), static_cast<std::size_t>(label.size())}};
+      return {.key = {.key = static_cast<KeyChord::Key>(kind), .character = value.value(u"character"_s).toUInt(), .modifiers = value.value(u"modifiers"_s).toUInt()}, .label = {label.constData(), static_cast<std::size_t>(label.size())}};
     }
 
     float advance(const QVariant& value, qreal density) {
@@ -101,7 +80,7 @@ namespace telar::gui::qt {
     if (mode_ != mode) {
       mode_ = mode;
       prepareLabels();
-      emit modeChanged();
+      modeChanged();
       polish();
     }
   }
@@ -109,7 +88,7 @@ namespace telar::gui::qt {
   void NativeModeLayout::setRatio(qreal ratio) {
     if (std::isfinite(ratio) && ratio > 0 && std::not_equal_to<>{}(ratio_, ratio)) {
       ratio_ = ratio;
-      emit ratioChanged();
+      ratioChanged();
       polish();
     }
   }
@@ -117,7 +96,7 @@ namespace telar::gui::qt {
   void NativeModeLayout::setPixelSize(qreal pixel_size) {
     if (std::isfinite(pixel_size) && pixel_size >= 0 && std::not_equal_to<>{}(pixel_size_, pixel_size)) {
       pixel_size_ = pixel_size;
-      emit pixelSizeChanged();
+      pixelSizeChanged();
       polish();
     }
   }
@@ -125,7 +104,7 @@ namespace telar::gui::qt {
   void NativeModeLayout::setMeasurements(const QVariantMap& measurements) {
     if (measurements_ != measurements) {
       measurements_ = measurements;
-      emit measurementsChanged();
+      measurementsChanged();
       polish();
     }
   }
@@ -135,12 +114,12 @@ namespace telar::gui::qt {
     QVariantList hints;
 
     try {
-      const auto kind = mode_.value(QStringLiteral("kind")).toInt();
+      const auto kind = mode_.value(u"kind"_s).toInt();
       if (kind < static_cast<int>(application::status_bar::StatusMode::normal) || kind > static_cast<int>(application::status_bar::StatusMode::copy)) {
         throw std::invalid_argument{"InvalidStatusMode"};
       }
 
-      const auto records = mode_.value(QStringLiteral("hints")).toList();
+      const auto records = mode_.value(u"hints"_s).toList();
       ds::Array<QByteArray, application::status_bar::ModeHints::capacity> storage;
       application::status_bar::ModeHints bound;
       const auto count = std::min(records.size(), static_cast<qsizetype>(storage.size()));
@@ -159,7 +138,7 @@ namespace telar::gui::qt {
 
       title = text(labels.title());
       for (const auto& hint : labels.hints()) {
-        hints.append(QVariantMap{{QStringLiteral("key"), text(hint.key.view())}, {QStringLiteral("word"), text(hint.word.view())}});
+        hints.append(QVariantMap{{u"key"_s, text(hint.key.view())}, {u"word"_s, text(hint.word.view())}});
       }
     } catch (const std::exception&) {
       title.clear();
@@ -169,7 +148,7 @@ namespace telar::gui::qt {
     if (title_ != title || hints_ != hints) {
       title_ = std::move(title);
       hints_ = hints;
-      emit labelsChanged();
+      labelsChanged();
     }
   }
 
@@ -179,15 +158,15 @@ namespace telar::gui::qt {
 
     chrome.ratio = static_cast<float>(ratio_ * density);
     chrome.small = static_cast<std::uint16_t>(std::clamp(std::round(pixel_size_ * density), qreal{0}, qreal{std::numeric_limits<std::uint16_t>::max()}));
-    const auto measured_hints = measurements_.value(QStringLiteral("hints")).toList();
+    const auto measured_hints = measurements_.value(u"hints"_s).toList();
     application::status_bar::ModeBarMeasurements measured;
 
-    measured.title = advance(measurements_.value(QStringLiteral("title")), density);
+    measured.title = advance(measurements_.value(u"title"_s), density);
     measured.count = std::min({static_cast<std::size_t>(hints_.size()), static_cast<std::size_t>(measured_hints.size()), application::status_bar::ModeBarMeasurements::capacity});
     for (std::size_t index = 0; index < measured.count; ++index) {
       const auto hint = measured_hints[static_cast<qsizetype>(index)].toMap();
 
-      measured.hints.atMut(index) = {.key = advance(hint.value(QStringLiteral("key")), density), .word = advance(hint.value(QStringLiteral("word")), density)};
+      measured.hints.atMut(index) = {.key = advance(hint.value(u"key"_s), density), .word = advance(hint.value(u"word"_s), density)};
     }
 
     const auto geometry = title_.isEmpty() ? application::status_bar::ModeBarGeometry{} : application::status_bar::ModeBarGeometry::derive({.width = static_cast<float>(width() * density), .height = static_cast<float>(height() * density)}, chrome, measured);
@@ -200,12 +179,12 @@ namespace telar::gui::qt {
     auto layout = historyHintStyle(ratio_);
     const auto title = geometry.title;
 
-    layout.insert(QStringLiteral("title"), QRectF{static_cast<qreal>(title.x) / density, static_cast<qreal>(title.y) / density, static_cast<qreal>(title.width) / density, static_cast<qreal>(title.height) / density});
-    layout.insert(QStringLiteral("hints"), hints);
-    layout.insert(QStringLiteral("hintCount"), static_cast<qulonglong>(geometry.count));
+    layout.insert(u"title"_s, QRectF{static_cast<qreal>(title.x) / density, static_cast<qreal>(title.y) / density, static_cast<qreal>(title.width) / density, static_cast<qreal>(title.height) / density});
+    layout.insert(u"hints"_s, hints);
+    layout.insert(u"hintCount"_s, static_cast<qulonglong>(geometry.count));
     if (layout_ != layout) {
       layout_ = layout;
-      emit layoutChanged();
+      layoutChanged();
     }
   }
 
